@@ -8,6 +8,7 @@ import * as agents from "./agents/sessionManager";
 import * as previewHarness from "./previewHarness";
 import * as gitOps from "./gitOps";
 import * as updater from "./updater";
+import * as snapshots from "./snapshots";
 import { fixPath } from "./fixPath";
 
 // Must run before anything spawns npx/pnpm/yarn/bunx — GUI-launched apps get
@@ -147,6 +148,19 @@ app.whenReady().then(() => {
     const result = await gitOps.clone(gitRemote, target);
     return result.ok ? { repoPath: result.message } : { error: result.message };
   });
+
+  ipcMain.handle(
+    "capture-snapshot",
+    async (_e, url: string, opts: { width: number; height: number; waitForDeploy?: boolean }) => {
+      if (opts.waitForDeploy && !(await snapshots.waitForDeploy(url))) return null;
+      try {
+        return await snapshots.capture(url, opts);
+      } catch (err) {
+        console.warn("snapshot failed:", err);
+        return null;
+      }
+    }
+  );
 
   ipcMain.handle("get-update-status", () => updater.status());
   ipcMain.handle("install-update", () => updater.installNow());

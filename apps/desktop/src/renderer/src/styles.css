@@ -767,6 +767,30 @@ textarea:focus {
   font-weight: 500;
 }
 
+/* Message image attachments (before/after snapshots) */
+.msg-images {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.msg-images button {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: none;
+  cursor: zoom-in;
+}
+.msg-images img {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  object-position: top;
+}
+
 /* Current-vs-draft compare (PRJ-14) */
 .compare-overlay {
   position: fixed;

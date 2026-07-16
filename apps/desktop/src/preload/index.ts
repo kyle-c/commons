@@ -45,6 +45,7 @@ const api: CommonsApi = {
     ipcRenderer.on("agent-event", handler);
     return () => ipcRenderer.removeListener("agent-event", handler);
   },
+  captureSnapshot: (url, opts) => ipcRenderer.invoke("capture-snapshot", url, opts),
   getUpdateStatus: () => ipcRenderer.invoke("get-update-status"),
   onUpdateStatus: (cb) => {
     const handler = (_e: unknown, status: UpdateStatus) => cb(status);

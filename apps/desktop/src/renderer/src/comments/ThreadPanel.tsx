@@ -61,6 +61,19 @@ export default function ThreadPanel({ thread, me, users, mentionUsers, onClose, 
               <div className="text">
                 <MessageText body={message.body} users={users} />
               </div>
+              {message.imageUrls && message.imageUrls.length > 0 && (
+                <div className="msg-images">
+                  {message.imageUrls.map((url, i) => (
+                    <button
+                      key={i}
+                      title="Open full size"
+                      onClick={() => (window.commons ? void window.commons.openExternal(url) : window.open(url))}
+                    >
+                      <img src={url} alt={`attachment ${i + 1}`} />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         ))}

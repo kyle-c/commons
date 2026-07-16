@@ -74,12 +74,19 @@ export const createThread = mutation({
   },
 });
 
+// Upload target for message-image attachments (snapshots).
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => await ctx.storage.generateUploadUrl(),
+});
+
 export const reply = mutation({
   args: {
     threadId: v.id("threads"),
     authorId: v.id("users"),
     body: v.string(),
     mentions: v.array(v.id("users")),
+    images: v.optional(v.array(v.id("_storage"))),
   },
   handler: async (ctx, args) => {
     const thread = await ctx.db.get(args.threadId);
@@ -130,7 +137,16 @@ export const threadsForProject = query({
           .withIndex("by_thread", (q) => q.eq("threadId", thread._id))
           .collect();
         const withAuthors = await Promise.all(
-          messages.map(async (m) => ({ ...m, author: await ctx.db.get(m.authorId) }))
+          messages.map(async (m) => ({
+            ...m,
+            author: await ctx.db.get(m.authorId),
+            imageUrls:
+              m.images && m.images.length > 0
+                ? (await Promise.all(m.images.map((id) => ctx.storage.getUrl(id)))).filter(
+                    (u): u is string => u !== null
+                  )
+                : undefined,
+          }))
         );
         return { ...thread, messages: withAuthors };
       })

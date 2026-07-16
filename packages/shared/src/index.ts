@@ -192,6 +192,15 @@ export interface CommonsApi {
   stopAgentSession(sessionId: string): Promise<void>;
   listAgentSessions(): Promise<AgentSessionInfo[]>;
   onAgentEvent(cb: (sessionId: string, event: AgentSessionEvent) => void): () => void;
+  /**
+   * Render a URL offscreen and return a PNG (SNAP-1). waitForDeploy first
+   * polls until the URL serves 200 (draft previews build after the push) —
+   * the returned promise can take minutes; null if the deploy never came up.
+   */
+  captureSnapshot(
+    url: string,
+    opts: { width: number; height: number; waitForDeploy?: boolean }
+  ): Promise<Uint8Array | null>;
   /** Auto-update: current status (for late subscribers), push events, restart-to-install. */
   getUpdateStatus(): Promise<UpdateStatus>;
   onUpdateStatus(cb: (status: UpdateStatus) => void): () => void;

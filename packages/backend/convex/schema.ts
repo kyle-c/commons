@@ -146,6 +146,8 @@ export default defineSchema({
     authorId: v.id("users"),
     body: v.string(),
     mentions: v.array(v.id("users")),
+    // Attached images (Convex storage) — e.g. agent before/after snapshots.
+    images: v.optional(v.array(v.id("_storage"))),
   }).index("by_thread", ["threadId"]),
 
   // In-app inbox entries created by @mentions.

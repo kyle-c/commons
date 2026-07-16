@@ -365,6 +365,55 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   }, [appendAgentEvent]);
 
   const replyToThread = useMutation(api.comments.reply);
+  const generateUploadUrl = useMutation(api.comments.generateUploadUrl);
+
+  /**
+   * SNAP-2: before/after images on draft results. "Before" is the current
+   * preview at the session's route; "after" is the draft branch's deploy
+   * preview once Vercel finishes building it (minutes) — so this runs fire-
+   * and-forget and posts a follow-up image reply when both are in hand.
+   */
+  const postBeforeAfter = (session: AgentSessionInfo, draftPreviewUrl: string) => {
+    if (!window.commons?.captureSnapshot || !session.context.threadId) return;
+    const routePath = session.context.routePath ?? "/";
+    const frame = session.context.frameId ? frames.find((f) => f._id === session.context.frameId) : undefined;
+    const size = { width: frame?.width ?? 1280, height: frame?.height ?? 800 };
+    const beforeUrl = resolveFrameUrl(routePath, devStatus, project?.previewUrl)?.url;
+    if (!beforeUrl) return;
+
+    const upload = async (png: Uint8Array) => {
+      const url = await generateUploadUrl();
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "image/png" },
+        body: new Blob([png as BlobPart], { type: "image/png" }),
+      });
+      const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+      return storageId;
+    };
+
+    void (async () => {
+      try {
+        // Capture "before" immediately — main will change once the PR merges.
+        const before = await window.commons.captureSnapshot(beforeUrl, size);
+        const after = await window.commons.captureSnapshot(`${draftPreviewUrl}${routePath}`, {
+          ...size,
+          waitForDeploy: true,
+        });
+        if (!before || !after) return;
+        const [beforeId, afterId] = await Promise.all([upload(before), upload(after)]);
+        await replyToThread({
+          threadId: session.context.threadId as Id<"threads">,
+          authorId: me._id,
+          body: `📸 Before → after (${routePath})`,
+          mentions: [],
+          images: [beforeId, afterId],
+        });
+      } catch (err) {
+        console.warn("before/after snapshot failed", err);
+      }
+    })();
+  };
 
   const handleAgentResult = (session: AgentSessionInfo, event: AgentResultEvent) => {
     if (session.context.projectId !== nav.projectId) return;
@@ -393,6 +442,10 @@ export default function ProjectView({ me, nav, setNav }: Props) {
         body: `⚡ Agent finished: ${summary}${files}${draftNote}`,
         mentions: [],
       }).catch((err) => console.error("agent thread reply failed", err));
+
+      if (event.draft?.previewUrl && event.editedFiles.length > 0) {
+        postBeforeAfter(session, event.draft.previewUrl);
+      }
     }
 
     // Draft edits live on their branch, not in the local tree — no reload.
