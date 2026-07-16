@@ -1,0 +1,19 @@
+{
+  "name": "@commons/backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "convex dev",
+    "dev:once": "convex dev --once",
+    "codegen": "convex codegen",
+    "typecheck": "tsc --noEmit -p convex",
+    "dev:anon": "CONVEX_AGENT_MODE=anonymous convex dev"
+  },
+  "dependencies": {
+    "@commons/shared": "workspace:*",
+    "convex": "^1.24.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

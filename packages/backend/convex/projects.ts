@@ -1,0 +1,226 @@
+import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
+import { accessibleProject, canAccessProject } from "./access";
+
+export const create = mutation({
+  args: {
+    name: v.string(),
+    createdBy: v.id("users"),
+    visibility: v.optional(v.union(v.literal("team"), v.literal("private"))),
+    repoPath: v.optional(v.string()),
+    gitRemote: v.optional(v.string()),
+    framework: v.optional(v.string()),
+    brandColors: v.optional(v.array(v.string())),
+    figmaFileKey: v.optional(v.string()),
+    frames: v.array(
+      v.object({
+        kind: v.union(v.literal("route"), v.literal("figma")),
+        title: v.string(),
+        section: v.optional(v.string()),
+        routePath: v.optional(v.string()),
+        figmaNodeId: v.optional(v.string()),
+        x: v.number(),
+        y: v.number(),
+        width: v.number(),
+        height: v.number(),
+      })
+    ),
+  },
+  handler: async (ctx, { frames, ...project }) => {
+    const projectId = await ctx.db.insert("projects", project);
+    for (const frame of frames) {
+      await ctx.db.insert("frames", { projectId, ...frame });
+    }
+    return projectId;
+  },
+});
+
+export const get = query({
+  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")) },
+  handler: (ctx, { projectId, userId }) => accessibleProject(ctx, projectId, userId),
+});
+
+// Home view: every active project this user can see, with creator + presence.
+export const listWithActivity = query({
+  args: { userId: v.optional(v.id("users")) },
+  handler: async (ctx, { userId }) => {
+    const projects = await ctx.db.query("projects").collect();
+    const active = projects.filter((p) => !p.archivedAt && canAccessProject(p, userId));
+    const cutoff = Date.now() - 60_000;
+    return await Promise.all(
+      active.map(async (project) => {
+        const creator = await ctx.db.get(project.createdBy);
+        const present = await ctx.db
+          .query("presence")
+          .withIndex("by_project", (q) => q.eq("projectId", project._id))
+          .collect();
+        const activeUsers = await Promise.all(
+          present.filter((p) => p.lastSeenAt > cutoff).map((p) => ctx.db.get(p.userId))
+        );
+        const frames = await ctx.db
+          .query("frames")
+          .withIndex("by_project", (q) => q.eq("projectId", project._id))
+          .collect();
+        const threads = await ctx.db
+          .query("threads")
+          .withIndex("by_project", (q) => q.eq("projectId", project._id))
+          .collect();
+        // Card thumbnail: the canvas as a schematic map — frame rects plus
+        // open-thread pin positions, all in canvas coordinates.
+        const frameById = new Map(frames.map((f) => [f._id, f]));
+        const openThreads = threads.filter((t) => !t.resolvedAt);
+        const pins = openThreads
+          .map((t) => {
+            if (t.frameId) {
+              const frame = frameById.get(t.frameId);
+              if (!frame) return null;
+              return { x: frame.x + (t.fx ?? 0) * frame.width, y: frame.y + (t.fy ?? 0) * frame.height };
+            }
+            return { x: t.canvasX ?? 0, y: t.canvasY ?? 0 };
+          })
+          .filter((p): p is { x: number; y: number } => p !== null);
+        return {
+          ...project,
+          creator,
+          activeUsers: activeUsers.filter(Boolean),
+          frameCount: frames.length,
+          openThreadCount: openThreads.length,
+          thumbnail: {
+            frames: frames.map(({ x, y, width, height }) => ({ x, y, width, height })),
+            pins,
+          },
+        };
+      })
+    );
+  },
+});
+
+export const frames = query({
+  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")) },
+  handler: async (ctx, { projectId, userId }) => {
+    if (!(await accessibleProject(ctx, projectId, userId))) return [];
+    return await ctx.db
+      .query("frames")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+  },
+});
+
+// Creator-only controls for private projects.
+export const setVisibility = mutation({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+    visibility: v.union(v.literal("team"), v.literal("private")),
+  },
+  handler: async (ctx, { projectId, userId, visibility }) => {
+    const project = await ctx.db.get(projectId);
+    if (!project || project.createdBy !== userId) throw new Error("Only the project's creator can change visibility.");
+    await ctx.db.patch(projectId, { visibility });
+  },
+});
+
+export const setMembers = mutation({
+  args: { projectId: v.id("projects"), userId: v.id("users"), memberIds: v.array(v.id("users")) },
+  handler: async (ctx, { projectId, userId, memberIds }) => {
+    const project = await ctx.db.get(projectId);
+    if (!project || project.createdBy !== userId) throw new Error("Only the project's creator can manage members.");
+    await ctx.db.patch(projectId, { memberIds: memberIds.filter((id) => id !== project.createdBy) });
+  },
+});
+
+export const moveFrame = mutation({
+  args: {
+    frameId: v.id("frames"),
+    x: v.number(),
+    y: v.number(),
+  },
+  handler: async (ctx, { frameId, x, y }) => {
+    await ctx.db.patch(frameId, { x, y });
+  },
+});
+
+export const archive = mutation({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    await ctx.db.patch(projectId, { archivedAt: Date.now() });
+  },
+});
+
+// DEPRECATED: machine-local paths live in repoLinks now. Kept for old callers.
+export const setRepoPath = mutation({
+  args: { projectId: v.id("projects"), repoPath: v.string() },
+  handler: async (ctx, { projectId, repoPath }) => {
+    await ctx.db.patch(projectId, { repoPath });
+  },
+});
+
+// Re-run of route discovery against a linked working copy — fills in frames
+// for projects that were created before their framework was supported.
+export const rediscover = mutation({
+  args: {
+    projectId: v.id("projects"),
+    framework: v.optional(v.string()),
+    frames: v.array(
+      v.object({
+        kind: v.union(v.literal("route"), v.literal("figma")),
+        title: v.string(),
+        section: v.optional(v.string()),
+        routePath: v.optional(v.string()),
+        figmaNodeId: v.optional(v.string()),
+        x: v.number(),
+        y: v.number(),
+        width: v.number(),
+        height: v.number(),
+      })
+    ),
+    // "Tidy": also move/resize known frames into the derived section layout.
+    relayout: v.optional(v.boolean()),
+    brandColors: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, { projectId, framework, frames, relayout, brandColors }) => {
+    if (framework) await ctx.db.patch(projectId, { framework });
+    if (brandColors) await ctx.db.patch(projectId, { brandColors });
+    const existing = await ctx.db
+      .query("frames")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+    const knownByRoute = new Map(existing.filter((f) => f.routePath).map((f) => [f.routePath, f]));
+    for (const frame of frames) {
+      const known = frame.routePath ? knownByRoute.get(frame.routePath) : undefined;
+      if (known) {
+        if (relayout) {
+          await ctx.db.patch(known._id, {
+            section: frame.section,
+            x: frame.x,
+            y: frame.y,
+            width: frame.width,
+            height: frame.height,
+          });
+        } else if (frame.section && known.section !== frame.section) {
+          // Keep the user's positions; adopt newly derived section labels.
+          await ctx.db.patch(known._id, { section: frame.section });
+        }
+        continue;
+      }
+      await ctx.db.insert("frames", { projectId, ...frame });
+    }
+  },
+});
+
+// Canonical identity of the project's code source (e.g. the origin URL).
+export const setGitRemote = mutation({
+  args: { projectId: v.id("projects"), gitRemote: v.string() },
+  handler: async (ctx, { projectId, gitRemote }) => {
+    await ctx.db.patch(projectId, { gitRemote });
+  },
+});
+
+// Deployed preview base URL; frames render previewUrl + routePath for
+// teammates without a local working copy.
+export const setPreviewUrl = mutation({
+  args: { projectId: v.id("projects"), previewUrl: v.optional(v.string()) },
+  handler: async (ctx, { projectId, previewUrl }) => {
+    await ctx.db.patch(projectId, { previewUrl });
+  },
+});

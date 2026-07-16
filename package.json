@@ -1,0 +1,14 @@
+{
+  "name": "commons",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "pnpm -C packages/backend dev:once && pnpm -C apps/desktop dev",
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm -C apps/desktop build"
+  },
+  "packageManager": "pnpm@10.12.4",
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron", "esbuild"]
+  }
+}
