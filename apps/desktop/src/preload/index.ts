@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AgentSessionEvent, AuthCallback, CommonsApi, DeepLink, DevServerStatus } from "@commons/shared";
+import type {
+  AgentSessionEvent,
+  AuthCallback,
+  CommonsApi,
+  DeepLink,
+  DevServerStatus,
+  UpdateStatus,
+} from "@commons/shared";
 
 const api: CommonsApi = {
   pickRepo: () => ipcRenderer.invoke("pick-repo"),
@@ -38,6 +45,13 @@ const api: CommonsApi = {
     ipcRenderer.on("agent-event", handler);
     return () => ipcRenderer.removeListener("agent-event", handler);
   },
+  getUpdateStatus: () => ipcRenderer.invoke("get-update-status"),
+  onUpdateStatus: (cb) => {
+    const handler = (_e: unknown, status: UpdateStatus) => cb(status);
+    ipcRenderer.on("update-status", handler);
+    return () => ipcRenderer.removeListener("update-status", handler);
+  },
+  installUpdate: () => ipcRenderer.invoke("install-update"),
 };
 
 contextBridge.exposeInMainWorld("commons", api);

@@ -45,3 +45,12 @@ dmg:
 
 # pnpm workspace: nothing to rebuild (no native modules).
 npmRebuild: false
+
+# Auto-update feed. "generic" because the source repo is private (a GitHub feed
+# would need a token in every install): the prod Convex deployment serves
+# /update/latest-mac.yml + artifacts from its file storage — see
+# packages/backend/convex/updates.ts and scripts/publish-update.mjs.
+# electron-builder only *generates* latest-mac.yml here; publishing is our script.
+publish:
+  provider: generic
+  url: https://rapid-anteater-106.convex.site/update

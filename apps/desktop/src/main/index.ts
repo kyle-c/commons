@@ -7,6 +7,7 @@ import * as runner from "./projectRunner";
 import * as agents from "./agents/sessionManager";
 import * as previewHarness from "./previewHarness";
 import * as gitOps from "./gitOps";
+import * as updater from "./updater";
 import { fixPath } from "./fixPath";
 
 // Must run before anything spawns npx/pnpm/yarn/bunx — GUI-launched apps get
@@ -147,6 +148,9 @@ app.whenReady().then(() => {
     return result.ok ? { repoPath: result.message } : { error: result.message };
   });
 
+  ipcMain.handle("get-update-status", () => updater.status());
+  ipcMain.handle("install-update", () => updater.installNow());
+
   ipcMain.handle("agent-start", (_e, options: AgentStartOptions) => agents.start(options));
   ipcMain.handle("agent-prompt", (_e, sessionId: string, prompt: string) => agents.prompt(sessionId, prompt));
   ipcMain.handle("agent-stop", (_e, sessionId: string) => agents.stop(sessionId));
@@ -158,6 +162,10 @@ app.whenReady().then(() => {
 
   agents.onEvent((sessionId, event) => {
     mainWindow?.webContents.send("agent-event", sessionId, event);
+  });
+
+  updater.start((status) => {
+    mainWindow?.webContents.send("update-status", status);
   });
 
   createWindow();

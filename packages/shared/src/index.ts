@@ -140,6 +140,9 @@ export interface GitSetupStatus {
   remoteAccess: "ok" | "auth_failed" | "unreachable" | "skipped";
 }
 
+/** Auto-update state relayed to the renderer ("ready" shows the restart chip). */
+export type UpdateStatus = { state: "none" } | { state: "ready"; version: string };
+
 /** Payload of the commons:// callback that ends a system-browser OAuth flow. */
 export interface AuthCallback {
   /** The OAuth `state` the app started the flow with. */
@@ -175,6 +178,10 @@ export interface CommonsApi {
   stopAgentSession(sessionId: string): Promise<void>;
   listAgentSessions(): Promise<AgentSessionInfo[]>;
   onAgentEvent(cb: (sessionId: string, event: AgentSessionEvent) => void): () => void;
+  /** Auto-update: current status (for late subscribers), push events, restart-to-install. */
+  getUpdateStatus(): Promise<UpdateStatus>;
+  onUpdateStatus(cb: (status: UpdateStatus) => void): () => void;
+  installUpdate(): Promise<void>;
 }
 
 export const DEEP_LINK_PROTOCOL = "commons";

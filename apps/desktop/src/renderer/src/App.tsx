@@ -9,6 +9,7 @@ import Inbox from "./views/Inbox";
 import Team from "./views/Team";
 import Welcome from "./views/Welcome";
 import ShortcutsHelp from "./views/ShortcutsHelp";
+import UpdateChip from "./views/UpdateChip";
 import ThemeToggle from "./views/ThemeToggle";
 import AccountMenu from "./views/AccountMenu";
 import { clearStoredSession, getStoredSession, initials, type StoredSession } from "./lib/session";
@@ -85,6 +86,7 @@ export default function App() {
       <>
         <ShortcutsHelp />
         <ProjectView key={nav.projectId} me={me} nav={nav} setNav={setNav} />
+        <UpdateChip />
       </>
     );
   }
@@ -102,6 +104,7 @@ export default function App() {
       <ProjectList me={me} setNav={setNav} />
       <ShortcutsHelp />
       <Welcome name={me.name} />
+      <UpdateChip />
     </div>
   );
 }
