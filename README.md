@@ -1,6 +1,6 @@
 # Commons
 
-Design in Figma or in code — collaborate on both through one shared canvas. See [SPEC.md](SPEC.md) for the full product spec and milestones.
+Design in Figma or in code — collaborate on both through one shared canvas. The product spec and roadmap live in a private companion repo ([kyle-c/commons-docs](https://github.com/kyle-c/commons-docs)).
 
 ## Run it
 

@@ -1,6 +1,6 @@
 # Commons — agent instructions
 
-Read `SPEC.md` first; it is the source of truth for product and architecture decisions. Do not re-open locked decisions (stack, backend, aesthetic) without Kyle asking.
+Product and architecture decisions live in the private [kyle-c/commons-docs](https://github.com/kyle-c/commons-docs) repo (`SPEC.md` is the source of truth; `PRD.md` tracks requirements, `PRFAQ.md` the positioning) — usually checked out at `~/Code/active/commons-docs`. Do not re-open locked decisions (stack, backend, aesthetic) without Kyle asking.
 
 ## Commands
 
