@@ -34,6 +34,25 @@ async function scheduleMentionEmails(
   });
 }
 
+/** COM-6: new threads and agent results land in the team Slack channel. */
+async function scheduleSlackPost(
+  ctx: MutationCtx,
+  args: { projectId: Id<"projects">; threadId: Id<"threads">; authorId: Id<"users">; body: string; kind: "thread" | "agent" }
+): Promise<void> {
+  const [author, project] = await Promise.all([ctx.db.get(args.authorId), ctx.db.get(args.projectId)]);
+  // Private-project activity stays out of the shared channel.
+  if (!project || project.visibility === "private") return;
+  const snippet = args.body.length > 200 ? `${args.body.slice(0, 200)}…` : args.body;
+  const link = buildDeepLink({ projectId: args.projectId, view: "canvas", threadId: args.threadId });
+  const headline =
+    args.kind === "agent"
+      ? `⚡ Agent draft ready on *${project.name}* (via ${author?.name ?? "a teammate"})`
+      : `💬 ${author?.name ?? "A teammate"} started a thread on *${project.name}*`;
+  await ctx.scheduler.runAfter(0, internal.slack.post, {
+    text: `${headline}\n> ${snippet.replace(/\n/g, "\n> ")}\nOpen in Commons: ${link}`,
+  });
+}
+
 export const createThread = mutation({
   args: {
     projectId: v.id("projects"),
@@ -69,6 +88,13 @@ export const createThread = mutation({
       authorId: thread.createdBy,
       body,
       mentions,
+    });
+    await scheduleSlackPost(ctx, {
+      projectId: thread.projectId,
+      threadId,
+      authorId: thread.createdBy,
+      body,
+      kind: "thread",
     });
     return threadId;
   },
@@ -110,6 +136,16 @@ export const reply = mutation({
       body: args.body,
       mentions,
     });
+    // Agent-result replies (AG-8 posts them with the ⚡ prefix) hit Slack too.
+    if (args.body.startsWith("⚡")) {
+      await scheduleSlackPost(ctx, {
+        projectId: thread.projectId,
+        threadId: args.threadId,
+        authorId: args.authorId,
+        body: args.body,
+        kind: "agent",
+      });
+    }
     return messageId;
   },
 });

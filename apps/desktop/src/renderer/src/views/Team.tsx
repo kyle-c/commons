@@ -20,6 +20,7 @@ export default function Team({ me }: { me: Doc<"users"> }) {
   const [busy, setBusy] = useState(false);
   const users = useQuery(api.users.list, open ? {} : "skip") ?? [];
   const pending = useQuery(api.invites.pending, open ? {} : "skip") ?? [];
+  const pulse = useQuery(api.metrics.pilot, open ? { userId: me._id } : "skip");
   const invite = useMutation(api.invites.create);
   const revoke = useMutation(api.invites.revoke);
 
@@ -93,6 +94,25 @@ export default function Team({ me }: { me: Doc<"users"> }) {
           {notice && (
             <div className="hint" style={{ padding: "0 14px 12px" }}>
               {notice}
+            </div>
+          )}
+          {pulse && (
+            <div className="pilot-pulse">
+              <span className="hint" style={{ fontWeight: 600 }}>
+                Pilot pulse (7 days)
+              </span>
+              <span className="hint">
+                {pulse.weeklyActiveUsers}/{pulse.totalUsers} active · {pulse.threadsThisWeek} threads
+                {pulse.threadsPriorWeek > 0 && ` (prev ${pulse.threadsPriorWeek})`} · {pulse.draftsPushedThisWeek}{" "}
+                drafts pushed
+              </span>
+              <span className="hint">
+                {pulse.medianCycleMs !== null
+                  ? `comment→fix median ${Math.round(pulse.medianCycleMs / 60000)} min over ${pulse.agentRepliesTotal} fixes`
+                  : "no agent fixes yet"}
+                {" · "}
+                {pulse.testSessionsThisMonth} test sessions/30d
+              </span>
             </div>
           )}
         </div>

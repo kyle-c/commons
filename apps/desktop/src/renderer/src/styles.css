@@ -772,6 +772,15 @@ textarea:focus {
   font-weight: 500;
 }
 
+/* Pilot pulse (MET-1) in the Team popover */
+.pilot-pulse {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
 /* Message image attachments (before/after snapshots) */
 .msg-images {
   display: flex;
