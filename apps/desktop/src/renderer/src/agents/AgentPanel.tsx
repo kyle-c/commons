@@ -21,9 +21,19 @@ interface Props {
   onSendPrompt: (sessionId: string, prompt: string) => Promise<void>;
   onStop: (sessionId: string) => void;
   onClose: () => void;
+  /** Open the main-vs-draft side-by-side compare (PRJ-14). */
+  onCompareDraft?: (draftPreviewUrl: string, routePath: string | undefined, title: string) => void;
 }
 
-function TranscriptItem({ event }: { event: AgentSessionEvent }) {
+function TranscriptItem({
+  event,
+  session,
+  onCompareDraft,
+}: {
+  event: AgentSessionEvent;
+  session: PanelSession | null;
+  onCompareDraft?: Props["onCompareDraft"];
+}) {
   switch (event.type) {
     case "prompt":
       return <div className="agent-item prompt">{event.text}</div>;
@@ -60,6 +70,26 @@ function TranscriptItem({ event }: { event: AgentSessionEvent }) {
           {event.draft && (
             <div className="draft-row">
               <code title={`Branched from ${event.draft.baseBranch}`}>{event.draft.branch}</code>
+              {event.draft.previewUrl && (
+                <button
+                  className="btn ghost"
+                  title="Open the draft branch's deploy preview (may take a minute to build after the push)"
+                  onClick={() =>
+                    window.commons.openExternal(`${event.draft!.previewUrl!}${session?.routePath ?? ""}`)
+                  }
+                >
+                  View draft ↗
+                </button>
+              )}
+              {event.draft.previewUrl && onCompareDraft && (
+                <button
+                  className="btn ghost"
+                  title="Current vs draft, side by side"
+                  onClick={() => onCompareDraft(event.draft!.previewUrl!, session?.routePath, session?.title ?? "Draft")}
+                >
+                  Compare
+                </button>
+              )}
               {event.draft.compareUrl && (
                 <button className="btn" onClick={() => window.commons.openExternal(event.draft!.compareUrl!)}>
                   Ship ↗
@@ -86,6 +116,7 @@ export default function AgentPanel({
   onSendPrompt,
   onStop,
   onClose,
+  onCompareDraft,
 }: Props) {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -148,7 +179,7 @@ export default function AgentPanel({
           <div className="agent-transcript" ref={scrollRef}>
             {transcript.length === 0 && <div className="agent-item tool">Starting session…</div>}
             {transcript.map((event, i) => (
-              <TranscriptItem key={i} event={event} />
+              <TranscriptItem key={i} event={event} session={active} onCompareDraft={onCompareDraft} />
             ))}
           </div>
           {active.canControl ? (

@@ -61,6 +61,10 @@ export default defineSchema({
     // Deployed preview (e.g. Vercel) — frames fall back to previewUrl + routePath
     // for teammates without a local working copy.
     previewUrl: v.optional(v.string()),
+    // "{branch}"-templated URL for per-branch deploy previews, e.g.
+    // "https://myapp-git-{branch}-team.vercel.app" — lets everyone see an
+    // agent draft live before it merges (PRJ-14).
+    branchPreviewPattern: v.optional(v.string()),
     // Two most prominent colors from the repo's stylesheets — drives the
     // project card cover.
     brandColors: v.optional(v.array(v.string())),

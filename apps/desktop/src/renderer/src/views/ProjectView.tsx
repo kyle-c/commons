@@ -13,6 +13,7 @@ import AgentPanel, { type PanelSession } from "../agents/AgentPanel";
 import ThemeToggle from "./ThemeToggle";
 import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessions";
 import { initials } from "../lib/session";
+import { resolveFrameUrl } from "../lib/frameUrl";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
 import { useClickOutside } from "../lib/useClickOutside";
@@ -59,9 +60,12 @@ function PreviewSettings({
 }) {
   const setOpen = onOpenChange;
   const [value, setValue] = useState("");
+  const [pattern, setPattern] = useState("");
   const setPreviewUrl = useMutation(api.projects.setPreviewUrl);
   const trimmed = value.trim();
+  const trimmedPattern = pattern.trim();
   const valid = trimmed === "" || /^https?:\/\/.+/.test(trimmed);
+  const patternValid = trimmedPattern === "" || (/^https?:\/\/.+/.test(trimmedPattern) && trimmedPattern.includes("{branch}"));
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
 
@@ -72,6 +76,7 @@ function PreviewSettings({
         title="Where teammates without the repo see this project — frames fall back to this deployed URL when no local dev server is running"
         onClick={() => {
           setValue(project.previewUrl ?? "");
+          setPattern(project.branchPreviewPattern ?? "");
           setOpen(!open);
         }}
       >
@@ -86,17 +91,28 @@ function PreviewSettings({
             placeholder="https://myapp-git-main-team.vercel.app"
             autoFocus
           />
+          <label className="hint" style={{ marginTop: 8 }}>
+            Branch preview pattern — lets everyone view agent drafts before they merge. Use {"{branch}"} where
+            the branch slug goes (Vercel: myapp-git-{"{branch}"}-team)
+          </label>
+          <input
+            value={pattern}
+            onChange={(e) => setPattern(e.target.value)}
+            placeholder={"https://myapp-git-{branch}-team.vercel.app"}
+          />
           <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 8 }}>
             <button className="btn ghost" onClick={() => setOpen(false)}>
               Cancel
             </button>
             <button
               className="btn"
-              disabled={!valid}
+              disabled={!valid || !patternValid}
               onClick={async () => {
                 await setPreviewUrl({
                   projectId: project._id,
                   previewUrl: trimmed === "" ? undefined : trimmed.replace(/\/+$/, ""),
+                  branchPreviewPattern: trimmedPattern === "" ? undefined : trimmedPattern.replace(/\/+$/, ""),
+                  hasBranchPattern: true,
                 });
                 setOpen(false);
               }}
@@ -106,6 +122,44 @@ function PreviewSettings({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Side-by-side current-vs-draft compare (PRJ-14): two live iframes at the same route. */
+function CompareDraft({
+  title,
+  mainUrl,
+  draftUrl,
+  onClose,
+}: {
+  title: string;
+  mainUrl: string | null;
+  draftUrl: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="compare-overlay" onMouseDown={onClose}>
+      <div className="compare-modal" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="compare-head">
+          <strong>{title}</strong>
+          <span className="hint">Draft previews build after the push — if the right side 404s, give Vercel a minute.</span>
+          <span style={{ flex: 1 }} />
+          <button className="btn ghost" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <div className="compare-panes">
+          <div className="compare-pane">
+            <span className="badge">current</span>
+            {mainUrl ? <iframe src={mainUrl} title="Current" /> : <div className="hint">No preview for main</div>}
+          </div>
+          <div className="compare-pane">
+            <span className="badge draft">draft</span>
+            <iframe src={draftUrl} title="Draft" />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -267,6 +321,8 @@ export default function ProjectView({ me, nav, setNav }: Props) {
 
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   const [activeAgentSessionId, setActiveAgentSessionId] = useState<string | null>(null);
+  // Current-vs-draft side-by-side (PRJ-14), opened from a draft result row.
+  const [compare, setCompare] = useState<{ title: string; routePath?: string; draftPreviewUrl: string } | null>(null);
   // Per-frame counters bumped when an agent finishes editing; keys the frame iframes.
   const [frameReloadTokens, setFrameReloadTokens] = useState<Record<string, number>>({});
 
@@ -319,8 +375,11 @@ export default function ProjectView({ me, nav, setNav }: Props) {
     if (session.context.threadId) {
       const summary = event.summary.length > 1000 ? `${event.summary.slice(0, 997)}…` : event.summary;
       const files = event.editedFiles.length > 0 ? `\n\nChanged: ${event.editedFiles.join(", ")}` : "";
+      const draftRoute = session.context.routePath ?? "";
       const draftNote = event.draft
         ? `\n\nDraft branch: ${event.draft.branch}${
+            event.draft.previewUrl ? `\nView draft: ${event.draft.previewUrl}${draftRoute}` : ""
+          }${
             event.draft.compareUrl
               ? `\nShip it: ${event.draft.compareUrl}`
               : event.draft.committed && !event.draft.pushed
@@ -375,7 +434,11 @@ export default function ProjectView({ me, nav, setNav }: Props) {
     });
     const info = await agentControl.start({
       ...(draftMode
-        ? { gitRemote: project!.gitRemote, draftSlug: slugify(title) }
+        ? {
+            gitRemote: project!.gitRemote,
+            draftSlug: slugify(title),
+            branchPreviewPattern: project!.branchPreviewPattern,
+          }
         : { repoPath: repoPath! }),
       prompt: buildThreadPrompt(thread, frame),
       title,
@@ -676,6 +739,18 @@ export default function ProjectView({ me, nav, setNav }: Props) {
             if (localId) void agentControl.stop(localId);
           }}
           onClose={() => setAgentPanelOpen(false)}
+          onCompareDraft={(draftPreviewUrl, routePath, title) =>
+            setCompare({ draftPreviewUrl, routePath, title })
+          }
+        />
+      )}
+
+      {compare && (
+        <CompareDraft
+          title={compare.title}
+          mainUrl={resolveFrameUrl(compare.routePath ?? "/", devStatus, project.previewUrl)?.url ?? null}
+          draftUrl={`${compare.draftPreviewUrl}${compare.routePath ?? ""}`}
+          onClose={() => setCompare(null)}
         />
       )}
     </div>

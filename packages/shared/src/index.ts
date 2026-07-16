@@ -74,6 +74,8 @@ export interface AgentStartOptions {
   gitRemote?: string;
   /** Branch slug for draft mode, e.g. "fix-savings-header". */
   draftSlug?: string;
+  /** "{branch}"-templated URL for per-branch deploy previews (PRJ-14). */
+  branchPreviewPattern?: string;
   prompt: string;
   /** Short label shown in the session list, e.g. the first line of the thread. */
   title: string;
@@ -89,7 +91,19 @@ export interface AgentDraftInfo {
   pushed: boolean;
   /** GitHub compare/PR page ("Ship it") when the remote is GitHub. */
   compareUrl?: string;
+  /** Deployed preview of the draft branch (from the project's branchPreviewPattern). */
+  previewUrl?: string;
   pushError?: string;
+}
+
+/**
+ * Resolve a draft branch's deploy-preview URL from a project pattern like
+ * "https://myapp-git-{branch}-team.vercel.app". The branch is slugified the
+ * way Vercel does (non-alphanumerics → dashes): commons/fix-nav → commons-fix-nav.
+ */
+export function draftPreviewUrl(pattern: string, branch: string): string {
+  const slug = branch.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return pattern.replace("{branch}", slug).replace(/\/+$/, "");
 }
 
 export interface AgentSessionInfo {

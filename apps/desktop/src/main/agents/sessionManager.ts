@@ -8,6 +8,7 @@ import type {
   AgentSessionStatus,
   AgentStartOptions,
 } from "@commons/shared";
+import { draftPreviewUrl } from "@commons/shared";
 import type { AgentAdapter, AgentTurnHandle } from "./adapter";
 import { claudeAdapter } from "./claudeAdapter";
 import * as gitOps from "../gitOps";
@@ -17,6 +18,8 @@ type EventListener = (sessionId: string, event: AgentSessionEvent) => void;
 interface DraftState {
   gitRemote: string;
   slug: string;
+  /** "{branch}"-templated deploy-preview URL (PRJ-14). */
+  previewPattern?: string;
   checkoutPath?: string;
   branch?: string;
   baseBranch?: string;
@@ -78,7 +81,11 @@ export function start(options: AgentStartOptions): AgentSessionInfo {
     adapter,
     editedFiles: new Set(),
     draft: options.gitRemote
-      ? { gitRemote: options.gitRemote, slug: options.draftSlug ?? "draft" }
+      ? {
+          gitRemote: options.gitRemote,
+          slug: options.draftSlug ?? "draft",
+          previewPattern: options.branchPreviewPattern,
+        }
       : undefined,
   };
   sessions.set(sessionId, session);
@@ -178,6 +185,8 @@ function runTurn(session: ManagedSession, promptText: string): void {
         compareUrl: landed.pushed
           ? gitOps.compareUrl(draft.gitRemote, draft.baseBranch ?? "main", draft.branch)
           : undefined,
+        previewUrl:
+          landed.pushed && draft.previewPattern ? draftPreviewUrl(draft.previewPattern, draft.branch) : undefined,
         pushError: landed.error,
       };
     }

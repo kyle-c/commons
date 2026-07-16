@@ -217,10 +217,19 @@ export const setGitRemote = mutation({
 });
 
 // Deployed preview base URL; frames render previewUrl + routePath for
-// teammates without a local working copy.
+// teammates without a local working copy. hasBranchPattern distinguishes
+// "clear the pattern" from "old client that never sends it" (version skew).
 export const setPreviewUrl = mutation({
-  args: { projectId: v.id("projects"), previewUrl: v.optional(v.string()) },
-  handler: async (ctx, { projectId, previewUrl }) => {
-    await ctx.db.patch(projectId, { previewUrl });
+  args: {
+    projectId: v.id("projects"),
+    previewUrl: v.optional(v.string()),
+    branchPreviewPattern: v.optional(v.string()),
+    hasBranchPattern: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { projectId, previewUrl, branchPreviewPattern, hasBranchPattern }) => {
+    await ctx.db.patch(projectId, {
+      previewUrl,
+      ...(hasBranchPattern ? { branchPreviewPattern: branchPreviewPattern || undefined } : {}),
+    });
   },
 });
