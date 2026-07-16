@@ -1,0 +1,47 @@
+# Packaging config for the distributable macOS build (single source of truth —
+# don't add a "build" block to package.json).
+# Signed + notarized when the Apple env vars are present — see README, "Distributable build".
+appId: app.commons.desktop
+productName: Commons
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - package.json
+
+# The Agent SDK spawns its bundled CLI as a subprocess — that can't run from
+# inside app.asar, so keep the package unpacked on disk.
+asar: true
+asarUnpack:
+  - "**/node_modules/@anthropic-ai/claude-agent-sdk/**"
+
+# Registers commons:// in the packaged app (CFBundleURLTypes); dev builds
+# register it at runtime in main/index.ts instead.
+protocols:
+  - name: Commons deep links
+    schemes:
+      - commons
+
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - arm64
+    - target: zip # zip is what a future auto-update feed serves
+      arch:
+        - arm64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Uses APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID from the env;
+  # skipped (with a warning) when they're absent.
+  notarize: true
+
+dmg:
+  sign: false
+
+# pnpm workspace: nothing to rebuild (no native modules).
+npmRebuild: false
