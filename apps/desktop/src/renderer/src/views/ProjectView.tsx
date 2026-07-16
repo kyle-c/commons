@@ -12,7 +12,7 @@ import Inbox from "./Inbox";
 import AgentPanel, { type PanelSession } from "../agents/AgentPanel";
 import ThemeToggle from "./ThemeToggle";
 import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessions";
-import { initials } from "../lib/session";
+import { initials, sessionToken } from "../lib/session";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
@@ -169,6 +169,8 @@ function SharingSettings({ project, me, users }: { project: Doc<"projects">; me:
   const [open, setOpen] = useState(false);
   const setVisibility = useMutation(api.projects.setVisibility);
   const setMembers = useMutation(api.projects.setMembers);
+  const moveProject = useMutation(api.workspaces.moveProject);
+  const myWorkspaces = useQuery(api.workspaces.mine, open ? { userId: me._id, sessionToken: sessionToken() } : "skip");
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
 
@@ -224,7 +226,32 @@ function SharingSettings({ project, me, users }: { project: Doc<"projects">; me:
                 ))}
             </>
           ) : (
-            <div className="hint">Everyone on the team can see and comment on this project.</div>
+            <div className="hint">Everyone in this project's workspace can see and comment on it.</div>
+          )}
+          {myWorkspaces && myWorkspaces.length > 1 && (
+            <>
+              <div className="hint" style={{ margin: "10px 0 4px" }}>
+                Workspace — who this project belongs to:
+              </div>
+              <select
+                value={project.workspaceId ?? ""}
+                onChange={(e) =>
+                  void moveProject({
+                    projectId: project._id,
+                    workspaceId: e.target.value as Id<"workspaces">,
+                    userId: me._id,
+                    sessionToken: sessionToken(),
+                  })
+                }
+              >
+                {myWorkspaces.map((w) => (
+                  <option key={w._id} value={w._id}>
+                    {w.name}
+                    {w.kind === "personal" ? " (just you)" : ` (${w.members.length} members)`}
+                  </option>
+                ))}
+              </select>
+            </>
           )}
         </div>
       )}
@@ -239,22 +266,22 @@ interface Props {
 }
 
 export default function ProjectView({ me, nav, setNav }: Props) {
-  const project = useQuery(api.projects.get, { projectId: nav.projectId, userId: me._id });
-  const framesQuery = useQuery(api.projects.frames, { projectId: nav.projectId, userId: me._id });
+  const project = useQuery(api.projects.get, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
+  const framesQuery = useQuery(api.projects.frames, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
   const frames = framesQuery ?? [];
-  const threads = useQuery(api.comments.threadsForProject, { projectId: nav.projectId, userId: me._id }) ?? [];
+  const threads = useQuery(api.comments.threadsForProject, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() }) ?? [];
   const users = useQuery(api.users.list) ?? [];
-  const activeUsers = useQuery(api.presence.activeInProject, { projectId: nav.projectId, userId: me._id }) ?? [];
+  const activeUsers = useQuery(api.presence.activeInProject, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() }) ?? [];
   const heartbeat = useMutation(api.presence.heartbeat);
   const linkRepo = useMutation(api.repoLinks.link);
   const setGitRemote = useMutation(api.projects.setGitRemote);
   const rediscover = useMutation(api.projects.rediscover);
 
   // This user's working copy on this machine (paths differ per teammate).
-  const repoLink = useQuery(api.repoLinks.forUser, { projectId: nav.projectId, userId: me._id });
+  const repoLink = useQuery(api.repoLinks.forUser, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
   const repoPath = repoLink?.repoPath;
   // Which teammates have live frames — drives viewer empty states.
-  const repoHolders = useQuery(api.repoLinks.holders, { projectId: nav.projectId, userId: me._id }) ?? [];
+  const repoHolders = useQuery(api.repoLinks.holders, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() }) ?? [];
   const holderNames = repoHolders.filter((h) => h.userId !== me._id).map((h) => h.name);
 
   const [devStatus, setDevStatus] = useState<DevServerStatus>({ state: "stopped" });
@@ -316,7 +343,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   const [heatmapTestId, setHeatmapTestId] = useState<Id<"tests"> | null>(null);
   const heatmapData = useQuery(
     api.userTests.heatmap,
-    heatmapTestId ? { testId: heatmapTestId, userId: me._id } : "skip"
+    heatmapTestId ? { testId: heatmapTestId, userId: me._id, sessionToken: sessionToken() } : "skip"
   );
 
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
@@ -327,7 +354,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   const [frameReloadTokens, setFrameReloadTokens] = useState<Record<string, number>>({});
 
   // Mirrored sessions are the source of truth for the panel (whole team sees them).
-  const convexSessions = useQuery(api.agentSessions.forProject, { projectId: nav.projectId, userId: me._id }) ?? [];
+  const convexSessions = useQuery(api.agentSessions.forProject, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() }) ?? [];
   const createAgentSession = useMutation(api.agentSessions.create);
   const appendAgentEvent = useMutation(api.agentSessions.appendEvent);
 

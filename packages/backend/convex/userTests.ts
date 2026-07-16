@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
-import { accessibleProject } from "./access";
+import { accessibleProject, resolveViewer } from "./access";
 
 /**
  * Maze-style usability tests. Team members build tests in Commons; testers run
@@ -45,6 +45,7 @@ export const create = mutation({
   args: {
     projectId: v.id("projects"),
     userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
     title: v.string(),
     startRoute: v.string(),
     device: v.object({ width: v.number(), height: v.number() }),
@@ -53,7 +54,7 @@ export const create = mutation({
     variant: v.optional(v.object({ label: v.string(), url: v.string() })),
   },
   handler: async (ctx, args) => {
-    const project = await accessibleProject(ctx, args.projectId, args.userId);
+    const project = await accessibleProject(ctx, args.projectId, await resolveViewer(ctx, args));
     if (!project) throw new Error("Project not found");
     if (!project.previewUrl) throw new Error("Set a preview URL first — testers open the deployed app.");
     const testId = await ctx.db.insert("tests", {
@@ -77,20 +78,21 @@ export const setStatus = mutation({
   args: {
     testId: v.id("tests"),
     userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
     status: v.union(v.literal("live"), v.literal("closed")),
   },
   handler: async (ctx, args) => {
     const test = await ctx.db.get(args.testId);
     if (!test) throw new Error("Test not found");
-    if (!(await accessibleProject(ctx, test.projectId, args.userId))) throw new Error("Not allowed");
+    if (!(await accessibleProject(ctx, test.projectId, await resolveViewer(ctx, args)))) throw new Error("Not allowed");
     await ctx.db.patch(args.testId, { status: args.status });
   },
 });
 
 export const forProject = query({
-  args: { projectId: v.id("projects"), userId: v.id("users") },
+  args: { projectId: v.id("projects"), userId: v.id("users"), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    if (!(await accessibleProject(ctx, args.projectId, args.userId))) return [];
+    if (!(await accessibleProject(ctx, args.projectId, await resolveViewer(ctx, args)))) return [];
     const tests = await ctx.db
       .query("tests")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
@@ -114,11 +116,11 @@ export const forProject = query({
 
 /** Full per-session results; aggregates are computed in the renderer. */
 export const results = query({
-  args: { testId: v.id("tests"), userId: v.id("users") },
+  args: { testId: v.id("tests"), userId: v.id("users"), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const test = await ctx.db.get(args.testId);
     if (!test) return null;
-    if (!(await accessibleProject(ctx, test.projectId, args.userId))) return null;
+    if (!(await accessibleProject(ctx, test.projectId, await resolveViewer(ctx, args)))) return null;
     const sessions = await ctx.db
       .query("testSessions")
       .withIndex("by_test", (q) => q.eq("testId", args.testId))
@@ -129,11 +131,11 @@ export const results = query({
 
 /** Every click of a test grouped by route — the canvas heatmap overlay. */
 export const heatmap = query({
-  args: { testId: v.id("tests"), userId: v.id("users") },
+  args: { testId: v.id("tests"), userId: v.id("users"), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const test = await ctx.db.get(args.testId);
     if (!test) return null;
-    if (!(await accessibleProject(ctx, test.projectId, args.userId))) return null;
+    if (!(await accessibleProject(ctx, test.projectId, await resolveViewer(ctx, args)))) return null;
     const events = await ctx.db
       .query("testEvents")
       .withIndex("by_test", (q) => q.eq("testId", args.testId))

@@ -10,6 +10,7 @@ import Team from "./views/Team";
 import Welcome from "./views/Welcome";
 import ShortcutsHelp from "./views/ShortcutsHelp";
 import UpdateChip from "./views/UpdateChip";
+import WorkspacesMenu from "./views/WorkspacesMenu";
 import ThemeToggle from "./views/ThemeToggle";
 import AccountMenu from "./views/AccountMenu";
 import { clearStoredSession, getStoredSession, initials, type StoredSession } from "./lib/session";
@@ -97,6 +98,7 @@ export default function App() {
         <span className="wordmark">Commons</span>
         <span className="spacer" />
         <ThemeToggle />
+        <WorkspacesMenu me={me} />
         <Team me={me} />
         <Inbox me={me} setNav={setNav} />
         <AccountMenu me={me} onSignOut={doSignOut} />

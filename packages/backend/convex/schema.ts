@@ -16,6 +16,8 @@ export default defineSchema({
     // Latest photo from Google sign-in — the default, and the reset target.
     googleAvatarUrl: v.optional(v.string()),
     googleId: v.optional(v.string()),
+    // The user's own playground workspace (kind "personal"), created at sign-in.
+    personalWorkspaceId: v.optional(v.id("workspaces")),
   }).index("by_email", ["email"]),
 
   // A signed-in device. The token is held by the desktop app and passed to
@@ -37,16 +39,43 @@ export default defineSchema({
     error: v.optional(v.string()),
   }).index("by_state", ["state"]),
 
-  // Emails allowed to join on their first Google sign-in.
+  // Emails allowed to join on their first Google sign-in. An invite may also
+  // carry a workspace: accepting it joins that workspace (how personal-email
+  // collaborators get into a team without a matching domain).
   invites: defineTable({
     email: v.string(),
     invitedBy: v.id("users"),
+    workspaceId: v.optional(v.id("workspaces")),
     acceptedAt: v.optional(v.number()),
   }).index("by_email", ["email"]),
+
+  // Isolation boundary: you see a project only if you're a member of its
+  // workspace. "team" workspaces are created explicitly (optionally with a
+  // corporate domain — matching sign-ins auto-join); every user also gets a
+  // "personal" playground workspace at first sign-in.
+  workspaces: defineTable({
+    name: v.string(),
+    kind: v.union(v.literal("team"), v.literal("personal")),
+    // Corporate domain for auto-join ("felixpago.com"). Consumer domains
+    // (gmail etc.) are rejected at create — strangers must never share a team.
+    domain: v.optional(v.string()),
+    createdBy: v.id("users"),
+  }).index("by_domain", ["domain"]),
+
+  workspaceMembers: defineTable({
+    workspaceId: v.id("workspaces"),
+    userId: v.id("users"),
+  })
+    .index("by_user", ["userId"])
+    .index("by_workspace", ["workspaceId"])
+    .index("by_user_workspace", ["userId", "workspaceId"]),
 
   projects: defineTable({
     name: v.string(),
     createdBy: v.id("users"),
+    // Which workspace this project belongs to. Absent = pre-workspace legacy
+    // row: visible only to its creator until migrateLegacy assigns it.
+    workspaceId: v.optional(v.id("workspaces")),
     // Absent = "team" (visible to everyone). Private projects are visible to
     // the creator plus explicitly added memberIds only.
     visibility: v.optional(v.union(v.literal("team"), v.literal("private"))),

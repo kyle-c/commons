@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
-import { getConvexUrl, timeAgo } from "../lib/session";
+import { getConvexUrl, timeAgo, sessionToken } from "../lib/session";
 
 /**
  * Maze-style usability testing, built on what Commons already has: tests run
@@ -236,7 +236,7 @@ function TestResults({
   onShowHeatmap?: (testId: Id<"tests">) => void;
   onClose: () => void;
 }) {
-  const data = useQuery(api.userTests.results, { testId: test._id, userId: me._id });
+  const data = useQuery(api.userTests.results, { testId: test._id, userId: me._id, sessionToken: sessionToken() });
   const site = siteUrl();
   const sessions = data?.sessions ?? [];
   const completed = sessions.filter((s) => s.completedAt);
@@ -409,7 +409,7 @@ export default function UserTests({
   onShowHeatmap?: (testId: Id<"tests">) => void;
   onClose: () => void;
 }) {
-  const tests = useQuery(api.userTests.forProject, { projectId: project._id, userId: me._id });
+  const tests = useQuery(api.userTests.forProject, { projectId: project._id, userId: me._id, sessionToken: sessionToken() });
   const setStatus = useMutation(api.userTests.setStatus);
   const [creating, setCreating] = useState(false);
   const [resultsFor, setResultsFor] = useState<Id<"tests"> | null>(null);

@@ -1,11 +1,14 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { accessibleProject, canAccessProject } from "./access";
+import { accessibleProject, canAccessProject, resolveViewer } from "./access";
+import { isMember, ensurePersonalWorkspace } from "./workspaces";
 
 export const create = mutation({
   args: {
     name: v.string(),
     createdBy: v.id("users"),
+    // Destination workspace; legacy clients omit it → creator's playground.
+    workspaceId: v.optional(v.id("workspaces")),
     visibility: v.optional(v.union(v.literal("team"), v.literal("private"))),
     repoPath: v.optional(v.string()),
     gitRemote: v.optional(v.string()),
@@ -27,7 +30,17 @@ export const create = mutation({
     ),
   },
   handler: async (ctx, { frames, ...project }) => {
-    const projectId = await ctx.db.insert("projects", project);
+    // Every project lands in a workspace: the requested one (creator must be
+    // a member) or, for legacy clients that don't send one, the playground.
+    let workspaceId = project.workspaceId;
+    if (workspaceId) {
+      if (!(await isMember(ctx, workspaceId, project.createdBy))) throw new Error("Not in that workspace");
+    } else {
+      const creator = await ctx.db.get(project.createdBy);
+      if (!creator) throw new Error("Unknown user");
+      workspaceId = await ensurePersonalWorkspace(ctx, creator);
+    }
+    const projectId = await ctx.db.insert("projects", { ...project, workspaceId });
     for (const frame of frames) {
       await ctx.db.insert("frames", { projectId, ...frame });
     }
@@ -36,16 +49,24 @@ export const create = mutation({
 });
 
 export const get = query({
-  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")) },
-  handler: (ctx, { projectId, userId }) => accessibleProject(ctx, projectId, userId),
+  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => accessibleProject(ctx, args.projectId, await resolveViewer(ctx, args)),
 });
 
 // Home view: every active project this user can see, with creator + presence.
 export const listWithActivity = query({
-  args: { userId: v.optional(v.id("users")) },
-  handler: async (ctx, { userId }) => {
+  args: { userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const userId = await resolveViewer(ctx, args);
     const projects = await ctx.db.query("projects").collect();
-    const active = projects.filter((p) => !p.archivedAt && canAccessProject(p, userId));
+    const visible = await Promise.all(projects.map((p) => canAccessProject(ctx, p, userId)));
+    const active = projects.filter((p, i) => !p.archivedAt && visible[i]);
+    const workspaceNames = new Map<string, string>();
+    for (const p of active) {
+      if (p.workspaceId && !workspaceNames.has(p.workspaceId)) {
+        workspaceNames.set(p.workspaceId, (await ctx.db.get(p.workspaceId))?.name ?? "");
+      }
+    }
     const cutoff = Date.now() - 60_000;
     return await Promise.all(
       active.map(async (project) => {
@@ -81,6 +102,7 @@ export const listWithActivity = query({
           .filter((p): p is { x: number; y: number } => p !== null);
         return {
           ...project,
+          workspaceName: project.workspaceId ? workspaceNames.get(project.workspaceId) : undefined,
           creator,
           activeUsers: activeUsers.filter(Boolean),
           frameCount: frames.length,
@@ -96,12 +118,12 @@ export const listWithActivity = query({
 });
 
 export const frames = query({
-  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")) },
-  handler: async (ctx, { projectId, userId }) => {
-    if (!(await accessibleProject(ctx, projectId, userId))) return [];
+  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    if (!(await accessibleProject(ctx, args.projectId, await resolveViewer(ctx, args)))) return [];
     return await ctx.db
       .query("frames")
-      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
   },
 });

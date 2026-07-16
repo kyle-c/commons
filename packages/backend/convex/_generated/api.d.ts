@@ -23,6 +23,7 @@ import type * as slack from "../slack.js";
 import type * as updates from "../updates.js";
 import type * as userTests from "../userTests.js";
 import type * as users from "../users.js";
+import type * as workspaces from "../workspaces.js";
 
 import type {
   ApiFromModules,
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   updates: typeof updates;
   userTests: typeof userTests;
   users: typeof users;
+  workspaces: typeof workspaces;
 }>;
 
 /**

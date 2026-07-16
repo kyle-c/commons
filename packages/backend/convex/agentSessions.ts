@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { accessibleProject } from "./access";
+import { accessibleProject, resolveViewer } from "./access";
 
 // Agent sessions execute on the host's machine (Electron main process); the
 // host mirrors every AgentSessionEvent here so the whole team can watch live.
@@ -36,9 +36,9 @@ export const appendEvent = mutation({
 
 // Sessions for a project, newest first, with the host teammate joined in.
 export const forProject = query({
-  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")) },
-  handler: async (ctx, { projectId, userId }) => {
-    if (!(await accessibleProject(ctx, projectId, userId))) return [];
+  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, { projectId, ...viewer }) => {
+    if (!(await accessibleProject(ctx, projectId, await resolveViewer(ctx, viewer)))) return [];
     const sessions = await ctx.db
       .query("agentSessions")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
@@ -73,10 +73,10 @@ export const reconcileHost = mutation({
 
 // Full ordered transcript of one session.
 export const events = query({
-  args: { sessionId: v.id("agentSessions"), userId: v.optional(v.id("users")) },
-  handler: async (ctx, { sessionId, userId }) => {
+  args: { sessionId: v.id("agentSessions"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, { sessionId, ...viewer }) => {
     const session = await ctx.db.get(sessionId);
-    if (!session || !(await accessibleProject(ctx, session.projectId, userId))) return [];
+    if (!session || !(await accessibleProject(ctx, session.projectId, await resolveViewer(ctx, viewer)))) return [];
     const rows = await ctx.db
       .query("agentEvents")
       .withIndex("by_session", (q) => q.eq("sessionId", sessionId))

@@ -1,5 +1,7 @@
 import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import { onSignIn } from "./workspaces";
 
 const AVATAR_COLORS = ["#f97316", "#22d3ee", "#a78bfa", "#4ade80", "#f472b6", "#facc15", "#60a5fa", "#fb7185"];
 
@@ -132,6 +134,7 @@ export const completeGoogleSignIn = internalMutation({
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", normalized))
       .unique();
+    let inviteWorkspaceId: Id<"workspaces"> | undefined;
 
     if (user) {
       // Keep the Google photo fresh, but never clobber a custom upload.
@@ -163,8 +166,15 @@ export const completeGoogleSignIn = internalMutation({
         googleAvatarUrl: avatarUrl,
       });
       user = (await ctx.db.get(userId))!;
-      if (invite && !invite.acceptedAt) await ctx.db.patch(invite._id, { acceptedAt: Date.now() });
+      if (invite && !invite.acceptedAt) {
+        await ctx.db.patch(invite._id, { acceptedAt: Date.now() });
+        inviteWorkspaceId = invite.workspaceId;
+      }
     }
+
+    // Workspaces: personal playground + corporate-domain auto-join +
+    // invite-carried team membership.
+    await onSignIn(ctx, user, inviteWorkspaceId);
 
     const token = randomToken(32);
     await ctx.db.insert("sessions", { userId: user._id, token });

@@ -2,9 +2,9 @@ import { useRef, useState } from "react";
 import { useClickOutside } from "../lib/useClickOutside";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
-import type { Doc } from "@commons/backend/convex/_generated/dataModel";
+import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import type { Nav } from "../App";
-import { initials, timeAgo } from "../lib/session";
+import { initials, timeAgo, sessionToken } from "../lib/session";
 import { layoutFrames } from "../lib/frameLayout";
 import GitSetupBanner from "./GitSetupBanner";
 
@@ -32,7 +32,8 @@ function ProjectCover({ name, colors }: { name: string; colors?: string[] }) {
 }
 
 export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: (nav: Nav) => void }) {
-  const projects = useQuery(api.projects.listWithActivity, { userId: me._id });
+  const projects = useQuery(api.projects.listWithActivity, { userId: me._id, sessionToken: sessionToken() });
+  const workspaces = useQuery(api.workspaces.mine, { userId: me._id, sessionToken: sessionToken() }) ?? [];
   const create = useMutation(api.projects.create);
   const linkRepo = useMutation(api.repoLinks.link);
   const [adding, setAdding] = useState(false);
@@ -40,7 +41,7 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
   const addMenuRef = useRef<HTMLDivElement>(null);
   useClickOutside(addMenuRef, () => setAddMenuOpen(false), addMenuOpen);
 
-  const addProject = async (visibility: "team" | "private") => {
+  const addProject = async (workspaceId: Id<"workspaces">) => {
     setAddMenuOpen(false);
     if (adding) return;
     if (!window.commons) {
@@ -54,7 +55,8 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
       const projectId = await create({
         name: inspection.name,
         createdBy: me._id,
-        visibility,
+        workspaceId,
+        visibility: "team",
         gitRemote: inspection.gitRemote,
         framework: inspection.framework,
         brandColors: inspection.brandColors,
@@ -68,6 +70,22 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
     }
   };
 
+  // Grouped home: one section per workspace (playground first), so team apps
+  // and personal apps never visually mix.
+  const sections = (() => {
+    const byWorkspace = new Map<string, { name: string; projects: NonNullable<typeof projects> }>();
+    for (const project of projects ?? []) {
+      const key = project.workspaceId ?? "unassigned";
+      const name = project.workspaceName ?? "Unassigned";
+      if (!byWorkspace.has(key)) byWorkspace.set(key, { name, projects: [] });
+      byWorkspace.get(key)!.projects.push(project);
+    }
+    const order = new Map(workspaces.map((w, i) => [w._id as string, i]));
+    return [...byWorkspace.entries()]
+      .sort(([a], [b]) => (order.get(a) ?? 99) - (order.get(b) ?? 99))
+      .map(([key, section]) => ({ key, ...section }));
+  })();
+
   return (
     <div className="home">
       <div className="home-header">
@@ -78,14 +96,16 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
           </button>
           {addMenuOpen && (
             <div className="titlebar-popover popover-menu">
-              <button onClick={() => addProject("team")}>
-                <strong>Team project</strong>
-                <span className="hint">Everyone on the team can see it</span>
-              </button>
-              <button onClick={() => addProject("private")}>
-                <strong>Private project</strong>
-                <span className="hint">Just you, until you add members</span>
-              </button>
+              {workspaces.map((workspace) => (
+                <button key={workspace._id} onClick={() => addProject(workspace._id)}>
+                  <strong>{workspace.name}</strong>
+                  <span className="hint">
+                    {workspace.kind === "personal"
+                      ? "Just you — your playground"
+                      : `${workspace.members.length} member${workspace.members.length === 1 ? "" : "s"}${workspace.domain ? ` · @${workspace.domain}` : ""}`}
+                  </span>
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -101,8 +121,11 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
         </div>
       )}
 
-      <div className="project-grid">
-        {(projects ?? []).map((project) => (
+      {sections.map((section) => (
+        <div key={section.key} className="workspace-section">
+          {sections.length > 1 && <h2 className="workspace-heading">{section.name}</h2>}
+          <div className="project-grid">
+            {section.projects.map((project) => (
           <button
             key={project._id}
             className="project-card"
@@ -142,8 +165,10 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
               </div>
             </div>
           </button>
-        ))}
-      </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

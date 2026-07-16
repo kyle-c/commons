@@ -772,6 +772,45 @@ textarea:focus {
   font-weight: 500;
 }
 
+/* Workspaces: grouped home + titlebar popover */
+.workspace-section {
+  margin-bottom: 28px;
+}
+.workspace-heading {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.workspaces-popover {
+  min-width: 320px;
+}
+.workspace-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.workspace-row:last-of-type {
+  border-bottom: none;
+}
+.workspace-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.workspace-row input {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+
 /* Pilot pulse (MET-1) in the Team popover */
 .pilot-pulse {
   display: flex;

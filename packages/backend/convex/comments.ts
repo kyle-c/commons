@@ -4,7 +4,7 @@ import { internal } from "./_generated/api";
 import { buildDeepLink } from "@commons/shared";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { accessibleProject, canAccessProject, filterMentions } from "./access";
+import { accessibleProject, canAccessProject, filterMentions, resolveViewer } from "./access";
 
 // @mentions notify twice: an inbox row (inserted by the caller) and an email,
 // sent from an action so a slow/failed Resend call never blocks the mutation.
@@ -67,11 +67,11 @@ export const createThread = mutation({
   },
   handler: async (ctx, { body, mentions: rawMentions, ...thread }) => {
     const project = await ctx.db.get(thread.projectId);
-    if (!project || !canAccessProject(project, thread.createdBy)) {
+    if (!project || !(await canAccessProject(ctx, project, thread.createdBy))) {
       throw new Error("You don't have access to this project.");
     }
     // Private projects: mentions of non-members are dropped, never notified.
-    const mentions = filterMentions(project, rawMentions);
+    const mentions = await filterMentions(ctx, project, rawMentions);
     const threadId = await ctx.db.insert("threads", thread);
     const messageId = await ctx.db.insert("messages", {
       threadId,
@@ -117,10 +117,10 @@ export const reply = mutation({
   handler: async (ctx, args) => {
     const thread = await ctx.db.get(args.threadId);
     const project = thread ? await ctx.db.get(thread.projectId) : null;
-    if (!thread || !project || !canAccessProject(project, args.authorId)) {
+    if (!thread || !project || !(await canAccessProject(ctx, project, args.authorId))) {
       throw new Error("You don't have access to this project.");
     }
-    const mentions = filterMentions(project, args.mentions);
+    const mentions = await filterMentions(ctx, project, args.mentions);
     const messageId = await ctx.db.insert("messages", { ...args, mentions });
     for (const userId of mentions) {
       await ctx.db.insert("notifications", {
@@ -159,9 +159,9 @@ export const setResolved = mutation({
 
 // All threads for a project, each with its messages and author details.
 export const threadsForProject = query({
-  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")) },
-  handler: async (ctx, { projectId, userId }) => {
-    if (!(await accessibleProject(ctx, projectId, userId))) return [];
+  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, { projectId, ...viewer }) => {
+    if (!(await accessibleProject(ctx, projectId, await resolveViewer(ctx, viewer)))) return [];
     const threads = await ctx.db
       .query("threads")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))

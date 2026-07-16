@@ -34,6 +34,14 @@ export function clearStoredSession(): void {
   localStorage.removeItem(SESSION_KEY);
 }
 
+/**
+ * Proof-of-identity for viewer-scoped Convex calls: the server resolves the
+ * viewer from this token instead of trusting the userId argument.
+ */
+export function sessionToken(): string | undefined {
+  return getStoredSession()?.token;
+}
+
 export function initials(name: string): string {
   return name
     .split(/\s+/)

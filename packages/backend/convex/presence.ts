@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { accessibleProject } from "./access";
+import { accessibleProject, resolveViewer } from "./access";
 
 export const heartbeat = mutation({
   args: { userId: v.id("users"), projectId: v.id("projects") },
@@ -33,9 +33,9 @@ export const moveCursor = mutation({
 
 // Fresh teammate cursors on a project's canvas, with display info joined in.
 export const cursorsInProject = query({
-  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")) },
-  handler: async (ctx, { projectId, userId }) => {
-    if (!(await accessibleProject(ctx, projectId, userId))) return [];
+  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, { projectId, ...viewer }) => {
+    if (!(await accessibleProject(ctx, projectId, await resolveViewer(ctx, viewer)))) return [];
     const cutoff = Date.now() - 30_000;
     const rows = await ctx.db
       .query("cursors")
@@ -60,9 +60,9 @@ export const cursorsInProject = query({
 });
 
 export const activeInProject = query({
-  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")) },
-  handler: async (ctx, { projectId, userId }) => {
-    if (!(await accessibleProject(ctx, projectId, userId))) return [];
+  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, { projectId, ...viewer }) => {
+    if (!(await accessibleProject(ctx, projectId, await resolveViewer(ctx, viewer)))) return [];
     const cutoff = Date.now() - 60_000;
     const rows = await ctx.db
       .query("presence")
