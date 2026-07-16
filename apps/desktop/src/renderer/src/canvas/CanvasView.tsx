@@ -49,6 +49,22 @@ interface Props {
   onSendToAgent?: (thread: ThreadWithMessages) => void;
   /** Re-derive the section layout from the repo and move frames into it. */
   onTidy?: () => void;
+  /** Test-click overlay: dots drawn on frames whose route matches. Coordinates
+   *  are normalized by the tester's viewport width, so they scale by frame width. */
+  heatmap?: {
+    title: string;
+    clicksByRoute: Record<string, { fx: number; fy: number; interactive: boolean }[]>;
+    onClear: () => void;
+  };
+}
+
+/** "/pay/[id]" (or "/pay/:id") matches "/pay/123" — same rule as the tester harness. */
+function routeMatches(pattern: string, path: string): boolean {
+  const norm = (s: string) => ("/" + s).replace(/\/+/g, "/").replace(/\/$/, "") || "/";
+  const p = norm(pattern).split("/");
+  const a = norm(path).split("/");
+  if (p.length !== a.length) return false;
+  return p.every((seg, i) => (seg.startsWith("[") || seg.startsWith(":") ? a[i].length > 0 : seg === a[i]));
 }
 
 export default function CanvasView({
@@ -67,6 +83,7 @@ export default function CanvasView({
   frameReloadTokens,
   onSendToAgent,
   onTidy,
+  heatmap,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [vp, setVp] = useState<Viewport>({ x: 80, y: 80, scale: 0.3 });
@@ -453,6 +470,21 @@ export default function CanvasView({
                               : "Waiting for a preview — ask a teammate with the repo to publish one"}
                   </div>
                 )}
+                {heatmap && frame.routePath && (
+                  <div className="heatmap-layer">
+                    {Object.entries(heatmap.clicksByRoute)
+                      .filter(([route]) => routeMatches(frame.routePath!, route))
+                      .flatMap(([route, clicks]) =>
+                        clicks.map((click, i) => (
+                          <span
+                            key={`${route}-${i}`}
+                            className={`heatmap-dot ${click.interactive ? "" : "miss"}`}
+                            style={{ left: click.fx * frame.width, top: click.fy * frame.width }}
+                          />
+                        ))
+                      )}
+                  </div>
+                )}
                 {!focused && url && (
                   <div
                     className="frame-shield"
@@ -571,6 +603,17 @@ export default function CanvasView({
             onClose={() => setSelectedThread(null)}
             onSendToAgent={onSendToAgent && (() => onSendToAgent(selected))}
           />
+        </div>
+      )}
+
+      {heatmap && (
+        <div className="heatmap-chip" onMouseDown={(e) => e.stopPropagation()}>
+          <span>
+            Clicks from “{heatmap.title}” — orange dots missed anything clickable
+          </span>
+          <button className="btn ghost" onClick={heatmap.onClear}>
+            Clear
+          </button>
         </div>
       )}
 

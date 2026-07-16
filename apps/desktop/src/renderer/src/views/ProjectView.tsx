@@ -257,6 +257,14 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   const showPreviewNudge =
     !!repoPath && !!project && !project.previewUrl && users.length > 1 && !nudgeDismissed;
 
+  // Which test's clicks are overlaid on the canvas ("Clicks on canvas" in
+  // the user-tests results panel). Convex feeds the dots live.
+  const [heatmapTestId, setHeatmapTestId] = useState<Id<"tests"> | null>(null);
+  const heatmapData = useQuery(
+    api.userTests.heatmap,
+    heatmapTestId ? { testId: heatmapTestId, userId: me._id } : "skip"
+  );
+
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   const [activeAgentSessionId, setActiveAgentSessionId] = useState<string | null>(null);
   // Per-frame counters bumped when an agent finishes editing; keys the frame iframes.
@@ -631,6 +639,11 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           frameReloadTokens={frameReloadTokens}
           onSendToAgent={repoPath || project.gitRemote ? sendThreadToAgent : undefined}
           onTidy={repoPath ? tidyCanvas : undefined}
+          heatmap={
+            heatmapTestId && heatmapData
+              ? { ...heatmapData, onClear: () => setHeatmapTestId(null) }
+              : undefined
+          }
         />
       ) : (
         <PrototypeView
@@ -639,6 +652,12 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           previewUrl={project.previewUrl}
           viewerHasRepo={!!repoPath}
           repoHolderNames={holderNames}
+          project={project}
+          me={me}
+          onShowHeatmap={(testId) => {
+            setHeatmapTestId(testId);
+            setNav({ ...nav, view: "canvas" });
+          }}
         />
       )}
 

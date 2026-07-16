@@ -76,6 +76,192 @@ http.route({
   }),
 });
 
+// ---------------------------------------------------------------------------
+// Desktop auto-update feed (electron-updater "generic" provider points here —
+// see apps/desktop/electron-builder.yml). latest-mac.yml is served verbatim;
+// artifacts 302 to Convex storage. Published by scripts/publish-update.mjs.
+// ---------------------------------------------------------------------------
+
+http.route({
+  pathPrefix: "/update/",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const name = decodeURIComponent(new URL(request.url).pathname.slice("/update/".length));
+    const release = await ctx.runQuery(internal.updates.latest, {});
+    if (!release) return new Response("no releases published", { status: 404 });
+    if (name === "latest-mac.yml") {
+      return new Response(release.channelYml, {
+        status: 200,
+        headers: { "Content-Type": "text/yaml; charset=utf-8", "Cache-Control": "no-cache" },
+      });
+    }
+    const file = release.files.find((f) => f.name === name);
+    const url = file ? await ctx.storage.getUrl(file.storageId) : null;
+    if (!url) return new Response("not found", { status: 404 });
+    return new Response(null, { status: 302, headers: { Location: url } });
+  }),
+});
+
+// ---------------------------------------------------------------------------
+// User testing: anonymous tester harness + event ingestion + shareable report.
+// Served straight off the deployment's .convex.site — no extra hosting.
+// ---------------------------------------------------------------------------
+
+// The tester-facing harness. Wraps the project's deployed preview in a device
+// frame, walks the tester through tasks/questions, and records route + click
+// events relayed by the in-app snippet (see /commons-testing.js).
+http.route({
+  pathPrefix: "/t/",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const token = new URL(request.url).pathname.slice("/t/".length).replace(/\/+$/, "");
+    const data = token ? await ctx.runQuery(internal.userTests.pageData, { token }) : null;
+    if (!data) return page("Test not found", "This link is broken or the test was deleted.");
+    if (data.test.status !== "live")
+      return page("Test closed", "This usability test is no longer accepting responses. Thanks for your interest!");
+    if (!data.previewUrl)
+      return page("Test not ready", "The team hasn't published a preview of the app yet. Check back soon.");
+    return new Response(testerHarnessHtml(data.test, data.previewUrl), {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }),
+});
+
+// The instrumentation snippet target apps include with one script tag. It only
+// activates inside an iframe and only relays navigation + click positions —
+// it never reads keystrokes or input values.
+http.route({
+  path: "/commons-testing.js",
+  method: "GET",
+  handler: httpAction(async () => {
+    return new Response(TESTING_SNIPPET, {
+      status: 200,
+      headers: { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "public, max-age=300" },
+    });
+  }),
+});
+
+http.route({
+  path: "/api/t/start",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = (await request.json()) as { token?: string; userAgent?: string };
+    if (typeof body.token !== "string") return json({ error: "bad_request" }, 400);
+    const sessionId = await ctx.runMutation(internal.userTests.startSession, {
+      token: body.token,
+      userAgent: typeof body.userAgent === "string" ? body.userAgent.slice(0, 300) : undefined,
+    });
+    return sessionId ? json({ sessionId }) : json({ error: "closed" }, 410);
+  }),
+});
+
+http.route({
+  path: "/api/t/events",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = (await request.json()) as { sessionId?: string; events?: unknown[] };
+    if (typeof body.sessionId !== "string" || !Array.isArray(body.events)) return json({ error: "bad_request" }, 400);
+    const events = body.events.slice(0, 200).flatMap((raw) => {
+      const e = raw as Record<string, unknown>;
+      if (e.kind !== "route" && e.kind !== "click") return [];
+      return [
+        {
+          taskId: typeof e.taskId === "string" ? e.taskId : undefined,
+          kind: e.kind as "route" | "click",
+          route: typeof e.route === "string" ? e.route.slice(0, 500) : undefined,
+          fx: typeof e.fx === "number" && isFinite(e.fx) ? e.fx : undefined,
+          fy: typeof e.fy === "number" && isFinite(e.fy) ? e.fy : undefined,
+          interactive: typeof e.interactive === "boolean" ? e.interactive : undefined,
+          at: typeof e.at === "number" ? e.at : Date.now(),
+        },
+      ];
+    });
+    try {
+      await ctx.runMutation(internal.userTests.recordEvents, {
+        sessionId: body.sessionId as never,
+        events,
+      });
+    } catch {
+      return json({ error: "bad_session" }, 400);
+    }
+    return json({ ok: true });
+  }),
+});
+
+http.route({
+  path: "/api/t/task",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = (await request.json()) as { sessionId?: string; task?: Record<string, unknown> };
+    const t = body.task;
+    if (typeof body.sessionId !== "string" || !t || typeof t.taskId !== "string") return json({ error: "bad_request" }, 400);
+    try {
+      await ctx.runMutation(internal.userTests.recordTask, {
+        sessionId: body.sessionId as never,
+        task: {
+          taskId: t.taskId,
+          outcome: t.outcome === "gave_up" ? "gave_up" : "success",
+          auto: t.auto === true,
+          durationMs: typeof t.durationMs === "number" ? Math.max(0, t.durationMs) : 0,
+          routeSequence: Array.isArray(t.routeSequence)
+            ? (t.routeSequence.filter((r) => typeof r === "string") as string[]).slice(0, 100)
+            : [],
+          clickCount: typeof t.clickCount === "number" ? t.clickCount : 0,
+          misclickCount: typeof t.misclickCount === "number" ? t.misclickCount : 0,
+        },
+      });
+    } catch {
+      return json({ error: "bad_session" }, 400);
+    }
+    return json({ ok: true });
+  }),
+});
+
+http.route({
+  path: "/api/t/finish",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = (await request.json()) as { sessionId?: string; answers?: unknown[] };
+    if (typeof body.sessionId !== "string") return json({ error: "bad_request" }, 400);
+    const answers = (Array.isArray(body.answers) ? body.answers : []).flatMap((raw) => {
+      const a = raw as Record<string, unknown>;
+      return typeof a.questionId === "string" && typeof a.value === "string"
+        ? [{ questionId: a.questionId, value: a.value.slice(0, 4000) }]
+        : [];
+    });
+    try {
+      await ctx.runMutation(internal.userTests.finishSession, { sessionId: body.sessionId as never, answers });
+    } catch {
+      return json({ error: "bad_session" }, 400);
+    }
+    return json({ ok: true });
+  }),
+});
+
+// Read-only aggregate report — safe to hand to stakeholders who don't have
+// Commons. Gated by its own token, separate from the tester link.
+http.route({
+  pathPrefix: "/r/",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const reportToken = new URL(request.url).pathname.slice("/r/".length).replace(/\/+$/, "");
+    const data = reportToken ? await ctx.runQuery(internal.userTests.reportData, { reportToken }) : null;
+    if (!data) return page("Report not found", "This link is broken or the test was deleted.");
+    return new Response(reportHtml(data), {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }),
+});
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 function decodeJwtPayload(jwt: string): unknown {
   const base64 = jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
   return JSON.parse(atob(base64));
@@ -107,6 +293,425 @@ ${deepLink ? `<script>location.href = ${JSON.stringify(deepLink)};</script>` : "
 </body>
 </html>`;
   return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
+}
+
+// --- User-testing page templates ---------------------------------------------
+
+type TestDoc = {
+  _id: string;
+  title: string;
+  token: string;
+  startRoute: string;
+  device: { width: number; height: number };
+  tasks: { id: string; instruction: string; targetRoute?: string }[];
+  questions: { id: string; prompt: string; kind: "scale" | "text" }[];
+};
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/** JSON safe to inline inside a <script> tag. */
+function inlineJson(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
+function testerHarnessHtml(test: TestDoc, previewUrl: string): string {
+  const config = {
+    token: test.token,
+    title: test.title,
+    previewUrl: previewUrl.replace(/\/+$/, ""),
+    startRoute: test.startRoute,
+    device: test.device,
+    tasks: test.tasks,
+    questions: test.questions,
+  };
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escapeHtml(test.title)} — usability test</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+         background: #101012; color: #e7e7ea; font: 14px/1.5 -apple-system, system-ui, sans-serif; }
+  .stage { flex: 1; display: flex; align-items: flex-start; justify-content: center; overflow: auto; padding: 16px; }
+  .device { background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 40px rgba(0,0,0,.5);
+            transform-origin: top center; }
+  .device iframe { border: 0; width: 100%; height: 100%; display: block; }
+  .bar { flex: none; border-top: 1px solid #2a2a2f; background: #18181b; padding: 14px 20px;
+         display: flex; align-items: center; gap: 16px; }
+  .bar .step { color: #a1a1a8; font-size: 12px; white-space: nowrap; }
+  .bar .task { flex: 1; font-size: 15px; }
+  .btn { border: 1px solid #3a3a41; background: #232328; color: #e7e7ea; border-radius: 8px;
+         padding: 8px 14px; font: inherit; cursor: pointer; }
+  .btn.primary { background: #4a6fdc; border-color: #4a6fdc; color: #fff; }
+  .btn.ghost { background: transparent; color: #a1a1a8; }
+  .overlay { position: fixed; inset: 0; background: #101012; display: flex; align-items: center;
+             justify-content: center; padding: 24px; overflow: auto; z-index: 5; }
+  .stage.pre { visibility: hidden; }
+  .card { max-width: 480px; width: 100%; background: #18181b; border: 1px solid #2a2a2f;
+          border-radius: 12px; padding: 32px; }
+  .card h1 { font-size: 20px; margin: 0 0 10px; }
+  .card p { color: #a1a1a8; margin: 0 0 12px; }
+  .card .consent { font-size: 12px; color: #8a8a92; border-top: 1px solid #2a2a2f; padding-top: 12px; margin-top: 16px; }
+  .q { margin: 18px 0; }
+  .q label { display: block; margin-bottom: 8px; }
+  .q textarea { width: 100%; min-height: 70px; background: #101012; color: #e7e7ea; border: 1px solid #2a2a2f;
+                border-radius: 8px; padding: 8px; font: inherit; }
+  .scale { display: flex; gap: 8px; }
+  .scale button { flex: 1; padding: 10px 0; border-radius: 8px; border: 1px solid #3a3a41;
+                  background: #232328; color: #e7e7ea; font: inherit; cursor: pointer; }
+  .scale button.on { background: #4a6fdc; border-color: #4a6fdc; color: #fff; }
+  .flash { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); background: #1f7a43;
+           color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px; display: none; z-index: 10; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="flash" id="flash">✓ Task complete</div>
+
+<div class="overlay" id="intro">
+  <div class="card">
+    <h1>${escapeHtml(test.title)}</h1>
+    <p>You'll be asked to complete ${test.tasks.length} short task${test.tasks.length === 1 ? "" : "s"} in a live app${
+      test.questions.length ? ", then answer a couple of questions" : ""
+    }. There are no wrong answers — we're testing the design, not you.</p>
+    <p>Use the app exactly as you normally would. When you finish a task (or want to skip it), use the buttons at the bottom of the screen.</p>
+    <button class="btn primary" id="start">Start</button>
+    <div class="consent">This test records which screens you visit and where you click, anonymously.
+    Nothing you type is recorded.</div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="questions"><div class="card" id="qcard"></div></div>
+
+<div class="overlay hidden" id="done">
+  <div class="card"><h1>That's it — thank you!</h1><p>Your responses were recorded. You can close this tab.</p></div>
+</div>
+
+<div class="stage pre" id="stage"><div class="device" id="device"><iframe id="app" title="App under test"></iframe></div></div>
+<div class="bar" id="bar" style="display:none">
+  <span class="step" id="step"></span>
+  <span class="task" id="taskText"></span>
+  <button class="btn primary" id="doneBtn">I did it</button>
+  <button class="btn ghost" id="giveUpBtn">Skip / couldn't do it</button>
+</div>
+
+<script>
+const CONFIG = ${inlineJson(config)};
+
+// --- state ---
+let sessionId = null;
+let taskIndex = -1;
+let taskStart = 0;
+let taskRoutes = [];
+let clicks = 0, misclicks = 0;
+let finished = false;
+const buffer = [];
+
+const $ = (id) => document.getElementById(id);
+
+// --- transport ---
+function post(path, body) {
+  return fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    keepalive: true,
+  }).then((r) => r.json()).catch(() => null);
+}
+function flush() {
+  if (!sessionId || buffer.length === 0) return;
+  const events = buffer.splice(0, buffer.length);
+  post("/api/t/events", { sessionId, events });
+}
+setInterval(flush, 2500);
+addEventListener("pagehide", () => {
+  if (!sessionId || buffer.length === 0) return;
+  const events = buffer.splice(0, buffer.length);
+  navigator.sendBeacon("/api/t/events", new Blob([JSON.stringify({ sessionId, events })], { type: "application/json" }));
+});
+
+// --- route matching: "/pay/[id]" and "/pay/:id" match "/pay/123" ---
+function matchRoute(pattern, path) {
+  if (!pattern) return false;
+  const norm = (s) => ("/" + s).replace(/\\/+/g, "/").replace(/\\/$/, "") || "/";
+  const p = norm(pattern).split("/"), a = norm(path).split("/");
+  if (p.length !== a.length) return false;
+  return p.every((seg, i) => (seg.startsWith("[") || seg.startsWith(":")) ? a[i].length > 0 : seg === a[i]);
+}
+
+// --- events from the instrumented app (via /commons-testing.js) ---
+addEventListener("message", (e) => {
+  const m = e.data;
+  if (!m || m.__commonsTesting !== true || taskIndex < 0 || finished) return;
+  const task = CONFIG.tasks[taskIndex];
+  const taskId = task ? task.id : undefined;
+  if (m.kind === "route" && typeof m.route === "string") {
+    if (taskRoutes[taskRoutes.length - 1] !== m.route) taskRoutes.push(m.route);
+    buffer.push({ taskId, kind: "route", route: m.route, at: Date.now() });
+    if (task && matchRoute(task.targetRoute, m.route)) completeTask("success", true);
+  } else if (m.kind === "click" && typeof m.fx === "number" && typeof m.fy === "number") {
+    clicks++;
+    if (m.interactive === false) misclicks++;
+    buffer.push({ taskId, kind: "click", route: typeof m.route === "string" ? m.route : undefined,
+                  fx: m.fx, fy: m.fy, interactive: m.interactive !== false, at: Date.now() });
+  }
+});
+
+// --- task flow ---
+function showTask() {
+  const task = CONFIG.tasks[taskIndex];
+  $("step").textContent = "Task " + (taskIndex + 1) + " of " + CONFIG.tasks.length;
+  $("taskText").textContent = task.instruction;
+  taskStart = Date.now();
+  taskRoutes = [];
+  clicks = 0; misclicks = 0;
+}
+function completeTask(outcome, auto) {
+  const task = CONFIG.tasks[taskIndex];
+  if (!task) return;
+  post("/api/t/task", { sessionId, task: {
+    taskId: task.id, outcome, auto: !!auto, durationMs: Date.now() - taskStart,
+    routeSequence: taskRoutes, clickCount: clicks, misclickCount: misclicks,
+  }});
+  flush();
+  if (auto) {
+    $("flash").style.display = "block";
+    setTimeout(() => { $("flash").style.display = "none"; }, 900);
+  }
+  taskIndex++;
+  if (taskIndex < CONFIG.tasks.length) showTask();
+  else if (CONFIG.questions.length > 0) showQuestions();
+  else finish([]);
+}
+
+// --- questions ---
+const answers = {};
+function showQuestions() {
+  $("bar").style.display = "none";
+  const card = $("qcard");
+  let html = "<h1>A few quick questions</h1>";
+  for (const q of CONFIG.questions) {
+    html += '<div class="q"><label>' + escapeText(q.prompt) + "</label>";
+    if (q.kind === "scale") {
+      html += '<div class="scale" data-q="' + q.id + '">';
+      for (let i = 1; i <= 5; i++) html += '<button type="button" data-v="' + i + '">' + i + "</button>";
+      html += "</div>";
+    } else {
+      html += '<textarea data-q="' + q.id + '"></textarea>';
+    }
+    html += "</div>";
+  }
+  html += '<button class="btn primary" id="submit">Submit</button>';
+  card.innerHTML = html;
+  card.querySelectorAll(".scale button").forEach((b) => b.addEventListener("click", () => {
+    const group = b.parentElement;
+    group.querySelectorAll("button").forEach((x) => x.classList.remove("on"));
+    b.classList.add("on");
+    answers[group.dataset.q] = b.dataset.v;
+  }));
+  card.querySelectorAll("textarea").forEach((t) => t.addEventListener("input", () => { answers[t.dataset.q] = t.value; }));
+  $("submit").addEventListener("click", () => {
+    finish(CONFIG.questions.map((q) => ({ questionId: q.id, value: answers[q.id] || "" })));
+  });
+  $("questions").classList.remove("hidden");
+}
+function escapeText(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+function finish(list) {
+  finished = true;
+  flush();
+  post("/api/t/finish", { sessionId, answers: list });
+  $("questions").classList.add("hidden");
+  $("bar").style.display = "none";
+  $("done").classList.remove("hidden");
+}
+
+// --- device sizing ---
+function sizeDevice() {
+  const device = $("device"), stage = $("stage");
+  const w = CONFIG.device.width, h = CONFIG.device.height;
+  if (!w) { device.style.width = "100%"; device.style.height = "100%"; device.style.borderRadius = "0"; return; }
+  device.style.width = w + "px";
+  device.style.height = (h || stage.clientHeight - 32) + "px";
+  const scale = Math.min(1, (stage.clientWidth - 32) / w, (stage.clientHeight - 32) / (h || 1));
+  device.style.transform = "scale(" + scale + ")";
+}
+addEventListener("resize", sizeDevice);
+
+// --- start ---
+$("start").addEventListener("click", async () => {
+  const res = await post("/api/t/start", { token: CONFIG.token, userAgent: navigator.userAgent });
+  if (!res || !res.sessionId) { alert("This test is no longer accepting responses."); return; }
+  sessionId = res.sessionId;
+  $("intro").classList.add("hidden");
+  $("stage").classList.remove("pre");
+  $("bar").style.display = "flex";
+  $("app").src = CONFIG.previewUrl + CONFIG.startRoute;
+  sizeDevice();
+  taskIndex = 0;
+  showTask();
+});
+$("doneBtn").addEventListener("click", () => completeTask("success", false));
+$("giveUpBtn").addEventListener("click", () => completeTask("gave_up", false));
+</script>
+</body>
+</html>`;
+}
+
+// Kept as a template string (not a bundled file) so the snippet stays a single
+// auditable screenful. Privacy invariant: navigation + click positions only.
+const TESTING_SNIPPET = `/* Commons user-testing snippet — active only inside a test iframe.
+   Records route changes and click positions. Never reads keystrokes or input values. */
+(function () {
+  if (window.top === window) return;
+  function post(msg) {
+    msg.__commonsTesting = true;
+    try { window.parent.postMessage(msg, "*"); } catch (e) {}
+  }
+  var last = null;
+  function sendRoute() {
+    var r = location.pathname;
+    if (r === last) return;
+    last = r;
+    post({ kind: "route", route: r });
+  }
+  ["pushState", "replaceState"].forEach(function (name) {
+    var orig = history[name];
+    history[name] = function () {
+      var out = orig.apply(this, arguments);
+      setTimeout(sendRoute, 0);
+      return out;
+    };
+  });
+  window.addEventListener("popstate", sendRoute);
+  window.addEventListener("hashchange", sendRoute);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", sendRoute);
+  else sendRoute();
+  window.addEventListener("click", function (e) {
+    var t = e.target instanceof Element ? e.target : null;
+    var interactive = !!(t && t.closest("a,button,input,select,textarea,label,summary,[role=button],[role=link],[role=tab],[role=menuitem],[onclick]"));
+    post({
+      kind: "click",
+      route: location.pathname,
+      fx: (e.clientX + window.scrollX) / window.innerWidth,
+      fy: (e.clientY + window.scrollY) / window.innerWidth,
+      interactive: interactive
+    });
+  }, true);
+})();
+`;
+
+function reportHtml(data: {
+  test: TestDoc & { _creationTime: number };
+  sessions: {
+    startedAt: number;
+    completedAt?: number;
+    instrumented: boolean;
+    tasks: {
+      taskId: string;
+      outcome: "success" | "gave_up";
+      auto: boolean;
+      durationMs: number;
+      misclickCount: number;
+      clickCount: number;
+    }[];
+    answers?: { questionId: string; value: string }[];
+  }[];
+  projectName: string;
+}): string {
+  const { test, sessions, projectName } = data;
+  const completed = sessions.filter((s) => s.completedAt).length;
+  const fmtSecs = (ms: number) => (ms >= 60000 ? `${Math.round(ms / 6000) / 10} min` : `${Math.round(ms / 100) / 10}s`);
+
+  const taskRows = test.tasks
+    .map((task, i) => {
+      const results = sessions.flatMap((s) => s.tasks.filter((t) => t.taskId === task.id));
+      const successes = results.filter((r) => r.outcome === "success");
+      const avgMs = successes.length
+        ? successes.reduce((sum, r) => sum + r.durationMs, 0) / successes.length
+        : 0;
+      const clicksTotal = results.reduce((sum, r) => sum + r.clickCount, 0);
+      const misclicksTotal = results.reduce((sum, r) => sum + r.misclickCount, 0);
+      return `<tr>
+        <td>${i + 1}. ${escapeHtml(task.instruction)}</td>
+        <td>${results.length}</td>
+        <td>${results.length ? Math.round((successes.length / results.length) * 100) + "%" : "—"}</td>
+        <td>${successes.length ? fmtSecs(avgMs) : "—"}</td>
+        <td>${clicksTotal ? Math.round((misclicksTotal / clicksTotal) * 100) + "%" : "—"}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const questionRows = test.questions
+    .map((q) => {
+      const values = sessions.flatMap((s) => (s.answers ?? []).filter((a) => a.questionId === q.id && a.value !== ""));
+      if (q.kind === "scale") {
+        const nums = values.map((a) => Number(a.value)).filter((n) => n >= 1 && n <= 5);
+        const avg = nums.length ? Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10 : null;
+        return `<div class="q"><h3>${escapeHtml(q.prompt)}</h3>
+          <p>${avg === null ? "No responses yet." : `<strong>${avg} / 5</strong> average · ${nums.length} response${nums.length === 1 ? "" : "s"}`}</p></div>`;
+      }
+      const items = values.map((a) => `<li>${escapeHtml(a.value)}</li>`).join("");
+      return `<div class="q"><h3>${escapeHtml(q.prompt)}</h3>${items ? `<ul>${items}</ul>` : "<p>No responses yet.</p>"}</div>`;
+    })
+    .join("");
+
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escapeHtml(test.title)} — test report</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 40px 24px; background: #101012; color: #e7e7ea;
+         font: 15px/1.6 -apple-system, system-ui, sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 32px 0 12px; }
+  h3 { font-size: 14px; margin: 0 0 4px; }
+  .sub { color: #a1a1a8; margin: 0 0 8px; }
+  .stats { display: flex; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
+  .stat { background: #18181b; border: 1px solid #2a2a2f; border-radius: 10px; padding: 14px 18px; }
+  .stat strong { display: block; font-size: 22px; }
+  .stat span { color: #a1a1a8; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; background: #18181b; border: 1px solid #2a2a2f; border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid #2a2a2f; font-size: 13px; }
+  th { color: #a1a1a8; font-weight: 500; }
+  tr:last-child td { border-bottom: 0; }
+  .q { background: #18181b; border: 1px solid #2a2a2f; border-radius: 10px; padding: 16px 18px; margin-bottom: 12px; }
+  .q p, .q ul { color: #c7c7cd; margin: 0; }
+  .q ul { padding-left: 18px; }
+  .foot { color: #6a6a72; font-size: 12px; margin-top: 40px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>${escapeHtml(test.title)}</h1>
+  <p class="sub">Usability test report · ${escapeHtml(projectName)}</p>
+  <div class="stats">
+    <div class="stat"><strong>${sessions.length}</strong><span>testers started</span></div>
+    <div class="stat"><strong>${completed}</strong><span>completed</span></div>
+    <div class="stat"><strong>${sessions.length ? Math.round((completed / sessions.length) * 100) + "%" : "—"}</strong><span>completion rate</span></div>
+  </div>
+  <h2>Tasks</h2>
+  <table>
+    <tr><th>Task</th><th>Attempts</th><th>Success</th><th>Avg time (successes)</th><th>Misclick rate</th></tr>
+    ${taskRows}
+  </table>
+  ${test.questions.length ? `<h2>Questions</h2>${questionRows}` : ""}
+  <div class="foot">Generated by Commons · anonymous sessions · clicks and screens only, no typed input recorded</div>
+</div>
+</body>
+</html>`;
 }
 
 export default http;

@@ -161,6 +161,93 @@ export default defineSchema({
     .index("by_project", ["projectId"])
     .index("by_user_project", ["userId", "projectId"]),
 
+  // Desktop auto-update feed. The newest row is what /update/* serves:
+  // channelYml verbatim as latest-mac.yml, files by 302 to Convex storage.
+  // Published by scripts/publish-update.mjs after a dist build.
+  appReleases: defineTable({
+    version: v.string(),
+    channelYml: v.string(),
+    files: v.array(v.object({ name: v.string(), storageId: v.id("_storage"), size: v.number() })),
+    publishedAt: v.number(),
+  }).index("by_version", ["version"]),
+
+  // A shareable usability test on a project's deployed preview. Testers open
+  // /t/<token> on the Convex site — no Commons account involved. reportToken
+  // gates the separate read-only aggregate report at /r/<reportToken>.
+  tests: defineTable({
+    projectId: v.id("projects"),
+    createdBy: v.id("users"),
+    title: v.string(),
+    token: v.string(),
+    reportToken: v.string(),
+    status: v.union(v.literal("live"), v.literal("closed")),
+    startRoute: v.string(),
+    // Tester-side frame size; height 0 = fill the browser (desktop apps).
+    device: v.object({ width: v.number(), height: v.number() }),
+    tasks: v.array(
+      v.object({
+        id: v.string(),
+        instruction: v.string(),
+        // Route pattern that auto-completes the task ("/settings", "/pay/[id]").
+        // Absent = self-reported success only.
+        targetRoute: v.optional(v.string()),
+      })
+    ),
+    questions: v.array(
+      v.object({
+        id: v.string(),
+        prompt: v.string(),
+        // scale = 1–5 opinion scale; text = free response.
+        kind: v.union(v.literal("scale"), v.literal("text")),
+      })
+    ),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_token", ["token"])
+    .index("by_report_token", ["reportToken"]),
+
+  // One tester's run through a test. Task summaries are computed in the
+  // harness page and posted at each task boundary; raw events land in
+  // testEvents. instrumented flips true once the in-app snippet phones home.
+  testSessions: defineTable({
+    testId: v.id("tests"),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    instrumented: v.boolean(),
+    userAgent: v.optional(v.string()),
+    tasks: v.array(
+      v.object({
+        taskId: v.string(),
+        outcome: v.union(v.literal("success"), v.literal("gave_up")),
+        // true when the target route matched; false = tester clicked "I did it".
+        auto: v.boolean(),
+        durationMs: v.number(),
+        routeSequence: v.array(v.string()),
+        clickCount: v.number(),
+        misclickCount: v.number(),
+      })
+    ),
+    answers: v.optional(v.array(v.object({ questionId: v.string(), value: v.string() }))),
+  }).index("by_test", ["testId"]),
+
+  // Raw instrumentation stream (route changes + clicks — never text input).
+  // Click coordinates are normalized by the tester's viewport WIDTH on both
+  // axes, so fx/fy scale directly by frame width when drawn on the canvas.
+  testEvents: defineTable({
+    sessionId: v.id("testSessions"),
+    testId: v.id("tests"),
+    taskId: v.optional(v.string()),
+    kind: v.union(v.literal("route"), v.literal("click")),
+    route: v.optional(v.string()),
+    fx: v.optional(v.number()),
+    fy: v.optional(v.number()),
+    // Click landed on something clickable (link/button/input) — false = misclick.
+    interactive: v.optional(v.boolean()),
+    at: v.number(),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_test", ["testId"]),
+
   // Live cursor positions on the canvas, in canvas coordinates. Deliberately
   // separate from `presence`: cursor writes are high-churn (~per 120ms while
   // moving) and must not invalidate the avatar-stack / project-list queries.

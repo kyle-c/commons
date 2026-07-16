@@ -1,7 +1,9 @@
-import { useState } from "react";
-import type { Doc } from "@commons/backend/convex/_generated/dataModel";
+import { useEffect, useState } from "react";
+import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import type { DevServerStatus } from "@commons/shared";
 import { resolveFrameUrl } from "../lib/frameUrl";
+import { registerShortcut } from "../lib/shortcuts";
+import UserTests from "./UserTests";
 
 // height > 0 marks a framed device — "Open in browser" wraps those in the
 // device-sized preview harness so the browser keeps the form factor.
@@ -18,16 +20,27 @@ export default function PrototypeView({
   previewUrl,
   viewerHasRepo,
   repoHolderNames,
+  project,
+  me,
+  onShowHeatmap,
 }: {
   frames: Doc<"frames">[];
   devStatus: DevServerStatus;
   previewUrl?: string | null;
   viewerHasRepo?: boolean;
   repoHolderNames?: string[];
+  project: Doc<"projects">;
+  me: Doc<"users">;
+  onShowHeatmap?: (testId: Id<"tests">) => void;
 }) {
   const routes = frames.filter((f) => f.kind === "route");
   const [routePath, setRoutePath] = useState(routes[0]?.routePath ?? "/");
   const [chosenDevice, setDevice] = useState<(typeof DEVICES)[number] | null>(null);
+  const [testsOpen, setTestsOpen] = useState(false);
+  useEffect(
+    () => registerShortcut("u", () => setTestsOpen((open) => !open), { description: "User tests" }),
+    []
+  );
   // Mobile projects (phone-sized frames) default to the iPhone preset.
   const device =
     chosenDevice ?? (routes.length > 0 && routes.every((f) => f.width <= 500) ? DEVICES[0] : DEVICES[3]);
@@ -53,6 +66,13 @@ export default function PrototypeView({
           ))}
         </div>
         <span className="spacer" style={{ flex: 1 }} />
+        <button
+          className={`btn ghost ${testsOpen ? "active" : ""}`}
+          title="Task-based usability tests, shareable by link (U)"
+          onClick={() => setTestsOpen((open) => !open)}
+        >
+          🧪 User tests
+        </button>
         {source && !source.live && (
           <span className="badge" title="Rendered from the deployed preview">
             preview
@@ -83,6 +103,15 @@ export default function PrototypeView({
           </button>
         )}
       </div>
+      {testsOpen && (
+        <UserTests
+          project={project}
+          me={me}
+          frames={frames}
+          onShowHeatmap={onShowHeatmap}
+          onClose={() => setTestsOpen(false)}
+        />
+      )}
       <div className="proto-stage">
         {url ? (
           <div className="proto-device" style={device.width ? { width: device.width } : { flex: 1 }}>
