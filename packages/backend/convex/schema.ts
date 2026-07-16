@@ -207,6 +207,9 @@ export default defineSchema({
         kind: v.union(v.literal("scale"), v.literal("text")),
       })
     ),
+    // Variant testing (UT-11): sessions alternate between the project preview
+    // ("A · current") and this URL — typically an agent draft's branch preview.
+    variant: v.optional(v.object({ label: v.string(), url: v.string() })),
   })
     .index("by_project", ["projectId"])
     .index("by_token", ["token"])
@@ -221,6 +224,8 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
     instrumented: v.boolean(),
     userAgent: v.optional(v.string()),
+    // "a" = project preview, "b" = the test's variant URL (UT-11).
+    variant: v.optional(v.union(v.literal("a"), v.literal("b"))),
     tasks: v.array(
       v.object({
         taskId: v.string(),

@@ -745,6 +745,11 @@ textarea:focus {
   color: var(--text-secondary);
   font-size: var(--text-xs);
 }
+.variant-tag {
+  color: var(--accent);
+  font-weight: 600;
+  min-width: 92px;
+}
 .test-paths {
   display: flex;
   flex-direction: column;

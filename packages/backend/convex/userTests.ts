@@ -50,6 +50,7 @@ export const create = mutation({
     device: v.object({ width: v.number(), height: v.number() }),
     tasks: v.array(taskValidator),
     questions: v.array(questionValidator),
+    variant: v.optional(v.object({ label: v.string(), url: v.string() })),
   },
   handler: async (ctx, args) => {
     const project = await accessibleProject(ctx, args.projectId, args.userId);
@@ -66,6 +67,7 @@ export const create = mutation({
       device: args.device,
       tasks: args.tasks,
       questions: args.questions,
+      variant: args.variant,
     });
     return testId;
   },
@@ -174,13 +176,24 @@ export const startSession = internalMutation({
       .withIndex("by_token", (q) => q.eq("token", args.token))
       .unique();
     if (!test || test.status !== "live") return null;
-    return await ctx.db.insert("testSessions", {
+    // A/B assignment alternates by arrival order — even split at any n.
+    let variant: "a" | "b" | undefined;
+    if (test.variant) {
+      const existing = await ctx.db
+        .query("testSessions")
+        .withIndex("by_test", (q) => q.eq("testId", test._id))
+        .collect();
+      variant = existing.length % 2 === 0 ? "a" : "b";
+    }
+    const sessionId = await ctx.db.insert("testSessions", {
       testId: test._id,
       startedAt: Date.now(),
       instrumented: false,
       userAgent: args.userAgent,
+      variant,
       tasks: [],
     });
+    return { sessionId, variant };
   },
 });
 

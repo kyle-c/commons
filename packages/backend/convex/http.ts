@@ -148,11 +148,11 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const body = (await request.json()) as { token?: string; userAgent?: string };
     if (typeof body.token !== "string") return json({ error: "bad_request" }, 400);
-    const sessionId = await ctx.runMutation(internal.userTests.startSession, {
+    const started = await ctx.runMutation(internal.userTests.startSession, {
       token: body.token,
       userAgent: typeof body.userAgent === "string" ? body.userAgent.slice(0, 300) : undefined,
     });
-    return sessionId ? json({ sessionId }) : json({ error: "closed" }, 410);
+    return started ? json(started) : json({ error: "closed" }, 410);
   }),
 });
 
@@ -305,6 +305,7 @@ type TestDoc = {
   device: { width: number; height: number };
   tasks: { id: string; instruction: string; targetRoute?: string }[];
   questions: { id: string; prompt: string; kind: "scale" | "text" }[];
+  variant?: { label: string; url: string };
 };
 
 function escapeHtml(s: string): string {
@@ -321,6 +322,8 @@ function testerHarnessHtml(test: TestDoc, previewUrl: string): string {
     token: test.token,
     title: test.title,
     previewUrl: previewUrl.replace(/\/+$/, ""),
+    // Variant sessions (assigned server-side at start) load this base instead.
+    variantUrl: test.variant ? test.variant.url.replace(/\/+$/, "") : null,
     startRoute: test.startRoute,
     device: test.device,
     tasks: test.tasks,
@@ -551,10 +554,11 @@ $("start").addEventListener("click", async () => {
   const res = await post("/api/t/start", { token: CONFIG.token, userAgent: navigator.userAgent });
   if (!res || !res.sessionId) { alert("This test is no longer accepting responses."); return; }
   sessionId = res.sessionId;
+  const base = res.variant === "b" && CONFIG.variantUrl ? CONFIG.variantUrl : CONFIG.previewUrl;
   $("intro").classList.add("hidden");
   $("stage").classList.remove("pre");
   $("bar").style.display = "flex";
-  $("app").src = CONFIG.previewUrl + CONFIG.startRoute;
+  $("app").src = base + CONFIG.startRoute;
   sizeDevice();
   taskIndex = 0;
   showTask();
@@ -615,6 +619,7 @@ function reportHtml(data: {
     startedAt: number;
     completedAt?: number;
     instrumented: boolean;
+    variant?: "a" | "b";
     tasks: {
       taskId: string;
       outcome: "success" | "gave_up";
@@ -631,22 +636,30 @@ function reportHtml(data: {
   const completed = sessions.filter((s) => s.completedAt).length;
   const fmtSecs = (ms: number) => (ms >= 60000 ? `${Math.round(ms / 6000) / 10} min` : `${Math.round(ms / 100) / 10}s`);
 
+  type TaskResult = (typeof sessions)[number]["tasks"][number];
+  const statCells = (results: TaskResult[]) => {
+    const successes = results.filter((r) => r.outcome === "success");
+    const avgMs = successes.length ? successes.reduce((sum, r) => sum + r.durationMs, 0) / successes.length : 0;
+    const clicksTotal = results.reduce((sum, r) => sum + r.clickCount, 0);
+    const misclicksTotal = results.reduce((sum, r) => sum + r.misclickCount, 0);
+    return `<td>${results.length}</td>
+      <td>${results.length ? Math.round((successes.length / results.length) * 100) + "%" : "—"}</td>
+      <td>${successes.length ? fmtSecs(avgMs) : "—"}</td>
+      <td>${clicksTotal ? Math.round((misclicksTotal / clicksTotal) * 100) + "%" : "—"}</td>`;
+  };
+
+  // Variant tests (UT-11) report one row per variant so A/B reads side by side.
   const taskRows = test.tasks
     .map((task, i) => {
-      const results = sessions.flatMap((s) => s.tasks.filter((t) => t.taskId === task.id));
-      const successes = results.filter((r) => r.outcome === "success");
-      const avgMs = successes.length
-        ? successes.reduce((sum, r) => sum + r.durationMs, 0) / successes.length
-        : 0;
-      const clicksTotal = results.reduce((sum, r) => sum + r.clickCount, 0);
-      const misclicksTotal = results.reduce((sum, r) => sum + r.misclickCount, 0);
-      return `<tr>
-        <td>${i + 1}. ${escapeHtml(task.instruction)}</td>
-        <td>${results.length}</td>
-        <td>${results.length ? Math.round((successes.length / results.length) * 100) + "%" : "—"}</td>
-        <td>${successes.length ? fmtSecs(avgMs) : "—"}</td>
-        <td>${clicksTotal ? Math.round((misclicksTotal / clicksTotal) * 100) + "%" : "—"}</td>
-      </tr>`;
+      const label = `${i + 1}. ${escapeHtml(task.instruction)}`;
+      if (!test.variant) {
+        const results = sessions.flatMap((s) => s.tasks.filter((t) => t.taskId === task.id));
+        return `<tr><td>${label}</td>${statCells(results)}</tr>`;
+      }
+      const forVariant = (v: "a" | "b") =>
+        sessions.filter((s) => (s.variant ?? "a") === v).flatMap((s) => s.tasks.filter((t) => t.taskId === task.id));
+      return `<tr><td>${label} — <strong>A · current</strong></td>${statCells(forVariant("a"))}</tr>
+        <tr><td style="color:#a1a1a8">↳ <strong>B · ${escapeHtml(test.variant.label)}</strong></td>${statCells(forVariant("b"))}</tr>`;
     })
     .join("");
 

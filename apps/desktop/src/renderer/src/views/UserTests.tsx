@@ -69,9 +69,13 @@ function NewTestForm({
   const [questions, setQuestions] = useState<QuestionDraft[]>([
     { prompt: "How easy was that, overall? (1 = very hard, 5 = very easy)", kind: "scale" },
   ]);
+  const [variantLabel, setVariantLabel] = useState("");
+  const [variantUrl, setVariantUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const valid = title.trim() !== "" && tasks.some((t) => t.instruction.trim() !== "");
+  const variantOn = variantUrl.trim() !== "";
+  const variantValid = !variantOn || /^https?:\/\/.+/.test(variantUrl.trim());
+  const valid = title.trim() !== "" && tasks.some((t) => t.instruction.trim() !== "") && variantValid;
 
   const submit = async () => {
     setSaving(true);
@@ -92,6 +96,9 @@ function NewTestForm({
         questions: questions
           .filter((q) => q.prompt.trim() !== "")
           .map((q, i) => ({ id: `q${i + 1}`, prompt: q.prompt.trim(), kind: q.kind })),
+        variant: variantOn
+          ? { label: variantLabel.trim() || "variant B", url: variantUrl.trim().replace(/\/+$/, "") }
+          : undefined,
       });
       onDone();
     } catch (err) {
@@ -184,6 +191,24 @@ function NewTestForm({
         + Question
       </button>
 
+      <strong title="Testers alternate between the current preview (A) and this URL (B) — paste an agent draft's branch preview to A/B a change before merging">
+        Variant B <span className="hint">(optional — A/B against a draft preview)</span>
+      </strong>
+      <div className="test-form-row">
+        <input
+          style={{ width: 130 }}
+          placeholder="Label, e.g. “new nav”"
+          value={variantLabel}
+          onChange={(e) => setVariantLabel(e.target.value)}
+        />
+        <input
+          style={{ flex: 1 }}
+          placeholder="https://myapp-git-commons-new-nav-team.vercel.app"
+          value={variantUrl}
+          onChange={(e) => setVariantUrl(e.target.value)}
+        />
+      </div>
+
       <div className="test-form-row" style={{ justifyContent: "flex-end" }}>
         <button className="btn ghost" onClick={onDone}>
           Cancel
@@ -245,14 +270,17 @@ function TestResults({
       )}
 
       {test.tasks.map((task, i) => {
-        const results = sessions.flatMap((s) => s.tasks.filter((t) => t.taskId === task.id));
-        const successes = results.filter((r) => r.outcome === "success");
-        const avgMs = successes.length ? successes.reduce((a, r) => a + r.durationMs, 0) / successes.length : 0;
-        const clicksTotal = results.reduce((a, r) => a + r.clickCount, 0);
-        const misclicksTotal = results.reduce((a, r) => a + r.misclickCount, 0);
+        // Variant tests (UT-11) show one stat line per arm, A/B side by side.
+        const arms: { label: string | null; sessions: typeof sessions }[] = test.variant
+          ? [
+              { label: "A · current", sessions: sessions.filter((s) => (s.variant ?? "a") === "a") },
+              { label: `B · ${test.variant.label}`, sessions: sessions.filter((s) => s.variant === "b") },
+            ]
+          : [{ label: null, sessions }];
+        const allResults = sessions.flatMap((s) => s.tasks.filter((t) => t.taskId === task.id));
         // Top actual paths, most common first — the "expected vs actual" view.
         const pathCounts = new Map<string, number>();
-        for (const r of results) {
+        for (const r of allResults) {
           if (r.routeSequence.length === 0) continue;
           const key = r.routeSequence.join(" → ");
           pathCounts.set(key, (pathCounts.get(key) ?? 0) + 1);
@@ -264,18 +292,33 @@ function TestResults({
               {i + 1}. {task.instruction}
               {task.targetRoute && <span className="hint"> → expects {task.targetRoute}</span>}
             </div>
-            <div className="test-task-nums">
-              <span>
-                <strong>{results.length ? `${Math.round((successes.length / results.length) * 100)}%` : "—"}</strong>{" "}
-                success ({results.length} attempts)
-              </span>
-              <span>
-                <strong>{successes.length ? fmtSecs(avgMs) : "—"}</strong> avg time
-              </span>
-              <span>
-                <strong>{clicksTotal ? `${Math.round((misclicksTotal / clicksTotal) * 100)}%` : "—"}</strong> misclicks
-              </span>
-            </div>
+            {arms.map((arm) => {
+              const results = arm.sessions.flatMap((s) => s.tasks.filter((t) => t.taskId === task.id));
+              const successes = results.filter((r) => r.outcome === "success");
+              const avgMs = successes.length
+                ? successes.reduce((a, r) => a + r.durationMs, 0) / successes.length
+                : 0;
+              const clicksTotal = results.reduce((a, r) => a + r.clickCount, 0);
+              const misclicksTotal = results.reduce((a, r) => a + r.misclickCount, 0);
+              return (
+                <div className="test-task-nums" key={arm.label ?? "all"}>
+                  {arm.label && <span className="variant-tag">{arm.label}</span>}
+                  <span>
+                    <strong>
+                      {results.length ? `${Math.round((successes.length / results.length) * 100)}%` : "—"}
+                    </strong>{" "}
+                    success ({results.length} attempts)
+                  </span>
+                  <span>
+                    <strong>{successes.length ? fmtSecs(avgMs) : "—"}</strong> avg time
+                  </span>
+                  <span>
+                    <strong>{clicksTotal ? `${Math.round((misclicksTotal / clicksTotal) * 100)}%` : "—"}</strong>{" "}
+                    misclicks
+                  </span>
+                </div>
+              );
+            })}
             {topPaths.length > 0 && (
               <div className="test-paths">
                 {topPaths.map(([path, count]) => (
