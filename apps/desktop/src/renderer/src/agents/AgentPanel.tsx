@@ -57,6 +57,21 @@ function TranscriptItem({ event }: { event: AgentSessionEvent }) {
               ))}
             </div>
           )}
+          {event.draft && (
+            <div className="draft-row">
+              <code title={`Branched from ${event.draft.baseBranch}`}>{event.draft.branch}</code>
+              {event.draft.compareUrl && (
+                <button className="btn" onClick={() => window.commons.openExternal(event.draft!.compareUrl!)}>
+                  Ship ↗
+                </button>
+              )}
+              {event.draft.committed && !event.draft.pushed && (
+                <span className="failed" title={event.draft.pushError}>
+                  push failed
+                </span>
+              )}
+            </div>
+          )}
         </div>
       );
     }

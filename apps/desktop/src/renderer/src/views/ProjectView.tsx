@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
-import type { AgentSessionEvent, AgentSessionInfo, DevServerStatus } from "@commons/shared";
+import type { AgentSessionEvent, AgentSessionInfo, DevServerStatus, GitRepoStatus } from "@commons/shared";
 import { buildDeepLink } from "@commons/shared";
 import type { Nav } from "../App";
 import type { ThreadWithMessages } from "../comments/types";
@@ -16,6 +16,18 @@ import { initials } from "../lib/session";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
 import { useClickOutside } from "../lib/useClickOutside";
+
+/** "Fix savings header" → "fix-savings-header" (draft branch slugs). */
+function slugify(text: string): string {
+  return (
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 24)
+      .replace(/-+$/, "") || "draft"
+  );
+}
 
 /** Turn a comment thread + its frame into a self-contained prompt for the coding agent. */
 function buildThreadPrompt(thread: ThreadWithMessages, frame: Doc<"frames"> | undefined): string {
@@ -194,6 +206,50 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   const [devStatus, setDevStatus] = useState<DevServerStatus>({ state: "stopped" });
   const [copied, setCopied] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [cloning, setCloning] = useState(false);
+
+  // Ambient git: drift is visible on the chip; a fast-forward pull onto a
+  // clean tree can't conflict, so that case syncs automatically. Dirty or
+  // diverged trees get a manual button instead — Commons never risks WIP.
+  const [gitStatus, setGitStatus] = useState<GitRepoStatus | null>(null);
+  useEffect(() => {
+    if (!repoPath || !window.commons) {
+      setGitStatus(null);
+      return;
+    }
+    let cancelled = false;
+    const poll = async () => {
+      const status = await window.commons.getGitStatus(repoPath).catch(() => null);
+      if (cancelled) return;
+      setGitStatus(status);
+      if (status && !status.dirty && status.ahead === 0 && status.behind > 0) {
+        const pulled = await window.commons.pullRepo(repoPath).catch(() => null);
+        if (!cancelled && pulled?.ok) setGitStatus({ ...status, behind: 0 });
+      }
+    };
+    void poll();
+    const interval = setInterval(poll, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [repoPath]);
+
+  // Rung 2: teammates without a clone get one from the project's gitRemote.
+  const cloneProject = async () => {
+    if (!project?.gitRemote || !window.commons || cloning) return;
+    setCloning(true);
+    try {
+      const result = await window.commons.cloneRepo(project.gitRemote, project.name);
+      if (result && "repoPath" in result) {
+        await linkRepo({ projectId: nav.projectId, userId: me._id, repoPath: result.repoPath });
+      } else if (result && "error" in result) {
+        alert(`Clone failed: ${result.error}`);
+      }
+    } finally {
+      setCloning(false);
+    }
+  };
 
   // Nudge the person who CAN fix it: repo-holders on projects teammates can't see.
   const nudgeKey = `commons.previewNudge.${nav.projectId}`;
@@ -255,15 +311,25 @@ export default function ProjectView({ me, nav, setNav }: Props) {
     if (session.context.threadId) {
       const summary = event.summary.length > 1000 ? `${event.summary.slice(0, 997)}…` : event.summary;
       const files = event.editedFiles.length > 0 ? `\n\nChanged: ${event.editedFiles.join(", ")}` : "";
+      const draftNote = event.draft
+        ? `\n\nDraft branch: ${event.draft.branch}${
+            event.draft.compareUrl
+              ? `\nShip it: ${event.draft.compareUrl}`
+              : event.draft.committed && !event.draft.pushed
+                ? "\n(committed locally — push failed, ask the host to check git credentials)"
+                : ""
+          }`
+        : "";
       void replyToThread({
         threadId: session.context.threadId as Id<"threads">,
         authorId: me._id,
-        body: `⚡ Agent finished: ${summary}${files}`,
+        body: `⚡ Agent finished: ${summary}${files}${draftNote}`,
         mentions: [],
       }).catch((err) => console.error("agent thread reply failed", err));
     }
 
-    if (event.editedFiles.length === 0) return;
+    // Draft edits live on their branch, not in the local tree — no reload.
+    if (event.editedFiles.length === 0 || event.draft) return;
     // Reload the frame the session targeted; canvas-level sessions reload everything.
     const targets = session.context.frameId ? [session.context.frameId] : frames.map((f) => f._id as string);
     setFrameReloadTokens((prev) => {
@@ -282,7 +348,11 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   );
 
   const sendThreadToAgent = async (thread: ThreadWithMessages) => {
-    if (!repoPath) return;
+    // Draft mode (project has a git remote) runs in a Commons-managed
+    // checkout on a fresh branch — no working copy needed, nobody's tree
+    // touched. Classic in-place mode is the remote-less fallback.
+    const draftMode = !!project?.gitRemote;
+    if (!draftMode && !repoPath) return;
     const frame = thread.frameId ? frames.find((f) => f._id === thread.frameId) : undefined;
     const firstBody = thread.messages[0]?.body ?? "Comment thread";
     const title = firstBody.length > 60 ? `${firstBody.slice(0, 57)}…` : firstBody;
@@ -296,7 +366,9 @@ export default function ProjectView({ me, nav, setNav }: Props) {
       routePath: frame?.routePath,
     });
     const info = await agentControl.start({
-      repoPath,
+      ...(draftMode
+        ? { gitRemote: project!.gitRemote, draftSlug: slugify(title) }
+        : { repoPath: repoPath! }),
       prompt: buildThreadPrompt(thread, frame),
       title,
       context: {
@@ -445,24 +517,57 @@ export default function ProjectView({ me, nav, setNav }: Props) {
         </div>
         <span className="spacer" />
         {repoPath ? (
-          <span className="status-chip" title={devStatus.state === "error" ? devStatus.message : repoPath}>
-            <span className={`status-dot ${devStatus.state}`} />
-            {devStatus.state === "ready"
-              ? `dev · :${devStatus.port}`
-              : devStatus.state === "starting"
-                ? "starting…"
-                : devStatus.state === "error"
-                  ? "dev error"
-                  : "stopped"}
-          </span>
+          <>
+            <span className="status-chip" title={devStatus.state === "error" ? devStatus.message : repoPath}>
+              <span className={`status-dot ${devStatus.state}`} />
+              {devStatus.state === "ready"
+                ? `dev · :${devStatus.port}`
+                : devStatus.state === "starting"
+                  ? "starting…"
+                  : devStatus.state === "error"
+                    ? "dev error"
+                    : "stopped"}
+              {gitStatus && (
+                <span className="git-bit" title={gitStatus.dirty ? "Local changes present" : "Working tree clean"}>
+                  {gitStatus.branch}
+                  {gitStatus.behind > 0 && ` ↓${gitStatus.behind}`}
+                  {gitStatus.ahead > 0 && ` ↑${gitStatus.ahead}`}
+                  {gitStatus.dirty && " •"}
+                </span>
+              )}
+            </span>
+            {gitStatus && gitStatus.behind > 0 && (gitStatus.dirty || gitStatus.ahead > 0) && (
+              <button
+                className="btn ghost"
+                title={
+                  gitStatus.dirty
+                    ? "Origin moved, but you have local changes — Commons won't pull over them"
+                    : "Your branch and origin diverged — pull manually when ready"
+                }
+                onClick={async () => {
+                  const result = await window.commons.pullRepo(repoPath);
+                  if (!result.ok) alert(result.message);
+                }}
+              >
+                Pull ↓{gitStatus.behind}
+              </button>
+            )}
+          </>
         ) : (
-          <button className="btn" onClick={locateRepo}>
-            Locate repo on this Mac
-          </button>
+          <>
+            {project.gitRemote && (
+              <button className="btn" disabled={cloning} onClick={cloneProject} title={project.gitRemote}>
+                {cloning ? "Cloning…" : "Get this project"}
+              </button>
+            )}
+            <button className={project.gitRemote ? "btn ghost" : "btn"} onClick={locateRepo}>
+              {project.gitRemote ? "Locate existing clone…" : "Locate repo on this Mac"}
+            </button>
+          </>
         )}
         {project.createdBy === me._id && <SharingSettings project={project} me={me} users={users} />}
         <PreviewSettings project={project} open={previewOpen} onOpenChange={setPreviewOpen} />
-        {(repoPath || convexSessions.length > 0) && (
+        {(repoPath || project.gitRemote || convexSessions.length > 0) && (
           <button
             className={`btn ghost ${agentPanelOpen ? "active" : ""}`}
             title="Agent sessions (A)"
@@ -524,7 +629,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           initialThreadId={nav.threadId}
           initialFrameId={nav.frameId}
           frameReloadTokens={frameReloadTokens}
-          onSendToAgent={repoPath ? sendThreadToAgent : undefined}
+          onSendToAgent={repoPath || project.gitRemote ? sendThreadToAgent : undefined}
           onTidy={repoPath ? tidyCanvas : undefined}
         />
       ) : (

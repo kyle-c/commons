@@ -6,6 +6,7 @@ import { inspectRepo } from "./routeDiscovery";
 import * as runner from "./projectRunner";
 import * as agents from "./agents/sessionManager";
 import * as previewHarness from "./previewHarness";
+import * as gitOps from "./gitOps";
 import { fixPath } from "./fixPath";
 
 // Must run before anything spawns npx/pnpm/yarn/bunx — GUI-launched apps get
@@ -128,6 +129,23 @@ app.whenReady().then(() => {
     (_e, url: string, opts: { width: number; height: number; title?: string }) =>
       previewHarness.wrapUrl(url, opts)
   );
+
+  ipcMain.handle("git-status", (_e, repoPath: string) => gitOps.status(repoPath));
+  ipcMain.handle("git-pull", (_e, repoPath: string) => gitOps.pullFastForward(repoPath));
+  ipcMain.handle("git-setup-check", (_e, probeRemote?: string) => gitOps.checkSetup(probeRemote));
+  ipcMain.handle("git-set-identity", (_e, name: string, email: string) => gitOps.setIdentity(name, email));
+  ipcMain.handle("clone-repo", async (_e, gitRemote: string, suggestedName: string) => {
+    if (!mainWindow) return null;
+    const picked = await dialog.showOpenDialog(mainWindow, {
+      title: `Choose where to put ${suggestedName}`,
+      buttonLabel: "Clone here",
+      properties: ["openDirectory", "createDirectory"],
+    });
+    if (picked.canceled || picked.filePaths.length === 0) return null;
+    const target = path.join(picked.filePaths[0], suggestedName);
+    const result = await gitOps.clone(gitRemote, target);
+    return result.ok ? { repoPath: result.message } : { error: result.message };
+  });
 
   ipcMain.handle("agent-start", (_e, options: AgentStartOptions) => agents.start(options));
   ipcMain.handle("agent-prompt", (_e, sessionId: string, prompt: string) => agents.prompt(sessionId, prompt));

@@ -64,12 +64,32 @@ export interface AgentSessionContext {
 }
 
 export interface AgentStartOptions {
-  repoPath: string;
+  /** Run in this working tree (classic in-place mode). */
+  repoPath?: string;
+  /**
+   * Draft mode: run in a Commons-managed checkout of this remote, on a fresh
+   * commons/<slug> branch, committing + pushing on success. Takes precedence
+   * over repoPath; lets teammates without a working copy host sessions.
+   */
+  gitRemote?: string;
+  /** Branch slug for draft mode, e.g. "fix-savings-header". */
+  draftSlug?: string;
   prompt: string;
   /** Short label shown in the session list, e.g. the first line of the thread. */
   title: string;
   adapter?: AgentAdapterKind;
   context?: AgentSessionContext;
+}
+
+/** Attached to a result event when the session ran in draft mode. */
+export interface AgentDraftInfo {
+  branch: string;
+  baseBranch: string;
+  committed: boolean;
+  pushed: boolean;
+  /** GitHub compare/PR page ("Ship it") when the remote is GitHub. */
+  compareUrl?: string;
+  pushError?: string;
 }
 
 export interface AgentSessionInfo {
@@ -100,7 +120,25 @@ export type AgentSessionEvent =
       numTurns: number;
       totalCostUsd?: number;
       editedFiles: string[];
+      draft?: AgentDraftInfo;
     };
+
+/** Local git state of a linked working copy (drift visibility). */
+export interface GitRepoStatus {
+  branch: string;
+  dirty: boolean;
+  hasUpstream: boolean;
+  ahead: number;
+  behind: number;
+}
+
+/** Onboarding preflight for the git integration. */
+export interface GitSetupStatus {
+  gitInstalled: boolean;
+  identityName?: string;
+  identityEmail?: string;
+  remoteAccess: "ok" | "auth_failed" | "unreachable" | "skipped";
+}
 
 /** Payload of the commons:// callback that ends a system-browser OAuth flow. */
 export interface AuthCallback {
@@ -121,6 +159,16 @@ export interface CommonsApi {
   openExternal(url: string): Promise<void>;
   /** Wrap a localhost dev URL in the device-sized preview harness page. */
   wrapPreviewUrl(url: string, opts: { width: number; height: number; title?: string }): Promise<string>;
+  /** Local git state of a working copy; null if not a git repo. */
+  getGitStatus(repoPath: string): Promise<GitRepoStatus | null>;
+  /** Fast-forward-only pull; refuses dirty trees. */
+  pullRepo(repoPath: string): Promise<{ ok: boolean; message: string }>;
+  /** Clone gitRemote into a user-chosen folder; null if the picker is cancelled. */
+  cloneRepo(gitRemote: string, suggestedName: string): Promise<{ repoPath: string } | { error: string } | null>;
+  /** Preflight the git integration (install, identity, remote credentials). */
+  checkGitSetup(probeRemote?: string): Promise<GitSetupStatus>;
+  /** Write global git user.name/user.email (the one-click identity fix). */
+  setGitIdentity(name: string, email: string): Promise<{ ok: boolean; message: string }>;
   startAgentSession(options: AgentStartOptions): Promise<AgentSessionInfo>;
   /** Follow-up prompt on an idle session. Rejects while a turn is running. */
   sendAgentPrompt(sessionId: string, prompt: string): Promise<void>;

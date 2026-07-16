@@ -1083,3 +1083,50 @@ kbd {
 .member-row input {
   accent-color: var(--accent);
 }
+
+/* Ambient git: branch/drift info on the dev chip; draft rows in agent results */
+.status-chip .git-bit {
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  border-left: 1px solid var(--border-default);
+  padding-left: 6px;
+  margin-left: 2px;
+}
+.agent-item.done .draft-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.agent-item.done .draft-row .failed {
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+
+/* Git setup preflight banner (home) */
+.nudge-banner.card {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  align-items: flex-start;
+}
+.setup-rows {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.setup-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.setup-row code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+  user-select: text;
+}

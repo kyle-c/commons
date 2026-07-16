@@ -6,6 +6,7 @@ import type { Doc } from "@commons/backend/convex/_generated/dataModel";
 import type { Nav } from "../App";
 import { initials, timeAgo } from "../lib/session";
 import { layoutFrames } from "../lib/frameLayout";
+import GitSetupBanner from "./GitSetupBanner";
 
 /** Stable color pair derived from the name, for repos with no detectable colors. */
 function fallbackColors(name: string): [string, string] {
@@ -89,6 +90,8 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
           )}
         </div>
       </div>
+
+      <GitSetupBanner me={me} probeRemote={(projects ?? []).find((p) => p.gitRemote)?.gitRemote} />
 
       {projects && projects.length === 0 && (
         <div className="empty-state">
