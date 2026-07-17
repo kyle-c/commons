@@ -1,7 +1,8 @@
 import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { onSignIn } from "./workspaces";
+import { onSignIn, autoJoinForEmail } from "./workspaces";
+import { resolveViewer } from "./access";
 
 const AVATAR_COLORS = ["#f97316", "#22d3ee", "#a78bfa", "#4ade80", "#f472b6", "#facc15", "#60a5fa", "#fb7185"];
 
@@ -21,11 +22,24 @@ function randomToken(bytes: number): string {
 // server-generated nonce, so it both prevents CSRF and stands in for PKCE —
 // the exchange happens on the same backend that generated it.
 export const start = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    // Link mode: prove ownership of an additional email for the account
+    // behind this session token — same OAuth flow, no new session minted.
+    linkSessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { linkSessionToken }) => {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     if (!clientId) {
       throw new Error("GOOGLE_CLIENT_ID is not set on the Convex deployment — see README, 'Google sign-in setup'.");
+    }
+    let linkUserId: Id<"users"> | undefined;
+    if (linkSessionToken) {
+      const session = await ctx.db
+        .query("sessions")
+        .withIndex("by_token", (q) => q.eq("token", linkSessionToken))
+        .unique();
+      if (!session) throw new Error("Sign in again before linking an email.");
+      linkUserId = session.userId;
     }
     // Opportunistic cleanup: this table only holds in-flight sign-ins.
     const now = Date.now();
@@ -33,7 +47,7 @@ export const start = mutation({
       if (stale.expiresAt < now || stale.status === "claimed") await ctx.db.delete(stale._id);
     }
     const state = randomToken(16);
-    await ctx.db.insert("authSessions", { state, status: "pending", expiresAt: now + AUTH_SESSION_TTL_MS });
+    await ctx.db.insert("authSessions", { state, status: "pending", expiresAt: now + AUTH_SESSION_TTL_MS, linkUserId });
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: `${process.env.CONVEX_SITE_URL}/auth/google/callback`,
@@ -98,6 +112,32 @@ export const touch = mutation({
   },
 });
 
+// Linked secondary addresses for the account menu.
+export const linkedEmails = query({
+  args: { userId: v.id("users"), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const userId = await resolveViewer(ctx, args);
+    if (!userId) return [];
+    const rows = await ctx.db
+      .query("userEmails")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    return rows.map((row) => ({ id: row._id, email: row.email }));
+  },
+});
+
+// Unlinking removes the sign-in path, not any workspace memberships the
+// address earned — leaving a company shouldn't silently eject you mid-project.
+export const unlinkEmail = mutation({
+  args: { emailId: v.id("userEmails"), userId: v.id("users"), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const userId = await resolveViewer(ctx, args);
+    const row = await ctx.db.get(args.emailId);
+    if (!row || !userId || row.userId !== userId) throw new Error("Not your linked email");
+    await ctx.db.delete(args.emailId);
+  },
+});
+
 export const signOut = mutation({
   args: { sessionToken: v.string() },
   handler: async (ctx, { sessionToken }) => {
@@ -130,10 +170,71 @@ export const completeGoogleSignIn = internalMutation({
     }
 
     const normalized = email.toLowerCase();
+
+    // Link mode: Google just proved the signer owns `normalized` — attach it
+    // to the linking account instead of signing anyone in.
+    if (session.linkUserId) {
+      const linker = await ctx.db.get(session.linkUserId);
+      if (!linker) {
+        await ctx.db.patch(session._id, { status: "failed", error: "link_account_gone" });
+        return { ok: false as const, reason: "expired" as const };
+      }
+      const ownedByPrimary = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", normalized))
+        .unique();
+      const ownedBySecondary = await ctx.db
+        .query("userEmails")
+        .withIndex("by_email", (q) => q.eq("email", normalized))
+        .unique();
+      if (ownedByPrimary?._id === linker._id || ownedBySecondary?.userId === linker._id) {
+        await ctx.db.patch(session._id, { status: "authorized", userId: linker._id });
+        return { ok: true as const, linked: true as const, email: normalized };
+      }
+      if (ownedByPrimary || ownedBySecondary) {
+        await ctx.db.patch(session._id, { status: "failed", error: "email_in_use" });
+        return { ok: false as const, reason: "email_in_use" as const };
+      }
+      await ctx.db.insert("userEmails", { userId: linker._id, email: normalized });
+      // The new address opens the same doors a sign-in with it would have:
+      // pending invite accepted (with any carried workspace) + domain auto-join.
+      const invite = await ctx.db
+        .query("invites")
+        .withIndex("by_email", (q) => q.eq("email", normalized))
+        .unique();
+      if (invite && !invite.acceptedAt) {
+        await ctx.db.patch(invite._id, { acceptedAt: Date.now() });
+        if (invite.workspaceId) await onSignIn(ctx, linker, invite.workspaceId);
+      }
+      await autoJoinForEmail(ctx, linker._id, normalized);
+      await ctx.db.patch(session._id, { status: "authorized", userId: linker._id });
+      return { ok: true as const, linked: true as const, email: normalized };
+    }
+
     let user = await ctx.db
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", normalized))
       .unique();
+    // A linked secondary address signs in to the account it belongs to.
+    const viaSecondary = user
+      ? null
+      : await ctx.db
+          .query("userEmails")
+          .withIndex("by_email", (q) => q.eq("email", normalized))
+          .unique();
+    if (!user && viaSecondary) {
+      user = await ctx.db.get(viaSecondary.userId);
+      // Don't refresh the profile from a secondary Google account — its
+      // name/photo belong to a different Google identity than the primary.
+      if (user) {
+        await ctx.db.patch(user._id, { lastSeenAt: Date.now() });
+        await onSignIn(ctx, user);
+        const token = randomToken(32);
+        await ctx.db.insert("sessions", { userId: user._id, token });
+        await ctx.db.patch(session._id, { status: "authorized", userId: user._id, sessionToken: token });
+        return { ok: true as const };
+      }
+    }
     let inviteWorkspaceId: Id<"workspaces"> | undefined;
 
     if (user) {

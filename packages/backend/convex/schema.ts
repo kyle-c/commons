@@ -27,6 +27,17 @@ export default defineSchema({
     token: v.string(),
   }).index("by_token", ["token"]),
 
+  // Secondary addresses linked to an account (one identity, many emails —
+  // work + personal). Verified by Google: linking runs the OAuth flow with the
+  // address being added. Sign-in with any linked address resolves to the same
+  // user; workspace domain auto-join fires per address.
+  userEmails: defineTable({
+    userId: v.id("users"),
+    email: v.string(),
+  })
+    .index("by_email", ["email"])
+    .index("by_user", ["userId"]),
+
   // One in-flight browser sign-in, keyed by the OAuth `state` param.
   // pending → authorized (Google callback landed) → claimed (app picked up the
   // session token), or failed (not invited / expired / Google error).
@@ -36,6 +47,9 @@ export default defineSchema({
     expiresAt: v.number(),
     userId: v.optional(v.id("users")),
     sessionToken: v.optional(v.string()),
+    // Link mode: this flow adds a verified secondary email to an existing
+    // account instead of signing in (auth.start with linkSessionToken).
+    linkUserId: v.optional(v.id("users")),
     error: v.optional(v.string()),
   }).index("by_state", ["state"]),
 

@@ -14,6 +14,11 @@ export const create = mutation({
       .withIndex("by_email", (q) => q.eq("email", normalized))
       .unique();
     if (existingUser) return { ok: false as const, reason: "already_member" as const };
+    const existingSecondary = await ctx.db
+      .query("userEmails")
+      .withIndex("by_email", (q) => q.eq("email", normalized))
+      .unique();
+    if (existingSecondary) return { ok: false as const, reason: "already_member" as const };
     const existingInvite = await ctx.db
       .query("invites")
       .withIndex("by_email", (q) => q.eq("email", normalized))

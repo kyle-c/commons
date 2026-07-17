@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
-import { useMutation } from "convex/react";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc } from "@commons/backend/convex/_generated/dataModel";
-import { initials } from "../lib/session";
+import { initials, sessionToken } from "../lib/session";
 import { useClickOutside } from "../lib/useClickOutside";
 
 /**
@@ -19,6 +19,30 @@ export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSig
   const generateUploadUrl = useMutation(api.users.generateAvatarUploadUrl);
   const setAvatarImage = useMutation(api.users.setAvatarImage);
   const resetAvatar = useMutation(api.users.resetAvatar);
+
+  // Linked emails: one account, many addresses. Linking reuses the Google
+  // OAuth flow — signing in with the other address once IS the verification.
+  const linked = useQuery(api.auth.linkedEmails, open ? { userId: me._id, sessionToken: sessionToken() } : "skip");
+  const startAuth = useMutation(api.auth.start);
+  const unlinkEmail = useMutation(api.auth.unlinkEmail);
+  const [linkState, setLinkState] = useState<string | null>(null);
+  const linkStatus = useQuery(api.auth.status, linkState ? { state: linkState } : "skip");
+  useEffect(() => {
+    if (!linkStatus) return;
+    if (linkStatus.status === "authorized" || linkStatus.status === "failed") {
+      // Leave the row visible a beat so the outcome is readable, then reset.
+      const timer = setTimeout(() => setLinkState(null), 4000);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [linkStatus]);
+
+  const linkAnother = async () => {
+    const { state, url } = await startAuth({ linkSessionToken: sessionToken() });
+    setLinkState(state);
+    if (window.commons) await window.commons.openExternal(url);
+    else window.open(url);
+  };
 
   const uploadPhoto = async (file: File) => {
     setBusy(true);
@@ -62,6 +86,33 @@ export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSig
               <span className="email">{me.email}</span>
             </span>
           </div>
+          {(linked ?? []).map((row) => (
+            <div key={row.id} className="linked-email-row">
+              <span className="email">{row.email}</span>
+              <button
+                className="btn ghost"
+                title="Unlink (workspace memberships it earned are kept)"
+                onClick={() => void unlinkEmail({ emailId: row.id, userId: me._id, sessionToken: sessionToken() })}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          {linkState ? (
+            <div className="hint" style={{ padding: "4px 14px 8px" }}>
+              {!linkStatus || linkStatus.status === "pending"
+                ? "Finish signing in with the other Google account in your browser…"
+                : linkStatus.status === "authorized"
+                  ? "✓ Linked — that address now signs into this account."
+                  : linkStatus.error === "email_in_use"
+                    ? "That email already belongs to another Commons account."
+                    : "Linking didn't complete — try again."}
+            </div>
+          ) : (
+            <button title="Add a work or personal address to this account — sign-ins with it land here, and its company domain joins you to that team's workspace" onClick={linkAnother}>
+              Link another email…
+            </button>
+          )}
           <button disabled={busy} onClick={() => fileRef.current?.click()}>
             {busy ? "Uploading…" : "Change photo…"}
           </button>

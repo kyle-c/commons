@@ -811,6 +811,19 @@ textarea:focus {
   padding: 6px 8px;
 }
 
+/* Linked emails in the account menu */
+.linked-email-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 8px 2px 14px;
+}
+.linked-email-row .email {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
 /* Pilot pulse (MET-1) in the Team popover */
 .pilot-pulse {
   display: flex;

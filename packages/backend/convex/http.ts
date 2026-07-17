@@ -69,7 +69,13 @@ http.route({
           `Commons is invite-only. Ask a teammate to invite ${claims.email} (Team menu in the app), then sign in again.`
         );
       }
+      if (result.reason === "email_in_use") {
+        return page("Email already in use", `${claims.email} already belongs to another Commons account.`);
+      }
       return page("Sign-in expired", "This sign-in took too long. Return to Commons and try again.");
+    }
+    if ("linked" in result && result.linked) {
+      return page("Email linked", `${result.email} is now linked to your Commons account — you can close this tab.`);
     }
 
     return page("Signed in", "Returning you to Commons — you can close this tab.", buildAuthCallbackUrl(state));

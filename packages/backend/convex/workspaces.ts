@@ -58,6 +58,17 @@ export async function ensurePersonalWorkspace(ctx: MutationCtx, user: Doc<"users
   return workspaceId;
 }
 
+/** Corporate-domain auto-join for one address — runs per email a user proves. */
+export async function autoJoinForEmail(ctx: MutationCtx, userId: Id<"users">, email: string): Promise<void> {
+  const domain = email.split("@")[1]?.toLowerCase();
+  if (!domain || CONSUMER_DOMAINS.has(domain)) return;
+  const domainWorkspace = await ctx.db
+    .query("workspaces")
+    .withIndex("by_domain", (q) => q.eq("domain", domain))
+    .unique();
+  if (domainWorkspace) await addMembership(ctx, domainWorkspace._id, userId);
+}
+
 /** Sign-in hook: personal workspace + corporate-domain auto-join + invite-carried workspace. */
 export async function onSignIn(
   ctx: MutationCtx,
@@ -65,14 +76,7 @@ export async function onSignIn(
   inviteWorkspaceId?: Id<"workspaces">
 ): Promise<void> {
   await ensurePersonalWorkspace(ctx, user);
-  const domain = user.email.split("@")[1]?.toLowerCase();
-  if (domain && !CONSUMER_DOMAINS.has(domain)) {
-    const domainWorkspace = await ctx.db
-      .query("workspaces")
-      .withIndex("by_domain", (q) => q.eq("domain", domain))
-      .unique();
-    if (domainWorkspace) await addMembership(ctx, domainWorkspace._id, user._id);
-  }
+  await autoJoinForEmail(ctx, user._id, user.email);
   if (inviteWorkspaceId && (await ctx.db.get(inviteWorkspaceId))) {
     await addMembership(ctx, inviteWorkspaceId, user._id);
   }
@@ -102,11 +106,16 @@ export const create = mutation({
     }
     const workspaceId = await ctx.db.insert("workspaces", { name, kind: "team", domain, createdBy: userId });
     await ctx.db.insert("workspaceMembers", { workspaceId, userId });
-    // Existing users on the domain join immediately, not on next sign-in.
+    // Existing users on the domain join immediately, not on next sign-in —
+    // matching on primary and linked secondary addresses alike.
     if (domain) {
       const users = await ctx.db.query("users").collect();
       for (const user of users) {
         if (user.email.endsWith(`@${domain}`)) await addMembership(ctx, workspaceId, user._id);
+      }
+      const secondaries = await ctx.db.query("userEmails").collect();
+      for (const row of secondaries) {
+        if (row.email.endsWith(`@${domain}`)) await addMembership(ctx, workspaceId, row.userId);
       }
     }
     return { ok: true as const, workspaceId };
