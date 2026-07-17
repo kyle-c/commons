@@ -112,6 +112,12 @@ export default function Team({ me }: { me: Doc<"users"> }) {
                   : "no agent fixes yet"}
                 {" · "}
                 {pulse.testSessionsThisMonth} test sessions/30d
+                {(pulse.errorsThisWeek ?? 0) > 0 && (
+                  <>
+                    {" · "}
+                    <span style={{ color: "var(--danger, #f87171)" }}>{pulse.errorsThisWeek} app errors</span>
+                  </>
+                )}
               </span>
             </div>
           )}

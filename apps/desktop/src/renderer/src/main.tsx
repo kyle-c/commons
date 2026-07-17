@@ -3,12 +3,15 @@ import ReactDOM from "react-dom/client";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import App from "./App";
 import SetupScreen from "./views/SetupScreen";
+import ErrorBoundary from "./ErrorBoundary";
 import { getConvexUrl } from "./lib/session";
+import { initErrorReporting } from "./lib/errorReport";
 import { initTheme } from "./lib/theme";
 import "./theme.css";
 import "./styles.css";
 
 initTheme();
+initErrorReporting();
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 const convexUrl = getConvexUrl();
@@ -23,9 +26,11 @@ if (!convexUrl) {
   const client = new ConvexReactClient(convexUrl);
   root.render(
     <React.StrictMode>
-      <ConvexProvider client={client}>
-        <App />
-      </ConvexProvider>
+      <ErrorBoundary>
+        <ConvexProvider client={client}>
+          <App />
+        </ConvexProvider>
+      </ErrorBoundary>
     </React.StrictMode>
   );
 }

@@ -46,6 +46,12 @@ const api: CommonsApi = {
     return () => ipcRenderer.removeListener("agent-event", handler);
   },
   captureSnapshot: (url, opts) => ipcRenderer.invoke("capture-snapshot", url, opts),
+  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+  onMainError: (cb) => {
+    const handler = (_e: unknown, message: string, stack?: string) => cb(message, stack);
+    ipcRenderer.on("main-process-error", handler);
+    return () => ipcRenderer.removeListener("main-process-error", handler);
+  },
   getUpdateStatus: () => ipcRenderer.invoke("get-update-status"),
   onUpdateStatus: (cb) => {
     const handler = (_e: unknown, status: UpdateStatus) => cb(status);

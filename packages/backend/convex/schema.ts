@@ -212,6 +212,17 @@ export default defineSchema({
     .index("by_project", ["projectId"])
     .index("by_user_project", ["userId", "projectId"]),
 
+  // Crash/error reports from installed apps (POST /api/error). With builds
+  // shipping over the air, this is how a bad release is noticed before a
+  // teammate DMs "it's blank again". Surfaced in the Pilot pulse.
+  appErrors: defineTable({
+    version: v.string(),
+    surface: v.union(v.literal("main"), v.literal("renderer"), v.literal("react")),
+    message: v.string(),
+    stack: v.optional(v.string()),
+    email: v.optional(v.string()),
+  }).index("by_version", ["version"]),
+
   // Desktop auto-update feed. The newest row is what /update/* serves:
   // channelYml verbatim as latest-mac.yml, files by 302 to Convex storage.
   // Published by scripts/publish-update.mjs after a dist build.

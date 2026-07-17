@@ -17,12 +17,13 @@ export const pilot = query({
     const weekAgo = now - WEEK;
     const priorWeekAgo = now - 2 * WEEK;
 
-    const [users, threads, messages, agentEvents, testSessions] = await Promise.all([
+    const [users, threads, messages, agentEvents, testSessions, appErrors] = await Promise.all([
       ctx.db.query("users").collect(),
       ctx.db.query("threads").collect(),
       ctx.db.query("messages").collect(),
       ctx.db.query("agentEvents").collect(),
       ctx.db.query("testSessions").collect(),
+      ctx.db.query("appErrors").collect(),
     ]);
 
     // Feedback→fix cycle: thread created → "⚡ Agent finished" reply lands.
@@ -53,6 +54,7 @@ export const pilot = query({
       draftsPushedThisWeek,
       testSessionsThisMonth: testSessions.filter((s) => s.startedAt >= now - 30 * 24 * 60 * 60 * 1000).length,
       testSessionsCompleted: testSessions.filter((s) => s.completedAt).length,
+      errorsThisWeek: appErrors.filter((e) => e._creationTime >= weekAgo).length,
     };
   },
 });

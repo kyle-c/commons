@@ -15,6 +15,19 @@ import { fixPath } from "./fixPath";
 // a PATH that's missing wherever those actually live (see fixPath.ts).
 fixPath();
 
+// Main-process failures forward to the renderer, which owns error reporting
+// (POST /api/error). Handlers keep the app alive — a background failure
+// shouldn't take down the canvas someone is presenting from.
+process.on("uncaughtException", (err) => {
+  console.error("uncaught (main):", err);
+  mainWindow?.webContents.send("main-process-error", err.message, err.stack);
+});
+process.on("unhandledRejection", (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  console.error("unhandled rejection (main):", err);
+  mainWindow?.webContents.send("main-process-error", err.message, err.stack);
+});
+
 let mainWindow: BrowserWindow | null = null;
 let pendingDeepLink: string | null = null;
 
@@ -162,6 +175,7 @@ app.whenReady().then(() => {
     }
   );
 
+  ipcMain.handle("get-app-version", () => (app.isPackaged ? app.getVersion() : "dev"));
   ipcMain.handle("get-update-status", () => updater.status());
   ipcMain.handle("install-update", () => updater.installNow());
 

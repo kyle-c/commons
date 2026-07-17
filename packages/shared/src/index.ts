@@ -201,6 +201,10 @@ export interface CommonsApi {
     url: string,
     opts: { width: number; height: number; waitForDeploy?: boolean }
   ): Promise<Uint8Array | null>;
+  /** Packaged app version ("dev" outside packaged builds) — for error reports. */
+  getAppVersion(): Promise<string>;
+  /** Main-process crashes forwarded for reporting (renderer owns the reporter). */
+  onMainError(cb: (message: string, stack?: string) => void): () => void;
   /** Auto-update: current status (for late subscribers), push events, restart-to-install. */
   getUpdateStatus(): Promise<UpdateStatus>;
   onUpdateStatus(cb: (status: UpdateStatus) => void): () => void;

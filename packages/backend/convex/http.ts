@@ -82,6 +82,26 @@ http.route({
   }),
 });
 
+// Crash/error ingestion from installed apps. Deliberately unauthenticated
+// (errors can happen before sign-in) but size-capped and deduped server-side.
+http.route({
+  path: "/api/error",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body || typeof body.message !== "string") return json({ error: "bad_request" }, 400);
+    const surface = body.surface === "main" || body.surface === "react" ? body.surface : "renderer";
+    await ctx.runMutation(internal.errors.report, {
+      version: typeof body.version === "string" ? body.version.slice(0, 40) : "unknown",
+      surface,
+      message: body.message.slice(0, 500),
+      stack: typeof body.stack === "string" ? body.stack.slice(0, 4000) : undefined,
+      email: typeof body.email === "string" ? body.email.slice(0, 200) : undefined,
+    });
+    return json({ ok: true });
+  }),
+});
+
 // ---------------------------------------------------------------------------
 // Desktop auto-update feed (electron-updater "generic" provider points here —
 // see apps/desktop/electron-builder.yml). latest-mac.yml is served verbatim;
