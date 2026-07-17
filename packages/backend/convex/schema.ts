@@ -113,8 +113,11 @@ export default defineSchema({
     // Two most prominent colors from the repo's stylesheets — drives the
     // project card cover.
     brandColors: v.optional(v.array(v.string())),
+    // Web share (SNAP-4/DL-3 lite): anyone with /p/<shareToken> gets the
+    // read-only snapshot canvas + threads. Minted/revoked in Sharing.
+    shareToken: v.optional(v.string()),
     archivedAt: v.optional(v.number()),
-  }),
+  }).index("by_share_token", ["shareToken"]),
 
   // Where each teammate's working copy of a project lives on their machine.
   repoLinks: defineTable({
@@ -153,6 +156,17 @@ export default defineSchema({
     sessionId: v.id("agentSessions"),
     event: v.any(),
   }).index("by_session", ["sessionId"]),
+
+  // Latest snapshot image per frame (SNAP-3), captured by a host whose dev
+  // server is live. Powers the web share page and canvas placeholders.
+  frameSnapshots: defineTable({
+    frameId: v.id("frames"),
+    projectId: v.id("projects"),
+    storageId: v.id("_storage"),
+    capturedAt: v.number(),
+  })
+    .index("by_frame", ["frameId"])
+    .index("by_project", ["projectId"]),
 
   // A frame on the canvas: a route of the code project or a Figma frame.
   frames: defineTable({

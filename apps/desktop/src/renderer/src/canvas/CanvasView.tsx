@@ -30,7 +30,7 @@ interface Draft {
 interface Props {
   me: Doc<"users">;
   projectId: Id<"projects">;
-  frames: Doc<"frames">[];
+  frames: (Doc<"frames"> & { snapshotUrl?: string | null; snapshotAt?: number | null })[];
   threads: ThreadWithMessages[];
   users: Doc<"users">[];
   /** Who can be @mentioned here — members only on private projects. */
@@ -455,6 +455,9 @@ export default function CanvasView({
               <div className="frame-body">
                 {url ? (
                   <iframe key={frameReloadTokens?.[frame._id] ?? 0} src={url} title={frame.title} />
+                ) : frame.snapshotUrl ? (
+                  // SNAP-3 fallback: last captured state beats an empty box.
+                  <img className="frame-snapshot" src={frame.snapshotUrl} alt={frame.title} title="Snapshot — no live preview right now" />
                 ) : (
                   <div className="frame-placeholder">
                     {frame.kind === "figma"

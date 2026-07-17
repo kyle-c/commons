@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { accessibleProject, canAccessProject, resolveViewer } from "./access";
 import { isMember, ensurePersonalWorkspace } from "./workspaces";
@@ -121,10 +121,127 @@ export const frames = query({
   args: { projectId: v.id("projects"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     if (!(await accessibleProject(ctx, args.projectId, await resolveViewer(ctx, args)))) return [];
-    return await ctx.db
+    const rows = await ctx.db
       .query("frames")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
+    // Latest snapshot per frame (SNAP-3): placeholder fallback + capture staleness.
+    return await Promise.all(
+      rows.map(async (frame) => {
+        const snapshot = await ctx.db
+          .query("frameSnapshots")
+          .withIndex("by_frame", (q) => q.eq("frameId", frame._id))
+          .unique();
+        return {
+          ...frame,
+          snapshotUrl: snapshot ? await ctx.storage.getUrl(snapshot.storageId) : null,
+          snapshotAt: snapshot?.capturedAt ?? null,
+        };
+      })
+    );
+  },
+});
+
+// SNAP-3: a host with a live dev server keeps one fresh snapshot per frame.
+export const saveFrameSnapshot = mutation({
+  args: {
+    frameId: v.id("frames"),
+    storageId: v.id("_storage"),
+    userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const frame = await ctx.db.get(args.frameId);
+    if (!frame) throw new Error("Frame not found");
+    if (!(await accessibleProject(ctx, frame.projectId, await resolveViewer(ctx, args)))) {
+      throw new Error("Not allowed");
+    }
+    const existing = await ctx.db
+      .query("frameSnapshots")
+      .withIndex("by_frame", (q) => q.eq("frameId", args.frameId))
+      .unique();
+    if (existing) {
+      await ctx.storage.delete(existing.storageId).catch(() => {});
+      await ctx.db.delete(existing._id);
+    }
+    await ctx.db.insert("frameSnapshots", {
+      frameId: args.frameId,
+      projectId: frame.projectId,
+      storageId: args.storageId,
+      capturedAt: Date.now(),
+    });
+  },
+});
+
+// Web share link: mint/revoke the read-only /p/<token> page (creator-only).
+export const setShareToken = mutation({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
+    enable: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await resolveViewer(ctx, args);
+    const project = await ctx.db.get(args.projectId);
+    if (!project || project.createdBy !== userId) throw new Error("Only the project creator can share to web");
+    const shareToken = args.enable
+      ? (project.shareToken ?? Array.from({ length: 4 }, () => Math.random().toString(36).slice(2, 8)).join(""))
+      : undefined;
+    await ctx.db.patch(args.projectId, { shareToken });
+    return shareToken ?? null;
+  },
+});
+
+/** Everything the read-only web share page needs, keyed by its token. */
+export const sharePageData = internalQuery({
+  args: { shareToken: v.string() },
+  handler: async (ctx, { shareToken }) => {
+    const project = await ctx.db
+      .query("projects")
+      .withIndex("by_share_token", (q) => q.eq("shareToken", shareToken))
+      .unique();
+    if (!project || project.archivedAt) return null;
+    const frames = await ctx.db
+      .query("frames")
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
+      .collect();
+    const framesWithSnapshots = await Promise.all(
+      frames.map(async (frame) => {
+        const snapshot = await ctx.db
+          .query("frameSnapshots")
+          .withIndex("by_frame", (q) => q.eq("frameId", frame._id))
+          .unique();
+        return { ...frame, snapshotUrl: snapshot ? await ctx.storage.getUrl(snapshot.storageId) : null };
+      })
+    );
+    const threads = await ctx.db
+      .query("threads")
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
+      .collect();
+    const threadsWithMessages = await Promise.all(
+      threads.map(async (thread) => {
+        const messages = await ctx.db
+          .query("messages")
+          .withIndex("by_thread", (q) => q.eq("threadId", thread._id))
+          .collect();
+        return {
+          ...thread,
+          messages: await Promise.all(
+            messages.map(async (m) => {
+              const author = await ctx.db.get(m.authorId);
+              return {
+                body: m.body,
+                at: m._creationTime,
+                authorName: author?.name ?? "Teammate",
+                avatarColor: author?.avatarColor ?? "#9d9da6",
+              };
+            })
+          ),
+        };
+      })
+    );
+    return { name: project.name, projectId: project._id, frames: framesWithSnapshots, threads: threadsWithMessages };
   },
 });
 

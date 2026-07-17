@@ -935,6 +935,15 @@ textarea:focus {
   z-index: 60;
 }
 
+.frame-snapshot {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  filter: saturate(0.92);
+}
+
 /* Test-click overlay on canvas frames */
 .heatmap-layer {
   position: absolute;

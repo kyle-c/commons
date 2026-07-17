@@ -12,7 +12,7 @@ import Inbox from "./Inbox";
 import AgentPanel, { type PanelSession } from "../agents/AgentPanel";
 import ThemeToggle from "./ThemeToggle";
 import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessions";
-import { initials, sessionToken } from "../lib/session";
+import { getConvexUrl, initials, sessionToken } from "../lib/session";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
@@ -170,9 +170,14 @@ function SharingSettings({ project, me, users }: { project: Doc<"projects">; me:
   const setVisibility = useMutation(api.projects.setVisibility);
   const setMembers = useMutation(api.projects.setMembers);
   const moveProject = useMutation(api.workspaces.moveProject);
+  const setShareToken = useMutation(api.projects.setShareToken);
+  const [linkCopied, setLinkCopied] = useState(false);
   const myWorkspaces = useQuery(api.workspaces.mine, open ? { userId: me._id, sessionToken: sessionToken() } : "skip");
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
+  const shareUrl = project.shareToken
+    ? `${(getConvexUrl() ?? "").replace(".convex.cloud", ".convex.site")}/p/${project.shareToken}`
+    : null;
 
   const memberIds = project.memberIds ?? [];
   const isPrivate = project.visibility === "private";
@@ -228,6 +233,41 @@ function SharingSettings({ project, me, users }: { project: Doc<"projects">; me:
           ) : (
             <div className="hint">Everyone in this project's workspace can see and comment on it.</div>
           )}
+          <div className="hint" style={{ margin: "10px 0 4px" }}>
+            Web link — read-only snapshot canvas for anyone, no install:
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {shareUrl ? (
+              <>
+                <button
+                  className="btn"
+                  style={{ flex: 1 }}
+                  onClick={() => {
+                    void navigator.clipboard.writeText(shareUrl);
+                    setLinkCopied(true);
+                    setTimeout(() => setLinkCopied(false), 1500);
+                  }}
+                >
+                  {linkCopied ? "Copied" : "Copy web link"}
+                </button>
+                <button
+                  className="btn ghost"
+                  title="Revoke — the link stops working immediately"
+                  onClick={() => void setShareToken({ projectId: project._id, userId: me._id, sessionToken: sessionToken(), enable: false })}
+                >
+                  Revoke
+                </button>
+              </>
+            ) : (
+              <button
+                className="btn ghost"
+                style={{ flex: 1 }}
+                onClick={() => void setShareToken({ projectId: project._id, userId: me._id, sessionToken: sessionToken(), enable: true })}
+              >
+                Create web link
+              </button>
+            )}
+          </div>
           {myWorkspaces && myWorkspaces.length > 1 && (
             <>
               <div className="hint" style={{ margin: "10px 0 4px" }}>
@@ -393,6 +433,43 @@ export default function ProjectView({ me, nav, setNav }: Props) {
 
   const replyToThread = useMutation(api.comments.reply);
   const generateUploadUrl = useMutation(api.comments.generateUploadUrl);
+  const saveFrameSnapshot = useMutation(api.projects.saveFrameSnapshot);
+
+  // SNAP-3: while this machine has live frames, keep one fresh snapshot per
+  // frame (stale after 30 min). Captures run serially in the main process;
+  // one attempt per frame per app session keeps this quiet.
+  const snapshotAttempted = useRef(new Set<string>());
+  useEffect(() => {
+    if (devStatus.state !== "ready" || !window.commons?.captureSnapshot) return;
+    const stale = frames.filter(
+      (f) =>
+        f.kind === "route" &&
+        !snapshotAttempted.current.has(f._id) &&
+        (f.snapshotAt == null || Date.now() - f.snapshotAt > 30 * 60_000)
+    );
+    for (const frame of stale) snapshotAttempted.current.add(frame._id);
+    void (async () => {
+      for (const frame of stale) {
+        const url = resolveFrameUrl(frame.routePath, devStatus, null)?.url;
+        if (!url) continue;
+        try {
+          const png = await window.commons.captureSnapshot(url, { width: frame.width, height: frame.height });
+          if (!png) continue;
+          const uploadUrl = await generateUploadUrl();
+          const res = await fetch(uploadUrl, {
+            method: "POST",
+            headers: { "Content-Type": "image/png" },
+            body: new Blob([png as BlobPart], { type: "image/png" }),
+          });
+          const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+          await saveFrameSnapshot({ frameId: frame._id, storageId, userId: me._id, sessionToken: sessionToken() });
+        } catch (err) {
+          console.warn("frame snapshot failed", frame.title, err);
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devStatus.state, frames.length]);
 
   /**
    * SNAP-2: before/after images on draft results. "Before" is the current

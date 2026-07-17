@@ -82,6 +82,23 @@ http.route({
   }),
 });
 
+// Read-only web share page (SNAP-4 / DL-3 lite): the canvas as snapshot
+// images with thread pins and conversations — for anyone with the link,
+// no install, no account. Token minted per project in Sharing.
+http.route({
+  pathPrefix: "/p/",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const shareToken = new URL(request.url).pathname.slice("/p/".length).replace(/\/+$/, "");
+    const data = shareToken ? await ctx.runQuery(internal.projects.sharePageData, { shareToken }) : null;
+    if (!data) return page("Not found", "This share link is broken or was revoked.");
+    return new Response(sharePageHtml(data), {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }),
+});
+
 // Crash/error ingestion from installed apps. Deliberately unauthenticated
 // (errors can happen before sign-in) but size-capped and deduped server-side.
 http.route({
@@ -591,6 +608,192 @@ $("start").addEventListener("click", async () => {
 });
 $("doneBtn").addEventListener("click", () => completeTask("success", false));
 $("giveUpBtn").addEventListener("click", () => completeTask("gave_up", false));
+</script>
+</body>
+</html>`;
+}
+
+function sharePageHtml(data: {
+  name: string;
+  projectId: string;
+  frames: {
+    _id: string;
+    title: string;
+    routePath?: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    snapshotUrl: string | null;
+  }[];
+  threads: {
+    _id: string;
+    frameId?: string;
+    fx?: number;
+    fy?: number;
+    canvasX?: number;
+    canvasY?: number;
+    resolvedAt?: number;
+    messages: { body: string; at: number; authorName: string; avatarColor: string }[];
+  }[];
+}): string {
+  const payload = {
+    name: data.name,
+    deepLink: `commons://project/${data.projectId}/canvas`,
+    frames: data.frames.map((f) => ({
+      id: f._id,
+      title: f.title,
+      route: f.routePath ?? null,
+      x: f.x,
+      y: f.y,
+      w: f.width,
+      h: f.height,
+      img: f.snapshotUrl,
+    })),
+    threads: data.threads
+      .filter((t) => t.messages.length > 0)
+      .map((t) => ({
+        id: t._id,
+        frameId: t.frameId ?? null,
+        fx: t.fx ?? null,
+        fy: t.fy ?? null,
+        cx: t.canvasX ?? null,
+        cy: t.canvasY ?? null,
+        resolved: !!t.resolvedAt,
+        messages: t.messages.map((m) => ({
+          body: m.body,
+          authorName: m.authorName,
+          avatarColor: m.avatarColor,
+          at: m.at,
+        })),
+      })),
+  };
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escapeHtml(data.name)} — Commons</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #101012; color: #e7e7ea; font: 14px/1.5 -apple-system, system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #2a2a2f;
+           position: sticky; top: 0; background: #101012; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0; }
+  header .hint { color: #7a7a82; font-size: 12px; }
+  header a { margin-left: auto; color: #7c9cf5; text-decoration: none; font-size: 13px; }
+  #stage-wrap { overflow: auto; padding: 32px; }
+  #stage { position: relative; transform-origin: 0 0; }
+  .frame { position: absolute; background: #18181b; border: 1px solid #2a2a2f; border-radius: 8px; overflow: hidden; }
+  .frame img { display: block; width: 100%; height: calc(100% - 26px); object-fit: cover; object-position: top; background: #fff; }
+  .frame .ph { display: flex; align-items: center; justify-content: center; height: calc(100% - 26px);
+               color: #55555c; font-size: 12px; }
+  .frame .cap { height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 11px;
+                color: #a1a1a8; border-bottom: 1px solid #2a2a2f; }
+  .pin { position: absolute; width: 24px; height: 24px; border-radius: 12px 12px 12px 2px; border: 2px solid #101012;
+         color: #101012; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+         cursor: pointer; z-index: 3; }
+  .pin.resolved { background: #3a3a41 !important; color: #9d9da6; }
+  #panel { position: fixed; top: 60px; right: 16px; bottom: 16px; width: 340px; background: #18181b;
+           border: 1px solid #2a2a2f; border-radius: 12px; padding: 14px; overflow-y: auto; display: none; z-index: 10; }
+  #panel.open { display: block; }
+  #panel .msg { margin-bottom: 12px; }
+  #panel .who { font-weight: 600; font-size: 12px; }
+  #panel .who small { color: #7a7a82; font-weight: 400; margin-left: 6px; }
+  #panel .close { float: right; background: none; border: none; color: #a1a1a8; cursor: pointer; font-size: 14px; }
+  footer { padding: 10px 20px 24px; color: #55555c; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <span class="hint" id="counts"></span>
+  <a id="open-app" href="#">Open in Commons →</a>
+</header>
+<div id="stage-wrap"><div id="stage"></div></div>
+<div id="panel"></div>
+<footer>Read-only view shared from Commons · snapshots update as the team works</footer>
+<script>
+const DATA = ${inlineJson(payload)};
+const HEADER = 26;
+document.getElementById("title").textContent = DATA.name;
+document.getElementById("open-app").href = DATA.deepLink;
+const open = DATA.threads.filter((t) => !t.resolved).length;
+document.getElementById("counts").textContent =
+  DATA.frames.length + " screens · " + (open ? open + " open threads" : "no open threads");
+
+const pad = 60;
+const minX = Math.min(...DATA.frames.map((f) => f.x), 0) - pad;
+const minY = Math.min(...DATA.frames.map((f) => f.y), 0) - pad;
+const maxX = Math.max(...DATA.frames.map((f) => f.x + f.w), 800) + pad;
+const maxY = Math.max(...DATA.frames.map((f) => f.y + f.h + HEADER), 600) + pad;
+const stage = document.getElementById("stage");
+stage.style.width = maxX - minX + "px";
+stage.style.height = maxY - minY + "px";
+function fit() {
+  const avail = document.getElementById("stage-wrap").clientWidth - 64;
+  const scale = Math.min(1, avail / (maxX - minX));
+  stage.style.transform = "scale(" + scale + ")";
+  document.getElementById("stage-wrap").style.height = (maxY - minY) * scale + 64 + "px";
+}
+addEventListener("resize", fit);
+
+const frameById = {};
+for (const f of DATA.frames) {
+  frameById[f.id] = f;
+  const el = document.createElement("div");
+  el.className = "frame";
+  el.style.cssText = "left:" + (f.x - minX) + "px;top:" + (f.y - minY) + "px;width:" + f.w + "px;height:" + (f.h + HEADER) + "px";
+  const cap = document.createElement("div");
+  cap.className = "cap";
+  cap.textContent = f.title + (f.route ? "  ·  " + f.route : "");
+  el.appendChild(cap);
+  if (f.img) {
+    const img = document.createElement("img");
+    img.src = f.img;
+    img.loading = "lazy";
+    el.appendChild(img);
+  } else {
+    const ph = document.createElement("div");
+    ph.className = "ph";
+    ph.textContent = "no snapshot yet";
+    el.appendChild(ph);
+  }
+  stage.appendChild(el);
+}
+
+const panel = document.getElementById("panel");
+function showThread(t) {
+  let html = '<button class="close" onclick="panel.classList.remove(\\'open\\')">✕</button>';
+  for (const m of t.messages) {
+    const when = new Date(m.at).toLocaleDateString();
+    html += '<div class="msg"><div class="who" style="color:' + m.avatarColor + '">' + esc(m.authorName) +
+            "<small>" + when + '</small></div><div>' + esc(m.body) + "</div></div>";
+  }
+  panel.innerHTML = html;
+  panel.classList.add("open");
+}
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+DATA.threads.forEach((t, i) => {
+  let x, y;
+  if (t.frameId && frameById[t.frameId]) {
+    const f = frameById[t.frameId];
+    x = f.x + (t.fx ?? 0) * f.w;
+    y = f.y + HEADER + (t.fy ?? 0) * f.h;
+  } else if (t.cx !== null) {
+    x = t.cx; y = t.cy;
+  } else return;
+  const first = t.messages[0];
+  const pin = document.createElement("div");
+  pin.className = "pin" + (t.resolved ? " resolved" : "");
+  pin.style.cssText = "left:" + (x - minX - 12) + "px;top:" + (y - minY - 22) + "px;background:" + first.avatarColor;
+  pin.textContent = first.authorName.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
+  pin.addEventListener("click", () => showThread(t));
+  stage.appendChild(pin);
+});
+fit();
 </script>
 </body>
 </html>`;
