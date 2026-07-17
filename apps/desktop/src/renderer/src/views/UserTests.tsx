@@ -225,15 +225,53 @@ function fmtSecs(ms: number): string {
   return ms >= 60000 ? `${Math.round(ms / 6000) / 10} min` : `${Math.round(ms / 100) / 10}s`;
 }
 
+/** #5: a failing test task, packaged as a self-contained agent prompt. */
+function buildTaskFixPrompt(
+  test: Doc<"tests">,
+  task: Doc<"tests">["tasks"][number],
+  results: Doc<"testSessions">["tasks"],
+  topPaths: [string, number][]
+): string {
+  const successes = results.filter((r) => r.outcome === "success");
+  const gaveUp = results.filter((r) => r.outcome === "gave_up");
+  const clicksTotal = results.reduce((a, r) => a + r.clickCount, 0);
+  const misclicksTotal = results.reduce((a, r) => a + r.misclickCount, 0);
+  const avgMs = successes.length ? successes.reduce((a, r) => a + r.durationMs, 0) / successes.length : 0;
+  return [
+    `You are addressing a usability problem found by real user testing on this repo.`,
+    ``,
+    `Testers were asked: "${task.instruction}"`,
+    task.targetRoute ? `Success meant reaching the route "${task.targetRoute}".` : ``,
+    `The test started on route "${test.startRoute}" at ${test.device.width > 0 ? `${test.device.width}px (mobile/tablet) width` : `desktop width`}.`,
+    ``,
+    `Results across ${results.length} testers:`,
+    `- ${successes.length} succeeded (${Math.round((successes.length / Math.max(1, results.length)) * 100)}%), ${gaveUp.length} gave up`,
+    successes.length ? `- average time for those who succeeded: ${fmtSecs(avgMs)}` : ``,
+    clicksTotal
+      ? `- ${misclicksTotal} of ${clicksTotal} clicks (${Math.round((misclicksTotal / clicksTotal) * 100)}%) hit nothing interactive — testers clicked where they expected something clickable`
+      : ``,
+    topPaths.length ? `` : ``,
+    topPaths.length ? `Actual navigation paths taken (most common first):` : ``,
+    ...topPaths.map(([path, count]) => `- ${count}×: ${path}`),
+    ``,
+    `Diagnose why testers struggled with this task and make the code changes that would fix it — usually clearer affordances, labels, or navigation on the routes above. Keep changes minimal and consistent with the codebase conventions. When you're done, summarize what you changed and why it should improve the task's success rate.`,
+  ]
+    // collapse the gaps left by omitted optional lines
+    .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+    .join("\n");
+}
+
 function TestResults({
   test,
   me,
   onShowHeatmap,
+  onSendToAgent,
   onClose,
 }: {
   test: Doc<"tests">;
   me: Doc<"users">;
   onShowHeatmap?: (testId: Id<"tests">) => void;
+  onSendToAgent?: (title: string, prompt: string, routePath?: string) => void;
   onClose: () => void;
 }) {
   const data = useQuery(api.userTests.results, { testId: test._id, userId: me._id, sessionToken: sessionToken() });
@@ -291,6 +329,22 @@ function TestResults({
             <div className="test-task-title">
               {i + 1}. {task.instruction}
               {task.targetRoute && <span className="hint"> → expects {task.targetRoute}</span>}
+              {onSendToAgent && allResults.length > 0 && (
+                <button
+                  className="btn ghost"
+                  style={{ marginLeft: "auto" }}
+                  title="Draft a fix from these results — the agent gets the task, success rates, paths, and misclick data"
+                  onClick={() =>
+                    onSendToAgent(
+                      `Test fix: ${task.instruction.slice(0, 46)}`,
+                      buildTaskFixPrompt(test, task, allResults, topPaths),
+                      test.startRoute
+                    )
+                  }
+                >
+                  ⚡ Send to agent
+                </button>
+              )}
             </div>
             {arms.map((arm) => {
               const results = arm.sessions.flatMap((s) => s.tasks.filter((t) => t.taskId === task.id));
@@ -401,12 +455,14 @@ export default function UserTests({
   me,
   frames,
   onShowHeatmap,
+  onSendToAgent,
   onClose,
 }: {
   project: Doc<"projects">;
   me: Doc<"users">;
   frames: Doc<"frames">[];
   onShowHeatmap?: (testId: Id<"tests">) => void;
+  onSendToAgent?: (title: string, prompt: string, routePath?: string) => void;
   onClose: () => void;
 }) {
   const tests = useQuery(api.userTests.forProject, { projectId: project._id, userId: me._id, sessionToken: sessionToken() });
@@ -480,7 +536,13 @@ export default function UserTests({
       )}
 
       {openResults && (
-        <TestResults test={openResults} me={me} onShowHeatmap={onShowHeatmap} onClose={() => setResultsFor(null)} />
+        <TestResults
+          test={openResults}
+          me={me}
+          onShowHeatmap={onShowHeatmap}
+          onSendToAgent={onSendToAgent}
+          onClose={() => setResultsFor(null)}
+        />
       )}
     </div>
   );

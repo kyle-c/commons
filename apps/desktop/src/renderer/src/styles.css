@@ -739,6 +739,11 @@ textarea:focus {
   background: var(--bg-panel);
   border-radius: var(--radius-sm);
 }
+.test-task-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .test-task-nums {
   display: flex;
   gap: 14px;

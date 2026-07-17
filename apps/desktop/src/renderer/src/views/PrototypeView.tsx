@@ -23,6 +23,7 @@ export default function PrototypeView({
   project,
   me,
   onShowHeatmap,
+  onSendToAgent,
 }: {
   frames: Doc<"frames">[];
   devStatus: DevServerStatus;
@@ -32,6 +33,8 @@ export default function PrototypeView({
   project: Doc<"projects">;
   me: Doc<"users">;
   onShowHeatmap?: (testId: Id<"tests">) => void;
+  /** #5: launch an agent draft from a failing test task. */
+  onSendToAgent?: (title: string, prompt: string, routePath?: string) => void;
 }) {
   const routes = frames.filter((f) => f.kind === "route");
   const [routePath, setRoutePath] = useState(routes[0]?.routePath ?? "/");
@@ -109,6 +112,7 @@ export default function PrototypeView({
           me={me}
           frames={frames}
           onShowHeatmap={onShowHeatmap}
+          onSendToAgent={onSendToAgent}
           onClose={() => setTestsOpen(false)}
         />
       )}

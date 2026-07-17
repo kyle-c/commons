@@ -571,45 +571,61 @@ export default function ProjectView({ me, nav, setNav }: Props) {
     []
   );
 
-  const sendThreadToAgent = async (thread: ThreadWithMessages) => {
-    // Draft mode (project has a git remote) runs in a Commons-managed
-    // checkout on a fresh branch — no working copy needed, nobody's tree
-    // touched. Classic in-place mode is the remote-less fallback.
+  // Shared launcher for every agent entry point (threads, test results).
+  // Draft mode (project has a git remote) runs in a Commons-managed checkout
+  // on a fresh branch; classic in-place mode is the remote-less fallback.
+  const startAgentSession = async (opts: {
+    title: string;
+    prompt: string;
+    threadId?: Id<"threads">;
+    frameId?: Id<"frames">;
+    routePath?: string;
+  }) => {
     const draftMode = !!project?.gitRemote;
     if (!draftMode && !repoPath) return;
-    const frame = thread.frameId ? frames.find((f) => f._id === thread.frameId) : undefined;
-    const firstBody = thread.messages[0]?.body ?? "Comment thread";
-    const title = firstBody.length > 60 ? `${firstBody.slice(0, 57)}…` : firstBody;
     const mirrorId = await createAgentSession({
       projectId: nav.projectId,
       hostUserId: me._id,
       adapter: "claude-code",
-      title,
-      threadId: thread._id,
-      frameId: thread.frameId,
-      routePath: frame?.routePath,
+      title: opts.title,
+      threadId: opts.threadId,
+      frameId: opts.frameId,
+      routePath: opts.routePath,
     });
     const info = await agentControl.start({
       ...(draftMode
         ? {
             gitRemote: project!.gitRemote,
-            draftSlug: slugify(title),
+            draftSlug: slugify(opts.title),
             branchPreviewPattern: project!.branchPreviewPattern,
           }
         : { repoPath: repoPath! }),
-      prompt: buildThreadPrompt(thread, frame),
-      title,
+      prompt: opts.prompt,
+      title: opts.title,
       context: {
         projectId: nav.projectId,
-        threadId: thread._id,
-        frameId: thread.frameId,
-        routePath: frame?.routePath,
+        threadId: opts.threadId,
+        frameId: opts.frameId,
+        routePath: opts.routePath,
         mirrorSessionId: mirrorId,
       },
     });
     rememberMapping(info.sessionId, mirrorId);
     setActiveAgentSessionId(mirrorId);
     setAgentPanelOpen(true);
+  };
+
+  const sendThreadToAgent = async (thread: ThreadWithMessages) => {
+    const frame = thread.frameId ? frames.find((f) => f._id === thread.frameId) : undefined;
+    const firstBody = thread.messages[0]?.body ?? "Comment thread";
+    const title = firstBody.length > 60 ? `${firstBody.slice(0, 57)}…` : firstBody;
+    await startAgentSession({
+      title,
+      prompt: buildThreadPrompt(thread, frame),
+      threadId: thread._id,
+      frameId: thread.frameId,
+      routePath: frame?.routePath,
+    });
   };
 
   const panelSessions: PanelSession[] = convexSessions.map((s) => ({
@@ -878,6 +894,11 @@ export default function ProjectView({ me, nav, setNav }: Props) {
             setHeatmapTestId(testId);
             setNav({ ...nav, view: "canvas" });
           }}
+          onSendToAgent={
+            repoPath || project.gitRemote
+              ? (title, prompt, routePath) => void startAgentSession({ title, prompt, routePath })
+              : undefined
+          }
         />
       )}
 
