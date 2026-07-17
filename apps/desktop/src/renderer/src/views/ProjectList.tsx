@@ -7,6 +7,7 @@ import type { Nav } from "../App";
 import { initials, timeAgo, sessionToken } from "../lib/session";
 import { layoutFrames } from "../lib/frameLayout";
 import GitSetupBanner from "./GitSetupBanner";
+import { useMachineId } from "../lib/machine";
 
 /** Stable color pair derived from the name, for repos with no detectable colors. */
 function fallbackColors(name: string): [string, string] {
@@ -33,6 +34,7 @@ function ProjectCover({ name, colors }: { name: string; colors?: string[] }) {
 
 export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: (nav: Nav) => void }) {
   const projects = useQuery(api.projects.listWithActivity, { userId: me._id, sessionToken: sessionToken() });
+  const machineId = useMachineId();
   const workspaces = useQuery(api.workspaces.mine, { userId: me._id, sessionToken: sessionToken() }) ?? [];
   const create = useMutation(api.projects.create);
   const linkRepo = useMutation(api.repoLinks.link);
@@ -63,7 +65,7 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
         frames: layoutFrames(inspection),
       });
       // The creator's working copy is the one we just inspected.
-      await linkRepo({ projectId, userId: me._id, repoPath: inspection.repoPath });
+      await linkRepo({ projectId, userId: me._id, repoPath: inspection.repoPath, machineId: machineId ?? undefined });
       setNav({ screen: "project", projectId, view: "canvas" });
     } finally {
       setAdding(false);

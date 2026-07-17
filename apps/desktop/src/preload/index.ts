@@ -47,6 +47,7 @@ const api: CommonsApi = {
   },
   captureSnapshot: (url, opts) => ipcRenderer.invoke("capture-snapshot", url, opts),
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+  getMachineId: () => ipcRenderer.invoke("get-machine-id"),
   onMainError: (cb) => {
     const handler = (_e: unknown, message: string, stack?: string) => cb(message, stack);
     ipcRenderer.on("main-process-error", handler);

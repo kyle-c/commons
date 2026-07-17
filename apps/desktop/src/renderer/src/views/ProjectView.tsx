@@ -17,6 +17,7 @@ import { resolveFrameUrl } from "../lib/frameUrl";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
 import { useClickOutside } from "../lib/useClickOutside";
+import { useMachineId } from "../lib/machine";
 
 /** "Fix savings header" → "fix-savings-header" (draft branch slugs). */
 function slugify(text: string): string {
@@ -318,7 +319,11 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   const rediscover = useMutation(api.projects.rediscover);
 
   // This user's working copy on this machine (paths differ per teammate).
-  const repoLink = useQuery(api.repoLinks.forUser, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
+  const machineId = useMachineId();
+  const repoLink = useQuery(
+    api.repoLinks.forUser,
+    machineId ? { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken(), machineId } : "skip"
+  );
   const repoPath = repoLink?.repoPath;
   // Which teammates have live frames — drives viewer empty states.
   const repoHolders = useQuery(api.repoLinks.holders, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() }) ?? [];
@@ -363,7 +368,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
     try {
       const result = await window.commons.cloneRepo(project.gitRemote, project.name);
       if (result && "repoPath" in result) {
-        await linkRepo({ projectId: nav.projectId, userId: me._id, repoPath: result.repoPath });
+        await linkRepo({ projectId: nav.projectId, userId: me._id, repoPath: result.repoPath, machineId: machineId ?? undefined });
       } else if (result && "error" in result) {
         alert(`Clone failed: ${result.error}`);
       }
@@ -681,7 +686,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
     if (!window.commons) return;
     const inspection = await window.commons.pickRepo();
     if (!inspection) return;
-    await linkRepo({ projectId: nav.projectId, userId: me._id, repoPath: inspection.repoPath });
+    await linkRepo({ projectId: nav.projectId, userId: me._id, repoPath: inspection.repoPath, machineId: machineId ?? undefined });
     if (inspection.gitRemote && !project?.gitRemote) {
       await setGitRemote({ projectId: nav.projectId, gitRemote: inspection.gitRemote });
     }

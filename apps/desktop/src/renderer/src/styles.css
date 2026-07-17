@@ -940,6 +940,11 @@ textarea:focus {
   z-index: 60;
 }
 
+.canvas-toolbar .zoom-step {
+  padding: 4px 10px;
+  font-size: var(--text-md);
+  line-height: 1;
+}
 .frame-snapshot {
   display: block;
   width: 100%;

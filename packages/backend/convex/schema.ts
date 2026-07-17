@@ -119,10 +119,14 @@ export default defineSchema({
     archivedAt: v.optional(v.number()),
   }).index("by_share_token", ["shareToken"]),
 
-  // Where each teammate's working copy of a project lives on their machine.
+  // Where each teammate's working copy of a project lives, per machine —
+  // paths only mean something on the device that created them (a stale
+  // cross-laptop path is how "dev error on my new laptop" happened).
+  // machineId absent = pre-0.2.4 row, readable only by old clients.
   repoLinks: defineTable({
     projectId: v.id("projects"),
     userId: v.id("users"),
+    machineId: v.optional(v.string()),
     repoPath: v.string(),
   })
     .index("by_user_project", ["userId", "projectId"])

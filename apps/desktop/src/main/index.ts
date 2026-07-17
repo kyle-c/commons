@@ -1,5 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, Menu } from "electron";
 import path from "path";
+import fs from "fs";
+import { randomUUID } from "crypto";
 import { DEEP_LINK_PROTOCOL, parseAuthCallback, parseDeepLink } from "@commons/shared";
 import type { AgentStartOptions } from "@commons/shared";
 import { inspectRepo } from "./routeDiscovery";
@@ -176,6 +178,21 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("get-app-version", () => (app.isPackaged ? app.getVersion() : "dev"));
+  // Stable per-device id: working-copy paths (repoLinks) are scoped to it so
+  // a second laptop never inherits this one's filesystem paths.
+  ipcMain.handle("get-machine-id", () => {
+    const file = path.join(app.getPath("userData"), "machine-id");
+    try {
+      const existing = fs.readFileSync(file, "utf8").trim();
+      if (existing) return existing;
+    } catch {
+      // first run on this device
+    }
+    const id = randomUUID();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, id);
+    return id;
+  });
   ipcMain.handle("get-update-status", () => updater.status());
   ipcMain.handle("install-update", () => updater.installNow());
 

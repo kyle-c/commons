@@ -650,7 +650,15 @@ export default function CanvasView({
             Tidy
           </button>
         )}
-        <span className="zoom">{Math.round(vp.scale * 100)}%</span>
+        <button className="btn ghost zoom-step" title="Zoom out (⌘−)" onClick={() => zoomBy(0.8)}>
+          −
+        </button>
+        <span className="zoom" title="⌘0 fits to content">
+          {Math.round(vp.scale * 100)}%
+        </span>
+        <button className="btn ghost zoom-step" title="Zoom in (⌘+)" onClick={() => zoomBy(1.25)}>
+          +
+        </button>
       </div>
     </div>
   );
