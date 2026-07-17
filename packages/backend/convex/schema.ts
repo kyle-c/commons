@@ -73,6 +73,8 @@ export default defineSchema({
     // Corporate domain for auto-join ("felixpago.com"). Consumer domains
     // (gmail etc.) are rejected at create — strangers must never share a team.
     domain: v.optional(v.string()),
+    // Per-workspace Slack channel (incoming webhook) for thread/agent posts.
+    slackWebhookUrl: v.optional(v.string()),
     createdBy: v.id("users"),
   }).index("by_domain", ["domain"]),
 

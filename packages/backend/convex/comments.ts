@@ -34,14 +34,24 @@ async function scheduleMentionEmails(
   });
 }
 
-/** COM-6: new threads and agent results land in the team Slack channel. */
+/** COM-6: new threads and agent results land in the project's workspace Slack channel. */
 async function scheduleSlackPost(
   ctx: MutationCtx,
   args: { projectId: Id<"projects">; threadId: Id<"threads">; authorId: Id<"users">; body: string; kind: "thread" | "agent" }
 ): Promise<void> {
   const [author, project] = await Promise.all([ctx.db.get(args.authorId), ctx.db.get(args.projectId)]);
-  // Private-project activity stays out of the shared channel.
+  // Private-project activity stays out of shared channels.
   if (!project || project.visibility === "private") return;
+  // Workspace routing: each team workspace has its own webhook (personal
+  // workspaces never post — a playground has an audience of one). Projects
+  // not yet in a workspace fall back to the deployment-wide env webhook.
+  let webhookUrl: string | undefined;
+  if (project.workspaceId) {
+    const workspace = await ctx.db.get(project.workspaceId);
+    if (!workspace || workspace.kind === "personal") return;
+    webhookUrl = workspace.slackWebhookUrl;
+    if (!webhookUrl) return; // team workspace without a channel configured
+  }
   const snippet = args.body.length > 200 ? `${args.body.slice(0, 200)}…` : args.body;
   const link = buildDeepLink({ projectId: args.projectId, view: "canvas", threadId: args.threadId });
   const headline =
@@ -50,6 +60,7 @@ async function scheduleSlackPost(
       : `💬 ${author?.name ?? "A teammate"} started a thread on *${project.name}*`;
   await ctx.scheduler.runAfter(0, internal.slack.post, {
     text: `${headline}\n> ${snippet.replace(/\n/g, "\n> ")}\nOpen in Commons: ${link}`,
+    webhookUrl,
   });
 }
 

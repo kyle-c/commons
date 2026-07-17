@@ -23,6 +23,8 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
   const workspaces = useQuery(api.workspaces.mine, open ? { userId: me._id, sessionToken: sessionToken() } : "skip");
   const createWorkspace = useMutation(api.workspaces.create);
   const addMember = useMutation(api.workspaces.addMember);
+  const setSlackWebhook = useMutation(api.workspaces.setSlackWebhook);
+  const [webhookDraft, setWebhookDraft] = useState<Record<string, string>>({});
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
@@ -102,6 +104,38 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
                     />
                     <button className="btn" onClick={() => submitMember(workspace._id)}>
                       Add
+                    </button>
+                  </div>
+                  <div className="team-invite">
+                    <input
+                      placeholder="Slack webhook URL for this workspace's activity…"
+                      title="New threads and agent results post here — create an incoming webhook in Slack and paste it"
+                      value={webhookDraft[workspace._id] ?? workspace.slackWebhookUrl ?? ""}
+                      onChange={(e) => setWebhookDraft((prev) => ({ ...prev, [workspace._id]: e.target.value }))}
+                    />
+                    <button
+                      className="btn"
+                      disabled={webhookDraft[workspace._id] === undefined}
+                      onClick={async () => {
+                        try {
+                          await setSlackWebhook({
+                            workspaceId: workspace._id,
+                            userId: me._id,
+                            sessionToken: sessionToken(),
+                            webhookUrl: webhookDraft[workspace._id] || undefined,
+                          });
+                          setNotice("Slack channel saved.");
+                          setWebhookDraft((prev) => {
+                            const next = { ...prev };
+                            delete next[workspace._id];
+                            return next;
+                          });
+                        } catch (err) {
+                          setNotice(err instanceof Error ? err.message : String(err));
+                        }
+                      }}
+                    >
+                      Save
                     </button>
                   </div>
                 </>

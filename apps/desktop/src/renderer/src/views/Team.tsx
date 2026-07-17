@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc } from "@commons/backend/convex/_generated/dataModel";
-import { initials } from "../lib/session";
+import { initials, sessionToken } from "../lib/session";
 import { registerShortcut } from "../lib/shortcuts";
 import { useClickOutside } from "../lib/useClickOutside";
 
@@ -18,7 +18,7 @@ export default function Team({ me }: { me: Doc<"users"> }) {
   const [email, setEmail] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const users = useQuery(api.users.list, open ? {} : "skip") ?? [];
+  const users = useQuery(api.users.list, open ? { userId: me._id, sessionToken: sessionToken() } : "skip") ?? [];
   const pending = useQuery(api.invites.pending, open ? {} : "skip") ?? [];
   const pulse = useQuery(api.metrics.pilot, open ? { userId: me._id } : "skip");
   const invite = useMutation(api.invites.create);

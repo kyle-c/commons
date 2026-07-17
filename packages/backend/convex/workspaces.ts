@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { resolveViewer } from "./access";
+import { resolveViewer, accessibleProject } from "./access";
 
 /**
  * Workspaces: the isolation boundary. Team workspaces are created explicitly
@@ -149,6 +149,46 @@ export const mine = query({
     return workspaces
       .filter((w): w is NonNullable<typeof w> => w !== null)
       .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "personal" ? -1 : 1));
+  },
+});
+
+/**
+ * The people who can see a project — its workspace's members. Drives the
+ * @mention typeahead and member pickers so names/emails never leak across
+ * workspaces. Legacy projects (no workspace) fall back to all users.
+ */
+export const membersForProject = query({
+  args: { projectId: v.id("projects"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, { projectId, ...viewer }) => {
+    const project = await accessibleProject(ctx, projectId, await resolveViewer(ctx, viewer));
+    if (!project) return [];
+    if (!project.workspaceId) return await ctx.db.query("users").collect();
+    const members = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", project.workspaceId!))
+      .collect();
+    const users = await Promise.all(members.map((m) => ctx.db.get(m.userId)));
+    return users.filter((u): u is Doc<"users"> => u !== null);
+  },
+});
+
+/** Point this workspace's activity at a Slack channel (incoming webhook). */
+export const setSlackWebhook = mutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
+    webhookUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await resolveViewer(ctx, args);
+    const workspace = await ctx.db.get(args.workspaceId);
+    if (!workspace || workspace.kind !== "team" || !userId || !(await isMember(ctx, workspace._id, userId))) {
+      throw new Error("Not allowed");
+    }
+    const url = args.webhookUrl?.trim();
+    if (url && !/^https:\/\/hooks\.slack\.com\//.test(url)) throw new Error("That doesn't look like a Slack webhook URL");
+    await ctx.db.patch(workspace._id, { slackWebhookUrl: url || undefined });
   },
 });
 

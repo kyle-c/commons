@@ -1,5 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import { resolveViewer } from "./access";
 
 // Users are created by Google sign-in (auth.completeGoogleSignIn), never here.
 
@@ -8,9 +10,29 @@ export const get = query({
   handler: (ctx, { userId }) => ctx.db.get(userId),
 });
 
+// With viewer args: only people who share a workspace with you (plus
+// yourself) — names/emails must not leak across workspaces. Bare calls
+// (shipped ≤0.2.2 clients) keep the old all-users behavior.
 export const list = query({
-  args: {},
-  handler: (ctx) => ctx.db.query("users").collect(),
+  args: { userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const viewerId = await resolveViewer(ctx, args);
+    if (!viewerId) return await ctx.db.query("users").collect();
+    const memberships = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_user", (q) => q.eq("userId", viewerId))
+      .collect();
+    const visible = new Set<string>([viewerId]);
+    for (const membership of memberships) {
+      const peers = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", membership.workspaceId))
+        .collect();
+      for (const peer of peers) visible.add(peer.userId);
+    }
+    const users = await Promise.all([...visible].map((id) => ctx.db.get(id as Id<"users">)));
+    return users.filter((u): u is NonNullable<(typeof users)[number]> => u !== null);
+  },
 });
 
 // Custom avatar upload: client POSTs the image to this URL, then calls

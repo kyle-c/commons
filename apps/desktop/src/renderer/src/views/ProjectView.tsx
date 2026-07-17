@@ -270,7 +270,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   const framesQuery = useQuery(api.projects.frames, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
   const frames = framesQuery ?? [];
   const threads = useQuery(api.comments.threadsForProject, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() }) ?? [];
-  const users = useQuery(api.users.list) ?? [];
+  const users = useQuery(api.workspaces.membersForProject, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() }) ?? [];
   const activeUsers = useQuery(api.presence.activeInProject, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() }) ?? [];
   const heartbeat = useMutation(api.presence.heartbeat);
   const linkRepo = useMutation(api.repoLinks.link);

@@ -11,9 +11,10 @@ import { internalAction } from "./_generated/server";
  * copyable text under the message.
  */
 export const post = internalAction({
-  args: { text: v.string() },
-  handler: async (_ctx, { text }) => {
-    const webhook = process.env.SLACK_WEBHOOK_URL;
+  args: { text: v.string(), webhookUrl: v.optional(v.string()) },
+  handler: async (_ctx, { text, webhookUrl }) => {
+    // Per-workspace webhook wins; the env var is the pre-workspace fallback.
+    const webhook = webhookUrl ?? process.env.SLACK_WEBHOOK_URL;
     if (!webhook) return;
     try {
       const res = await fetch(webhook, {
