@@ -10,7 +10,13 @@ export const heartbeat = mutation({
       .withIndex("by_user_project", (q) => q.eq("userId", userId).eq("projectId", projectId))
       .unique();
     if (existing) {
-      await ctx.db.patch(existing._id, { lastSeenAt: Date.now() });
+      // A heartbeat after a >10min gap starts a new visit; remember where the
+      // old one ended so the catch-up strip knows what "since last time" means.
+      const gap = Date.now() - existing.lastSeenAt;
+      await ctx.db.patch(existing._id, {
+        lastSeenAt: Date.now(),
+        ...(gap > 10 * 60_000 ? { previousVisitAt: existing.lastSeenAt } : {}),
+      });
     } else {
       await ctx.db.insert("presence", { userId, projectId, lastSeenAt: Date.now() });
     }

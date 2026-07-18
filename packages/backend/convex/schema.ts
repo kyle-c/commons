@@ -224,11 +224,14 @@ export default defineSchema({
     readAt: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
-  // Presence heartbeat per user per project.
+  // Presence heartbeat per user per project. previousVisitAt marks when the
+  // *prior* visit ended (set when a heartbeat lands after a >10min gap) —
+  // the anchor for the "since you were last here" catch-up strip.
   presence: defineTable({
     userId: v.id("users"),
     projectId: v.id("projects"),
     lastSeenAt: v.number(),
+    previousVisitAt: v.optional(v.number()),
   })
     .index("by_project", ["projectId"])
     .index("by_user_project", ["userId", "projectId"]),

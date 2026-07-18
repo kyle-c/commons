@@ -383,6 +383,17 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   const showPreviewNudge =
     !!repoPath && !!project && !project.previewUrl && users.length > 1 && !nudgeDismissed;
 
+  // "Since you were last here" (#4) — one glance instead of hunting for what
+  // changed. Snapshot the first non-null result so live churn doesn't mutate
+  // the strip while it's being read; dismiss lasts for this project visit.
+  const catchUpLive = useQuery(api.projects.catchUp, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
+  const [catchUp, setCatchUpSnapshot] = useState<typeof catchUpLive>(undefined);
+  const [catchUpDismissed, setCatchUpDismissed] = useState(false);
+  useEffect(() => {
+    if (catchUpLive && catchUp === undefined) setCatchUpSnapshot(catchUpLive);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catchUpLive]);
+
   // Which test's clicks are overlaid on the canvas ("Clicks on canvas" in
   // the user-tests results panel). Convex feeds the dots live.
   const [heatmapTestId, setHeatmapTestId] = useState<Id<"tests"> | null>(null);
@@ -841,6 +852,27 @@ export default function ProjectView({ me, nav, setNav }: Props) {
         </div>
         <Inbox me={me} setNav={setNav} />
       </div>
+
+      {catchUp && !catchUpDismissed && (
+        <div className="nudge-banner catchup">
+          <span>
+            Since you were last here:{" "}
+            {[
+              catchUp.newThreads > 0 && `${catchUp.newThreads} new thread${catchUp.newThreads === 1 ? "" : "s"}`,
+              catchUp.newReplies > 0 && `${catchUp.newReplies} repl${catchUp.newReplies === 1 ? "y" : "ies"}`,
+              catchUp.newAgentSessions > 0 &&
+                `${catchUp.newAgentSessions} agent session${catchUp.newAgentSessions === 1 ? "" : "s"}`,
+              catchUp.newTestSessions > 0 &&
+                `${catchUp.newTestSessions} test session${catchUp.newTestSessions === 1 ? "" : "s"} completed`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+          <button className="btn ghost" onClick={() => setCatchUpDismissed(true)}>
+            ✕
+          </button>
+        </div>
+      )}
 
       {showPreviewNudge && (
         <div className="nudge-banner">

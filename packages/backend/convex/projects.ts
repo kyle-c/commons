@@ -193,6 +193,64 @@ export const setShareToken = mutation({
   },
 });
 
+/**
+ * "Since you were last here" (#4): counts of what happened in this project
+ * after the viewer's previous visit ended. Null when there's no prior visit
+ * or nothing new — the strip only appears when there's something to say.
+ */
+export const catchUp = query({
+  args: { projectId: v.id("projects"), userId: v.id("users"), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const userId = await resolveViewer(ctx, args);
+    if (!userId || !(await accessibleProject(ctx, args.projectId, userId))) return null;
+    const row = await ctx.db
+      .query("presence")
+      .withIndex("by_user_project", (q) => q.eq("userId", userId).eq("projectId", args.projectId))
+      .unique();
+    const since = row?.previousVisitAt;
+    if (!since) return null;
+
+    const threads = await ctx.db
+      .query("threads")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    let newThreads = 0;
+    let newReplies = 0;
+    for (const thread of threads) {
+      const isNewThread = thread._creationTime > since && thread.createdBy !== userId;
+      if (isNewThread) newThreads++;
+      const messages = await ctx.db
+        .query("messages")
+        .withIndex("by_thread", (q) => q.eq("threadId", thread._id))
+        .collect();
+      newReplies += messages.filter(
+        (m) => m._creationTime > since && m.authorId !== userId && !(isNewThread && m._creationTime === messages[0]?._creationTime)
+      ).length;
+    }
+    const sessions = await ctx.db
+      .query("agentSessions")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    const newAgentSessions = sessions.filter((s) => s._creationTime > since && s.hostUserId !== userId).length;
+
+    const tests = await ctx.db
+      .query("tests")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    let newTestSessions = 0;
+    for (const test of tests) {
+      const testSessions = await ctx.db
+        .query("testSessions")
+        .withIndex("by_test", (q) => q.eq("testId", test._id))
+        .collect();
+      newTestSessions += testSessions.filter((s) => (s.completedAt ?? 0) > since).length;
+    }
+
+    if (newThreads + newReplies + newAgentSessions + newTestSessions === 0) return null;
+    return { since, newThreads, newReplies, newAgentSessions, newTestSessions };
+  },
+});
+
 /** Everything the read-only web share page needs, keyed by its token. */
 export const sharePageData = internalQuery({
   args: { shareToken: v.string() },
