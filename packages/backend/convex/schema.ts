@@ -198,7 +198,8 @@ export default defineSchema({
     fy: v.optional(v.number()),
     canvasX: v.optional(v.number()),
     canvasY: v.optional(v.number()),
-    createdBy: v.id("users"),
+    // Absent = started by a guest from the web share page.
+    createdBy: v.optional(v.id("users")),
     resolvedAt: v.optional(v.number()),
   })
     .index("by_project", ["projectId"])
@@ -206,7 +207,9 @@ export default defineSchema({
 
   messages: defineTable({
     threadId: v.id("threads"),
-    authorId: v.id("users"),
+    // Absent = guest comment from the web share page (guestName set instead).
+    authorId: v.optional(v.id("users")),
+    guestName: v.optional(v.string()),
     body: v.string(),
     mentions: v.array(v.id("users")),
     // Attached images (Convex storage) — e.g. agent before/after snapshots.

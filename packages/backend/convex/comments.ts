@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { buildDeepLink } from "@commons/shared";
@@ -37,9 +37,19 @@ async function scheduleMentionEmails(
 /** COM-6: new threads and agent results land in the project's workspace Slack channel. */
 async function scheduleSlackPost(
   ctx: MutationCtx,
-  args: { projectId: Id<"projects">; threadId: Id<"threads">; authorId: Id<"users">; body: string; kind: "thread" | "agent" }
+  args: {
+    projectId: Id<"projects">;
+    threadId: Id<"threads">;
+    authorId?: Id<"users">;
+    guestName?: string;
+    body: string;
+    kind: "thread" | "agent";
+  }
 ): Promise<void> {
-  const [author, project] = await Promise.all([ctx.db.get(args.authorId), ctx.db.get(args.projectId)]);
+  const [author, project] = await Promise.all([
+    args.authorId ? ctx.db.get(args.authorId) : Promise.resolve(null),
+    ctx.db.get(args.projectId),
+  ]);
   // Private-project activity stays out of shared channels.
   if (!project || project.visibility === "private") return;
   // Workspace routing: each team workspace has its own webhook (personal
@@ -57,7 +67,7 @@ async function scheduleSlackPost(
   const headline =
     args.kind === "agent"
       ? `⚡ Agent draft ready on *${project.name}* (via ${author?.name ?? "a teammate"})`
-      : `💬 ${author?.name ?? "A teammate"} started a thread on *${project.name}*`;
+      : `💬 ${author?.name ?? (args.guestName ? `${args.guestName} (guest)` : "A teammate")} started a thread on *${project.name}*`;
   await ctx.scheduler.runAfter(0, internal.slack.post, {
     text: `${headline}\n> ${snippet.replace(/\n/g, "\n> ")}\nOpen in Commons: ${link}`,
     webhookUrl,
@@ -173,6 +183,74 @@ export const postAgentReply = mutation({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Guest commenting from the web share page (/p/<token>). Authenticated by the
+// share token alone — revoking it cuts guests off instantly. Guests never
+// mention, never notify, and appear as guestName with no account.
+// ---------------------------------------------------------------------------
+
+async function projectByShareToken(ctx: MutationCtx, shareToken: string) {
+  return await ctx.db
+    .query("projects")
+    .withIndex("by_share_token", (q) => q.eq("shareToken", shareToken))
+    .unique();
+}
+
+export const guestThread = internalMutation({
+  args: {
+    shareToken: v.string(),
+    frameId: v.optional(v.id("frames")),
+    fx: v.optional(v.number()),
+    fy: v.optional(v.number()),
+    name: v.string(),
+    body: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const project = await projectByShareToken(ctx, args.shareToken);
+    if (!project) return null;
+    if (args.frameId) {
+      const frame = await ctx.db.get(args.frameId);
+      if (!frame || frame.projectId !== project._id) return null;
+    }
+    const guestName = args.name.slice(0, 40) || "Guest";
+    const threadId = await ctx.db.insert("threads", {
+      projectId: project._id,
+      frameId: args.frameId,
+      fx: args.fx,
+      fy: args.fy,
+    });
+    await ctx.db.insert("messages", {
+      threadId,
+      guestName,
+      body: args.body.slice(0, 2000),
+      mentions: [],
+    });
+    await scheduleSlackPost(ctx, {
+      projectId: project._id,
+      threadId,
+      guestName,
+      body: args.body,
+      kind: "thread",
+    });
+    return threadId;
+  },
+});
+
+export const guestReply = internalMutation({
+  args: { shareToken: v.string(), threadId: v.id("threads"), name: v.string(), body: v.string() },
+  handler: async (ctx, args) => {
+    const project = await projectByShareToken(ctx, args.shareToken);
+    const thread = await ctx.db.get(args.threadId);
+    if (!project || !thread || thread.projectId !== project._id) return null;
+    return await ctx.db.insert("messages", {
+      threadId: args.threadId,
+      guestName: args.name.slice(0, 40) || "Guest",
+      body: args.body.slice(0, 2000),
+      mentions: [],
+    });
+  },
+});
+
 export const reply = mutation({
   args: {
     threadId: v.id("threads"),
@@ -242,7 +320,7 @@ export const threadsForProject = query({
         const withAuthors = await Promise.all(
           messages.map(async (m) => ({
             ...m,
-            author: await ctx.db.get(m.authorId),
+            author: m.authorId ? await ctx.db.get(m.authorId) : null,
             imageUrls:
               m.images && m.images.length > 0
                 ? (await Promise.all(m.images.map((id) => ctx.storage.getUrl(id)))).filter(
@@ -269,7 +347,7 @@ export const inbox = query({
       items.map(async (n) => {
         const message = await ctx.db.get(n.messageId);
         const thread = await ctx.db.get(n.threadId);
-        const author = message ? await ctx.db.get(message.authorId) : null;
+        const author = message?.authorId ? await ctx.db.get(message.authorId) : null;
         const project = thread ? await ctx.db.get(thread.projectId) : null;
         return { ...n, message, thread, author, project };
       })

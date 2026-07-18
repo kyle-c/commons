@@ -229,11 +229,11 @@ export const sharePageData = internalQuery({
           ...thread,
           messages: await Promise.all(
             messages.map(async (m) => {
-              const author = await ctx.db.get(m.authorId);
+              const author = m.authorId ? await ctx.db.get(m.authorId) : null;
               return {
                 body: m.body,
                 at: m._creationTime,
-                authorName: author?.name ?? "Teammate",
+                authorName: author?.name ?? (m.guestName ? `${m.guestName} (guest)` : "Teammate"),
                 avatarColor: author?.avatarColor ?? "#9d9da6",
               };
             })

@@ -51,11 +51,11 @@ export default function ThreadPanel({ thread, me, users, mentionUsers, onClose, 
               className="avatar"
               style={{ background: message.author?.avatarColor ?? "var(--text-tertiary)" }}
             >
-              {initials(message.author?.name ?? "?")}
+              {initials(message.author?.name ?? message.guestName ?? "?")}
             </span>
             <div className="body">
               <div className="who">
-                {message.author?.name ?? "Unknown"}
+                {message.author?.name ?? (message.guestName ? `${message.guestName} (guest)` : "Unknown")}
                 <span className="when">{timeAgo(message._creationTime)}</span>
               </div>
               <div className="text">

@@ -99,6 +99,59 @@ http.route({
   }),
 });
 
+// Guest comments from the share page — token-gated, capped, no accounts.
+http.route({
+  path: "/api/p/thread",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body || typeof body.token !== "string" || typeof body.body !== "string" || !body.body.trim()) {
+      return json({ error: "bad_request" }, 400);
+    }
+    try {
+      const threadId = await ctx.runMutation(internal.comments.guestThread, {
+        shareToken: body.token,
+        frameId: typeof body.frameId === "string" ? (body.frameId as never) : undefined,
+        fx: typeof body.fx === "number" ? body.fx : undefined,
+        fy: typeof body.fy === "number" ? body.fy : undefined,
+        name: typeof body.name === "string" ? body.name : "Guest",
+        body: body.body,
+      });
+      return threadId ? json({ threadId }) : json({ error: "not_found" }, 404);
+    } catch {
+      return json({ error: "bad_request" }, 400);
+    }
+  }),
+});
+
+http.route({
+  path: "/api/p/reply",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    if (
+      !body ||
+      typeof body.token !== "string" ||
+      typeof body.threadId !== "string" ||
+      typeof body.body !== "string" ||
+      !body.body.trim()
+    ) {
+      return json({ error: "bad_request" }, 400);
+    }
+    try {
+      const messageId = await ctx.runMutation(internal.comments.guestReply, {
+        shareToken: body.token,
+        threadId: body.threadId as never,
+        name: typeof body.name === "string" ? body.name : "Guest",
+        body: body.body,
+      });
+      return messageId ? json({ ok: true }) : json({ error: "not_found" }, 404);
+    } catch {
+      return json({ error: "bad_request" }, 400);
+    }
+  }),
+});
+
 // Crash/error ingestion from installed apps. Deliberately unauthenticated
 // (errors can happen before sign-in) but size-capped and deduped server-side.
 http.route({
@@ -703,12 +756,22 @@ function sharePageHtml(data: {
   #panel .who small { color: #7a7a82; font-weight: 400; margin-left: 6px; }
   #panel .close { float: right; background: none; border: none; color: #a1a1a8; cursor: pointer; font-size: 14px; }
   footer { padding: 10px 20px 24px; color: #55555c; font-size: 12px; }
+  .cbtn { background: #232328; border: 1px solid #3a3a41; color: #e7e7ea; border-radius: 8px;
+          padding: 6px 12px; font: inherit; cursor: pointer; margin-left: 16px; }
+  .cbtn.on { background: #4a6fdc; border-color: #4a6fdc; color: #fff; }
+  body.commenting .frame { cursor: crosshair; }
+  #panel input, #panel textarea { width: 100%; background: #101012; color: #e7e7ea; border: 1px solid #2a2a2f;
+          border-radius: 8px; padding: 8px; font: inherit; margin-bottom: 8px; box-sizing: border-box; }
+  #panel textarea { min-height: 64px; }
+  #panel .send { background: #4a6fdc; border: none; color: #fff; border-radius: 8px; padding: 8px 14px;
+          font: inherit; cursor: pointer; }
 </style>
 </head>
 <body>
 <header>
   <h1 id="title"></h1>
   <span class="hint" id="counts"></span>
+  <button class="cbtn" id="comment-mode" title="Then click anywhere on a screen to leave a comment">💬 Comment</button>
   <a id="open-app" href="#">Open in Commons →</a>
 </header>
 <div id="stage-wrap"><div id="stage"></div></div>
@@ -764,6 +827,20 @@ for (const f of DATA.frames) {
 }
 
 const panel = document.getElementById("panel");
+const TOKEN = decodeURIComponent(location.pathname.split("/p/")[1] || "").replace(/\\/+$/, "");
+const savedName = () => localStorage.getItem("commons.guestName") || "";
+function nameField(id) {
+  return '<input id="' + id + '" placeholder="Your name" value="' + esc(savedName()) + '" maxlength="40" />';
+}
+async function postJson(path, payload) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return res.ok ? res.json() : null;
+}
+
 function showThread(t) {
   let html = '<button class="close" onclick="panel.classList.remove(\\'open\\')">✕</button>';
   for (const m of t.messages) {
@@ -771,12 +848,53 @@ function showThread(t) {
     html += '<div class="msg"><div class="who" style="color:' + m.avatarColor + '">' + esc(m.authorName) +
             "<small>" + when + '</small></div><div>' + esc(m.body) + "</div></div>";
   }
+  html += '<div style="border-top:1px solid #2a2a2f;padding-top:12px">' + nameField("r-name") +
+          '<textarea id="r-body" placeholder="Reply…"></textarea><button class="send" id="r-send">Reply</button></div>';
   panel.innerHTML = html;
   panel.classList.add("open");
+  document.getElementById("r-send").addEventListener("click", async () => {
+    const name = document.getElementById("r-name").value.trim() || "Guest";
+    const body = document.getElementById("r-body").value.trim();
+    if (!body) return;
+    localStorage.setItem("commons.guestName", name);
+    const ok = await postJson("/api/p/reply", { token: TOKEN, threadId: t.id, name, body });
+    if (!ok) { alert("Couldn't post — the share link may have been revoked."); return; }
+    t.messages.push({ body, authorName: name + " (guest)", avatarColor: "#9d9da6", at: Date.now() });
+    showThread(t);
+  });
 }
 function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
 
-DATA.threads.forEach((t, i) => {
+// Comment mode: click a screen to pin a new thread, no account needed.
+let commenting = false;
+document.getElementById("comment-mode").addEventListener("click", (e) => {
+  commenting = !commenting;
+  e.currentTarget.classList.toggle("on", commenting);
+  document.body.classList.toggle("commenting", commenting);
+});
+function newThreadForm(frame, fx, fy) {
+  panel.innerHTML =
+    '<button class="close" onclick="panel.classList.remove(\\'open\\')">✕</button>' +
+    '<div class="who" style="margin-bottom:8px">New comment on ' + esc(frame.title) + "</div>" +
+    nameField("n-name") + '<textarea id="n-body" placeholder="What are you seeing?"></textarea>' +
+    '<button class="send" id="n-send">Comment</button>';
+  panel.classList.add("open");
+  document.getElementById("n-send").addEventListener("click", async () => {
+    const name = document.getElementById("n-name").value.trim() || "Guest";
+    const body = document.getElementById("n-body").value.trim();
+    if (!body) return;
+    localStorage.setItem("commons.guestName", name);
+    const res = await postJson("/api/p/thread", { token: TOKEN, frameId: frame.id, fx, fy, name, body });
+    if (!res) { alert("Couldn't post — the share link may have been revoked."); return; }
+    const t = { id: res.threadId, frameId: frame.id, fx, fy, cx: null, cy: null, resolved: false,
+                messages: [{ body, authorName: name + " (guest)", avatarColor: "#9d9da6", at: Date.now() }] };
+    DATA.threads.push(t);
+    addPin(t);
+    showThread(t);
+  });
+}
+
+function addPin(t) {
   let x, y;
   if (t.frameId && frameById[t.frameId]) {
     const f = frameById[t.frameId];
@@ -790,8 +908,23 @@ DATA.threads.forEach((t, i) => {
   pin.className = "pin" + (t.resolved ? " resolved" : "");
   pin.style.cssText = "left:" + (x - minX - 12) + "px;top:" + (y - minY - 22) + "px;background:" + first.avatarColor;
   pin.textContent = first.authorName.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
-  pin.addEventListener("click", () => showThread(t));
+  pin.addEventListener("click", (e) => { e.stopPropagation(); showThread(t); });
   stage.appendChild(pin);
+}
+DATA.threads.forEach(addPin);
+
+// In comment mode, a click anywhere on a screen pins a new thread there.
+document.querySelectorAll(".frame").forEach((el, i) => {
+  const f = DATA.frames[i];
+  el.addEventListener("click", (e) => {
+    if (!commenting) return;
+    const rect = el.getBoundingClientRect();
+    const scale = rect.width / f.w;
+    const fx = (e.clientX - rect.left) / rect.width;
+    const fy = ((e.clientY - rect.top) / scale - HEADER) / f.h;
+    if (fy < 0) return; // clicked the caption bar
+    newThreadForm(f, Math.min(1, Math.max(0, fx)), Math.min(1, Math.max(0, fy)));
+  });
 });
 fit();
 </script>
