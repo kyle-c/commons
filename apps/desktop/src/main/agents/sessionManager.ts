@@ -33,7 +33,18 @@ interface ManagedSession {
   editedFiles: Set<string>;
   /** Present when the session runs in a Commons-managed checkout (draft mode). */
   draft?: DraftState;
+  /** Cumulative API spend as reported by the adapter (session-total). */
+  costUsd: number;
+  /** Set once the ceiling is hit — further prompts are refused. */
+  costCapped?: boolean;
 }
+
+/**
+ * Hard per-session spend ceiling (AG-7). Sessions run on the host's own
+ * Anthropic credentials, so a teammate's runaway prompt is the host's bill —
+ * enforced at turn boundaries (a single turn can overshoot slightly).
+ */
+export const COST_CEILING_USD = 5;
 
 const adapters: Record<string, AgentAdapter> = {
   [claudeAdapter.kind]: claudeAdapter,
@@ -80,6 +91,7 @@ export function start(options: AgentStartOptions): AgentSessionInfo {
     },
     adapter,
     editedFiles: new Set(),
+    costUsd: 0,
     draft: options.gitRemote
       ? {
           gitRemote: options.gitRemote,
@@ -120,6 +132,11 @@ export function prompt(sessionId: string, text: string): void {
   const session = sessions.get(sessionId);
   if (!session) throw new Error("Agent session not found.");
   if (session.activeTurn) throw new Error("Agent is still working — wait for the current turn to finish.");
+  if (session.costCapped) {
+    throw new Error(
+      `This session hit its $${COST_CEILING_USD} cost ceiling — start a new session for further work.`
+    );
+  }
   runTurn(session, text);
 }
 
@@ -189,6 +206,18 @@ function runTurn(session: ManagedSession, promptText: string): void {
           landed.pushed && draft.previewPattern ? draftPreviewUrl(draft.previewPattern, draft.branch) : undefined,
         pushError: landed.error,
       };
+    }
+
+    // AG-7: track spend and lock the session once it crosses the ceiling.
+    if (outcome.totalCostUsd !== undefined) {
+      session.costUsd = Math.max(session.costUsd, outcome.totalCostUsd);
+    }
+    if (!session.costCapped && session.costUsd >= COST_CEILING_USD) {
+      session.costCapped = true;
+      emit(sessionId, {
+        type: "text",
+        text: `💸 Cost ceiling reached ($${session.costUsd.toFixed(2)} of $${COST_CEILING_USD}) — this session is locked. Start a new session for further work.`,
+      });
     }
 
     emit(sessionId, {

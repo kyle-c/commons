@@ -436,7 +436,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
     });
   }, [appendAgentEvent]);
 
-  const replyToThread = useMutation(api.comments.reply);
+  const postAgentReply = useMutation(api.comments.postAgentReply);
   const generateUploadUrl = useMutation(api.comments.generateUploadUrl);
   const saveFrameSnapshot = useMutation(api.projects.saveFrameSnapshot);
 
@@ -511,11 +511,11 @@ export default function ProjectView({ me, nav, setNav }: Props) {
         });
         if (!before || !after) return;
         const [beforeId, afterId] = await Promise.all([upload(before), upload(after)]);
-        await replyToThread({
+        await postAgentReply({
           threadId: session.context.threadId as Id<"threads">,
-          authorId: me._id,
+          hostUserId: me._id,
+          sessionToken: sessionToken(),
           body: `📸 Before → after (${routePath})`,
-          mentions: [],
           images: [beforeId, afterId],
         });
       } catch (err) {
@@ -545,11 +545,11 @@ export default function ProjectView({ me, nav, setNav }: Props) {
                 : ""
           }`
         : "";
-      void replyToThread({
+      void postAgentReply({
         threadId: session.context.threadId as Id<"threads">,
-        authorId: me._id,
+        hostUserId: me._id,
+        sessionToken: sessionToken(),
         body: `⚡ Agent finished: ${summary}${files}${draftNote}`,
-        mentions: [],
       }).catch((err) => console.error("agent thread reply failed", err));
 
       if (event.draft?.previewUrl && event.editedFiles.length > 0) {

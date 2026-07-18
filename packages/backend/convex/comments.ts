@@ -117,6 +117,62 @@ export const generateUploadUrl = mutation({
   handler: async (ctx) => await ctx.storage.generateUploadUrl(),
 });
 
+// The first-class author for agent replies (open question 3): summaries no
+// longer impersonate whoever hosted the session. Invisible in team/mention
+// lists (it belongs to no workspace); created on first use.
+const AGENT_EMAIL = "agent@commons.internal";
+async function ensureAgentUser(ctx: MutationCtx): Promise<Id<"users">> {
+  const existing = await ctx.db
+    .query("users")
+    .withIndex("by_email", (q) => q.eq("email", AGENT_EMAIL))
+    .unique();
+  if (existing) return existing._id;
+  return await ctx.db.insert("users", {
+    name: "Commons Agent",
+    email: AGENT_EMAIL,
+    avatarColor: "#7c9cf5",
+    lastSeenAt: 0,
+  });
+}
+
+/** Agent results post under the agent identity, with the host attributed in-line. */
+export const postAgentReply = mutation({
+  args: {
+    threadId: v.id("threads"),
+    hostUserId: v.id("users"),
+    sessionToken: v.optional(v.string()),
+    body: v.string(),
+    images: v.optional(v.array(v.id("_storage"))),
+  },
+  handler: async (ctx, args) => {
+    const hostId = (await resolveViewer(ctx, args)) ?? args.hostUserId;
+    const thread = await ctx.db.get(args.threadId);
+    const project = thread ? await ctx.db.get(thread.projectId) : null;
+    if (!thread || !project || !(await canAccessProject(ctx, project, hostId))) {
+      throw new Error("You don't have access to this project.");
+    }
+    const host = await ctx.db.get(hostId);
+    const agentId = await ensureAgentUser(ctx);
+    const body = `${args.body}\n\n— via ${host?.name ?? "a teammate"}'s machine`;
+    await ctx.db.insert("messages", {
+      threadId: args.threadId,
+      authorId: agentId,
+      body,
+      mentions: [],
+      images: args.images,
+    });
+    if (args.body.startsWith("⚡")) {
+      await scheduleSlackPost(ctx, {
+        projectId: thread.projectId,
+        threadId: args.threadId,
+        authorId: hostId, // Slack keeps the human attribution
+        body: args.body,
+        kind: "agent",
+      });
+    }
+  },
+});
+
 export const reply = mutation({
   args: {
     threadId: v.id("threads"),

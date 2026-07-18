@@ -123,6 +123,11 @@ export default function AgentPanel({
 
   const active = sessions.find((s) => s.id === activeSessionId) ?? sessions[0] ?? null;
   const busy = active !== null && (active.status === "running" || active.status === "starting");
+  // Live spend meter (AG-7): the SDK reports session-cumulative cost per result.
+  const spentUsd = transcript.reduce(
+    (max, e) => (e.type === "result" && e.totalCostUsd !== undefined ? Math.max(max, e.totalCostUsd) : max),
+    0
+  );
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -141,6 +146,15 @@ export default function AgentPanel({
       <header>
         <span>
           Agent {active && <span className={`agent-status ${active.status}`}>{active.status}</span>}
+          {spentUsd > 0 && (
+            <span
+              className="agent-status"
+              title="This session's API spend on the host's credentials — sessions lock at the $5 ceiling"
+              style={spentUsd >= 4 ? { color: "var(--danger, #f87171)" } : undefined}
+            >
+              ${spentUsd.toFixed(2)} / $5
+            </span>
+          )}
         </span>
         <div style={{ display: "flex", gap: 6 }}>
           {busy && active?.canControl && (

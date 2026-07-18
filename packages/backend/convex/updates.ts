@@ -32,6 +32,14 @@ export const publish = internalMutation({
       await ctx.db.delete(existing._id);
     }
     await ctx.db.insert("appReleases", { ...args, publishedAt: Date.now() });
+    // Keep only the newest two releases' artifacts — older DMGs live on
+    // GitHub Releases, and stale zips bloat storage and nightly backups.
+    const all = await ctx.db.query("appReleases").collect();
+    const stale = all.sort((a, b) => b.publishedAt - a.publishedAt).slice(2);
+    for (const release of stale) {
+      for (const file of release.files) await ctx.storage.delete(file.storageId).catch(() => {});
+      await ctx.db.delete(release._id);
+    }
   },
 });
 
