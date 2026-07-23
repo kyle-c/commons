@@ -479,7 +479,16 @@ export default function UserTests({
       <div className="user-tests-head">
         <strong>User tests</strong>
         <span style={{ flex: 1 }} />
-        <button className="btn primary" onClick={() => setCreating(true)} disabled={!project.previewUrl}>
+        <button
+          className="btn primary"
+          onClick={() => setCreating(true)}
+          disabled={!project.previewUrl}
+          title={
+            project.previewUrl
+              ? undefined
+              : "Needs a deployed preview first — set it via “Preview URL” in the titlebar"
+          }
+        >
           + New test
         </button>
         <button className="btn ghost" onClick={onClose}>
@@ -489,7 +498,9 @@ export default function UserTests({
 
       {!project.previewUrl && (
         <div className="hint">
-          Tests run on the deployed preview so anyone can take them — set a preview URL first.
+          Tests run on the <strong>deployed</strong> app so testers don't need Commons or the repo — this project
+          doesn't have one linked yet. Deploy it (e.g. Vercel), then paste the URL via{" "}
+          <strong>“Preview URL”</strong> in the titlebar and this button unlocks.
         </div>
       )}
 
