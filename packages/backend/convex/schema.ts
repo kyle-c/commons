@@ -50,8 +50,14 @@ export default defineSchema({
     // Link mode: this flow adds a verified secondary email to an existing
     // account instead of signing in (auth.start with linkSessionToken).
     linkUserId: v.optional(v.id("users")),
+    // Magic-link mode: emailed one-time token; clicking the link authorizes
+    // this session (no OAuth apps involved — client-friendly).
+    email: v.optional(v.string()),
+    emailToken: v.optional(v.string()),
     error: v.optional(v.string()),
-  }).index("by_state", ["state"]),
+  })
+    .index("by_state", ["state"])
+    .index("by_email_token", ["emailToken"]),
 
   // Emails allowed to join on their first Google sign-in. An invite may also
   // carry a workspace: accepting it joins that workspace (how personal-email

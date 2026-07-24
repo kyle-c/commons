@@ -1,4 +1,5 @@
 import { internalMutation, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { onSignIn, autoJoinForEmail } from "./workspaces";
@@ -57,6 +58,120 @@ export const start = mutation({
       prompt: "select_account",
     });
     return { state, url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` };
+  },
+});
+
+/**
+ * Magic-link sign-in (client-friendly: no OAuth apps, no Google/Microsoft
+ * account needed). Same gate as Google — the email must already belong to a
+ * user (primary or linked) or hold an invite; bootstrap stays Google-only.
+ * The app polls auth.status with the returned state, exactly like OAuth.
+ */
+export const startEmailSignIn = mutation({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    const email = args.email.trim().toLowerCase();
+    if (!/.+@.+\..+/.test(email)) return { ok: false as const, reason: "invalid_email" as const };
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .unique();
+    const secondary = existingUser
+      ? null
+      : await ctx.db
+          .query("userEmails")
+          .withIndex("by_email", (q) => q.eq("email", email))
+          .unique();
+    const invite =
+      existingUser || secondary
+        ? null
+        : await ctx.db
+            .query("invites")
+            .withIndex("by_email", (q) => q.eq("email", email))
+            .unique();
+    if (!existingUser && !secondary && !invite) return { ok: false as const, reason: "not_invited" as const };
+
+    const now = Date.now();
+    const state = randomToken(16);
+    const emailToken = randomToken(24);
+    await ctx.db.insert("authSessions", {
+      state,
+      status: "pending",
+      expiresAt: now + 15 * 60 * 1000,
+      email,
+      emailToken,
+    });
+    await ctx.scheduler.runAfter(0, internal.emails.sendMagicLinkEmail, {
+      email,
+      link: `${process.env.CONVEX_SITE_URL}/auth/email/callback?token=${emailToken}`,
+    });
+    return { ok: true as const, state };
+  },
+});
+
+/** The emailed link lands here (via the HTTP route): authorize + mint a session. */
+export const completeEmailSignIn = internalMutation({
+  args: { emailToken: v.string() },
+  handler: async (ctx, { emailToken }) => {
+    const session = await ctx.db
+      .query("authSessions")
+      .withIndex("by_email_token", (q) => q.eq("emailToken", emailToken))
+      .unique();
+    if (!session || session.status !== "pending" || session.expiresAt < Date.now() || !session.email) {
+      return { ok: false as const };
+    }
+    const email = session.email;
+
+    let user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .unique();
+    if (!user) {
+      const viaSecondary = await ctx.db
+        .query("userEmails")
+        .withIndex("by_email", (q) => q.eq("email", email))
+        .unique();
+      if (viaSecondary) user = await ctx.db.get(viaSecondary.userId);
+    }
+    let inviteWorkspaceId: Id<"workspaces"> | undefined;
+    if (!user) {
+      // Invited but new: create the account (name from the address; they can
+      // fix it later — Google sign-in refreshes it if they ever use that).
+      const invite = await ctx.db
+        .query("invites")
+        .withIndex("by_email", (q) => q.eq("email", email))
+        .unique();
+      if (!invite) {
+        await ctx.db.patch(session._id, { status: "failed", error: "not_invited" });
+        return { ok: false as const };
+      }
+      const count = (await ctx.db.query("users").collect()).length;
+      const userId = await ctx.db.insert("users", {
+        name: email.split("@")[0],
+        email,
+        avatarColor: AVATAR_COLORS[count % AVATAR_COLORS.length],
+        lastSeenAt: Date.now(),
+      });
+      user = (await ctx.db.get(userId))!;
+      if (!invite.acceptedAt) {
+        await ctx.db.patch(invite._id, { acceptedAt: Date.now() });
+        inviteWorkspaceId = invite.workspaceId;
+      }
+    } else {
+      await ctx.db.patch(user._id, { lastSeenAt: Date.now() });
+    }
+    await onSignIn(ctx, user, inviteWorkspaceId);
+
+    const token = randomToken(32);
+    await ctx.db.insert("sessions", { userId: user._id, token });
+    // Burn the email token; the app claims via state as usual.
+    await ctx.db.patch(session._id, {
+      status: "authorized",
+      userId: user._id,
+      sessionToken: token,
+      emailToken: undefined,
+    });
+    return { ok: true as const, state: session.state };
   },
 });
 

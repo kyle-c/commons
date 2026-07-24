@@ -172,6 +172,22 @@ http.route({
   }),
 });
 
+// Magic-link landing: the emailed one-time token authorizes the pending
+// sign-in; the app (desktop or web) completes via its live status subscription.
+http.route({
+  path: "/auth/email/callback",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const emailToken = new URL(request.url).searchParams.get("token");
+    if (!emailToken) return page("Sign-in failed", "This link is malformed — request a new one from Commons.");
+    const result = await ctx.runMutation(internal.auth.completeEmailSignIn, { emailToken });
+    if (!result.ok) {
+      return page("Link expired", "Sign-in links work once and expire after 15 minutes. Request a new one from Commons.");
+    }
+    return page("Signed in", "Return to Commons — you're in.", buildAuthCallbackUrl(result.state));
+  }),
+});
+
 // ---------------------------------------------------------------------------
 // Desktop auto-update feed (electron-updater "generic" provider points here —
 // see apps/desktop/electron-builder.yml). latest-mac.yml is served verbatim;

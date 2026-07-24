@@ -15,8 +15,11 @@ const FAIL_MESSAGES: Record<string, string> = {
 // subscription (which also covers dev builds where commons:// isn't registered).
 export default function SignIn({ onSignedIn }: { onSignedIn: (session: StoredSession) => void }) {
   const start = useMutation(api.auth.start);
+  const startEmail = useMutation(api.auth.startEmailSignIn);
   const claim = useMutation(api.auth.claim);
   const [state, setState] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [emailSent, setEmailSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const status = useQuery(api.auth.status, state ? { state } : "skip");
   const stateRef = useRef<string | null>(null);
@@ -71,15 +74,62 @@ export default function SignIn({ onSignedIn }: { onSignedIn: (session: StoredSes
     }
   };
 
+  const beginEmail = async () => {
+    setError(null);
+    try {
+      const result = await startEmail({ email: email.trim() });
+      if (!result.ok) {
+        setError(
+          result.reason === "not_invited"
+            ? "That email hasn't been invited yet — ask a teammate to invite you first."
+            : "That doesn't look like an email address."
+        );
+        return;
+      }
+      setEmailSent(true);
+      setState(result.state);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not send the link.");
+    }
+  };
+
   return (
     <div className="center-screen">
       <div className="center-card">
         <h1>Commons</h1>
-        <p>One canvas for designing in Figma and in code. Sign in with your team Google account.</p>
+        <p>One canvas for designing in Figma and in code.</p>
         {state === null ? (
-          <button className="btn primary" onClick={begin}>
-            Continue with Google
-          </button>
+          <>
+            <button className="btn primary" onClick={begin}>
+              Continue with Google
+            </button>
+            <div className="hint" style={{ margin: "12px 0 8px" }}>
+              or get a sign-in link by email — no Google account needed
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                style={{ flex: 1 }}
+                type="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void beginEmail()}
+              />
+              <button className="btn" disabled={!email.trim()} onClick={() => void beginEmail()}>
+                Email link
+              </button>
+            </div>
+          </>
+        ) : emailSent ? (
+          <>
+            <p>
+              Check <strong>{email}</strong> — the sign-in link lands in a minute and works once. This screen
+              finishes automatically when you click it.
+            </p>
+            <button className="btn ghost" onClick={() => { setState(null); setEmailSent(false); }}>
+              Cancel
+            </button>
+          </>
         ) : (
           <>
             <p>Finishing sign-in in your browser — come back here when Google is done.</p>

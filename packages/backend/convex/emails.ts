@@ -25,6 +25,21 @@ function escapeHtml(text: string): string {
 
 const footer = `<p style="color:#888;font-size:13px;margin-top:24px">Sent by Commons. Open the link in the app; if you don't have Commons installed, ask your team for the build.</p>`;
 
+export const sendMagicLinkEmail = internalAction({
+  args: { email: v.string(), link: v.string() },
+  handler: async (_ctx, { email, link }) => {
+    const html = `
+<div style="font:15px/1.6 -apple-system,system-ui,sans-serif;color:#222;max-width:480px">
+  <p>Click to sign in to Commons:</p>
+  <p><a href="${link}" style="display:inline-block;background:#4c6ef5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Sign in to Commons</a></p>
+  <p style="color:#888;font-size:13px">This link works once and expires in 15 minutes. If you didn't request it, ignore this email.</p>
+</div>`;
+    // Unkeyed environments print the link so dev sign-ins still work.
+    if (!process.env.RESEND_API_KEY) console.log(`magic link for ${email}: ${link}`);
+    await sendEmail(email, "Your Commons sign-in link", html);
+  },
+});
+
 export const sendMentionEmail = internalAction({
   args: {
     recipients: v.array(v.object({ email: v.string(), name: v.string() })),
