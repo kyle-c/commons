@@ -75,10 +75,31 @@ textarea:focus {
 }
 .titlebar .crumb {
   color: var(--text-tertiary);
+  /* The one flexible child: shrink to an ellipsis before anything wraps or clips. */
+  flex: 0 1 auto;
+  min-width: 48px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .titlebar .crumb strong {
   color: var(--text-primary);
   font-weight: 500;
+}
+/* Controls never shrink; the crumb and spacer absorb narrow windows. */
+.titlebar > :not(.crumb):not(.spacer) {
+  flex-shrink: 0;
+}
+.titlebar {
+  overflow: hidden; /* graceful clip beats painting outside the bar */
+}
+@media (max-width: 1240px) {
+  .titlebar {
+    gap: 8px;
+  }
+  .titlebar .crumb-prefix {
+    display: none; /* "Projects /" goes first — the back arrow already says it */
+  }
 }
 .titlebar .spacer {
   flex: 1;

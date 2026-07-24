@@ -775,7 +775,8 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           ←
         </button>
         <span className="crumb">
-          Projects / <strong>{project.name}</strong>
+          <span className="crumb-prefix">Projects / </span>
+          <strong>{project.name}</strong>
         </span>
         <div className="seg">
           <button className={nav.view === "canvas" ? "on" : ""} onClick={() => setNav({ ...nav, view: "canvas" })}>
