@@ -36,6 +36,12 @@ const api: CommonsApi = {
   cloneRepo: (gitRemote, suggestedName) => ipcRenderer.invoke("clone-repo", gitRemote, suggestedName),
   checkGitSetup: (probeRemote) => ipcRenderer.invoke("git-setup-check", probeRemote),
   setGitIdentity: (name, email) => ipcRenderer.invoke("git-set-identity", name, email),
+  generateAnnotations: (request) => ipcRenderer.invoke("annotate-project", request),
+  onAnnotatorProgress: (cb) => {
+    const handler = (_e: unknown, repoPath: string, summary: string) => cb(repoPath, summary);
+    ipcRenderer.on("annotator-progress", handler);
+    return () => ipcRenderer.removeListener("annotator-progress", handler);
+  },
   startAgentSession: (options) => ipcRenderer.invoke("agent-start", options),
   sendAgentPrompt: (sessionId, prompt) => ipcRenderer.invoke("agent-prompt", sessionId, prompt),
   stopAgentSession: (sessionId) => ipcRenderer.invoke("agent-stop", sessionId),

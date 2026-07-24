@@ -3,10 +3,11 @@ import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
 import { DEEP_LINK_PROTOCOL, parseAuthCallback, parseDeepLink } from "@commons/shared";
-import type { AgentStartOptions } from "@commons/shared";
+import type { AgentStartOptions, AnnotationGenerateRequest } from "@commons/shared";
 import { inspectRepo } from "./routeDiscovery";
 import * as runner from "./projectRunner";
 import * as agents from "./agents/sessionManager";
+import * as annotator from "./annotator";
 import * as previewHarness from "./previewHarness";
 import * as gitOps from "./gitOps";
 import * as updater from "./updater";
@@ -201,12 +202,18 @@ app.whenReady().then(() => {
   ipcMain.handle("agent-stop", (_e, sessionId: string) => agents.stop(sessionId));
   ipcMain.handle("agent-list", () => agents.list());
 
+  ipcMain.handle("annotate-project", (_e, request: AnnotationGenerateRequest) => annotator.generate(request));
+
   runner.onStatusChange((repoPath, status) => {
     mainWindow?.webContents.send("dev-server-status", repoPath, status);
   });
 
   agents.onEvent((sessionId, event) => {
     mainWindow?.webContents.send("agent-event", sessionId, event);
+  });
+
+  annotator.onProgress((repoPath, summary) => {
+    mainWindow?.webContents.send("annotator-progress", repoPath, summary);
   });
 
   updater.start((status) => {
