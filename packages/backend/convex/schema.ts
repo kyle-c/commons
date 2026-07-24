@@ -253,6 +253,15 @@ export default defineSchema({
     email: v.optional(v.string()),
   }).index("by_version", ["version"]),
 
+  // The web app (renderer bundle) served at /app for non-repo personas —
+  // clients on Windows, PMs, anyone without the desktop install. Published
+  // by scripts/publish-webapp.mjs; newest row wins.
+  webApp: defineTable({
+    indexHtml: v.string(),
+    files: v.array(v.object({ name: v.string(), storageId: v.id("_storage") })),
+    publishedAt: v.number(),
+  }),
+
   // Desktop auto-update feed. The newest row is what /update/* serves:
   // channelYml verbatim as latest-mac.yml, files by 302 to Convex storage.
   // Published by scripts/publish-update.mjs after a dist build.

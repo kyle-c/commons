@@ -27,7 +27,22 @@ export type Nav =
 
 export default function App() {
   const [session, setSession] = useState<StoredSession | null>(getStoredSession());
-  const [nav, setNav] = useState<Nav>({ screen: "home" });
+  const [nav, setNav] = useState<Nav>(() => {
+    // Browser links target app state via the hash (#p=<id>&view=…&thread=…);
+    // the desktop app uses commons:// deep links instead.
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const projectId = params.get("p");
+    if (projectId) {
+      return {
+        screen: "project",
+        projectId: projectId as Id<"projects">,
+        view: params.get("view") === "prototype" ? "prototype" : "canvas",
+        threadId: (params.get("thread") as Id<"threads">) ?? undefined,
+        frameId: (params.get("frame") as Id<"frames">) ?? undefined,
+      };
+    }
+    return { screen: "home" };
+  });
   const me = useQuery(api.auth.validate, session ? { sessionToken: session.token } : "skip");
   const touch = useMutation(api.auth.touch);
   const signOut = useMutation(api.auth.signOut);

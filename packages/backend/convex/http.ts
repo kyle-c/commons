@@ -172,6 +172,48 @@ http.route({
   }),
 });
 
+// The web app: the same renderer the desktop wraps, for anyone in a browser
+// (clients on Windows, PMs, phones). Sign-in and all collaboration work;
+// desktop-only powers (repos, dev servers, agent hosting) hide themselves.
+http.route({
+  path: "/app",
+  method: "GET",
+  handler: httpAction(async (ctx) => {
+    const bundle = await ctx.runQuery(internal.updates.latestWebApp, {});
+    if (!bundle) return page("Not published", "The Commons web app hasn't been published yet.");
+    return new Response(bundle.indexHtml, {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" },
+    });
+  }),
+});
+
+http.route({
+  pathPrefix: "/app/",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    // ?v=<publish> cache-buster rides the URL; the lookup ignores it.
+    const name = decodeURIComponent(new URL(request.url).pathname.slice("/app/".length));
+    const bundle = await ctx.runQuery(internal.updates.latestWebApp, {});
+    if (!bundle) return page("Not published", "The Commons web app hasn't been published yet.");
+    const file = bundle.files.find((f) => f.name === name);
+    const fileUrl = file ? await ctx.storage.getUrl(file.storageId) : null;
+    if (!fileUrl) {
+      // SPA fallback: unknown paths get the shell (hash routing does the rest).
+      return new Response(bundle.indexHtml, {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" },
+      });
+    }
+    // no-store: republishing deletes old bundle files, so a cached redirect
+    // would point at a dead storage id (white screen).
+    return new Response(null, {
+      status: 302,
+      headers: { Location: fileUrl, "Cache-Control": "no-store" },
+    });
+  }),
+});
+
 // Magic-link landing: the emailed one-time token authorizes the pending
 // sign-in; the app (desktop or web) completes via its live status subscription.
 http.route({

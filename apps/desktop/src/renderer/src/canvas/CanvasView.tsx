@@ -103,6 +103,7 @@ export default function CanvasView({
   const createThread = useMutation(api.comments.createThread);
   const moveFrame = useMutation(api.projects.moveFrame);
   const didFit = useRef(false);
+  const [fitRetry, forceRender] = useState(0);
 
   // Multiplayer cursors: broadcast mine (throttled), render teammates'.
   const moveCursor = useMutation(api.presence.moveCursor);
@@ -147,10 +148,9 @@ export default function CanvasView({
     const maxX = Math.max(...target.map((f) => f.x + f.width));
     const maxY = Math.max(...target.map((f) => f.y + f.height));
     const pad = 80;
-    const scale = Math.min(
-      (el.clientWidth - pad * 2) / (maxX - minX),
-      (el.clientHeight - pad * 2) / (maxY - minY),
-      maxScale
+    const scale = Math.max(
+      0.05,
+      Math.min((el.clientWidth - pad * 2) / (maxX - minX), (el.clientHeight - pad * 2) / (maxY - minY), maxScale)
     );
     setVp({
       scale,
@@ -204,6 +204,12 @@ export default function CanvasView({
 
   useEffect(() => {
     if (didFit.current || frames.length === 0 || !wrapRef.current) return;
+    // In the browser web app the stylesheet can land after first render,
+    // leaving the wrap unmeasured — retry until layout is real.
+    if (wrapRef.current.clientWidth < 200 || wrapRef.current.clientHeight < 200) {
+      const timer = setTimeout(() => forceRender((n) => n + 1), 120);
+      return () => clearTimeout(timer);
+    }
     didFit.current = true;
     const target = initialFrameId && frames.find((f) => f._id === initialFrameId);
     if (target) {
@@ -218,7 +224,7 @@ export default function CanvasView({
       initialFit();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frames]);
+  }, [frames, fitRetry]);
 
   // Wheel: two-finger pan, pinch/⌘ zoom around the cursor.
   useEffect(() => {

@@ -827,7 +827,9 @@ export default function ProjectView({ me, nav, setNav }: Props) {
               </button>
             )}
           </>
-        ) : (
+        ) : window.commons ? (
+          // Repo powers are desktop-only; the browser web app is the
+          // view/comment/test surface and hides them entirely.
           <>
             {project.gitRemote && (
               <button className="btn" disabled={cloning} onClick={cloneProject} title={project.gitRemote}>
@@ -838,7 +840,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
               {project.gitRemote ? "Locate existing clone…" : "Locate repo on this Mac"}
             </button>
           </>
-        )}
+        ) : null}
         {project.createdBy === me._id && <SharingSettings project={project} me={me} users={users} />}
         <PreviewSettings project={project} open={previewOpen} onOpenChange={setPreviewOpen} />
         {(repoPath || project.gitRemote || convexSessions.length > 0) && (
@@ -924,7 +926,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           initialThreadId={nav.threadId}
           initialFrameId={nav.frameId}
           frameReloadTokens={frameReloadTokens}
-          onSendToAgent={repoPath || project.gitRemote ? sendThreadToAgent : undefined}
+          onSendToAgent={window.commons && (repoPath || project.gitRemote) ? sendThreadToAgent : undefined}
           onTidy={repoPath ? tidyCanvas : undefined}
           webLinkBase={
             project.shareToken
@@ -951,7 +953,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
             setNav({ ...nav, view: "canvas" });
           }}
           onSendToAgent={
-            repoPath || project.gitRemote
+            window.commons && (repoPath || project.gitRemote)
               ? (title, prompt, routePath) => void startAgentSession({ title, prompt, routePath })
               : undefined
           }

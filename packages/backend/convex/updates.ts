@@ -51,3 +51,29 @@ export const latest = internalQuery({
     return releases.reduce((a, b) => (b.publishedAt > a.publishedAt ? b : a));
   },
 });
+
+// --- Web app (/app) -------------------------------------------------------
+
+export const publishWebApp = internalMutation({
+  args: {
+    indexHtml: v.string(),
+    files: v.array(v.object({ name: v.string(), storageId: v.id("_storage") })),
+  },
+  handler: async (ctx, args) => {
+    // Replace wholesale; old bundles' assets are dead weight.
+    for (const old of await ctx.db.query("webApp").collect()) {
+      for (const file of old.files) await ctx.storage.delete(file.storageId).catch(() => {});
+      await ctx.db.delete(old._id);
+    }
+    await ctx.db.insert("webApp", { ...args, publishedAt: Date.now() });
+  },
+});
+
+export const latestWebApp = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("webApp").collect();
+    if (rows.length === 0) return null;
+    return rows.reduce((a, b) => (b.publishedAt > a.publishedAt ? b : a));
+  },
+});
