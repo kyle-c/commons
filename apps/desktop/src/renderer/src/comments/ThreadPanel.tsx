@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc } from "@commons/backend/convex/_generated/dataModel";
@@ -15,18 +16,34 @@ interface Props {
   onClose: () => void;
   /** Present when the project has a local repo — sends this thread to a coding agent. */
   onSendToAgent?: () => void;
+  /** The project's /p/<token> web page, when shared — enables ticket-to-pixel links. */
+  webLinkBase?: string;
 }
 
-export default function ThreadPanel({ thread, me, users, mentionUsers, onClose, onSendToAgent }: Props) {
+export default function ThreadPanel({ thread, me, users, mentionUsers, onClose, onSendToAgent, webLinkBase }: Props) {
   const reply = useMutation(api.comments.reply);
   const setResolved = useMutation(api.comments.setResolved);
   const resolved = !!thread.resolvedAt;
+  const [webCopied, setWebCopied] = useState(false);
 
   return (
     <div className="thread-panel">
       <header>
         <span>Thread {resolved && <span className="hint">· resolved</span>}</span>
         <div style={{ display: "flex", gap: 6 }}>
+          {webLinkBase && (
+            <button
+              className="btn ghost"
+              title="Copy a browser link to this exact thread — paste it into a ticket; no install or account needed to open"
+              onClick={() => {
+                void navigator.clipboard.writeText(`${webLinkBase}?thread=${thread._id}`);
+                setWebCopied(true);
+                setTimeout(() => setWebCopied(false), 1500);
+              }}
+            >
+              {webCopied ? "Copied" : "Web link"}
+            </button>
+          )}
           {onSendToAgent && (
             <button className="btn ghost" title="Send this thread to a coding agent" onClick={onSendToAgent}>
               ⚡ Agent

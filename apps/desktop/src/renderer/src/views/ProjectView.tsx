@@ -926,6 +926,11 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           frameReloadTokens={frameReloadTokens}
           onSendToAgent={repoPath || project.gitRemote ? sendThreadToAgent : undefined}
           onTidy={repoPath ? tidyCanvas : undefined}
+          webLinkBase={
+            project.shareToken
+              ? `${(getConvexUrl() ?? "").replace(".convex.cloud", ".convex.site")}/p/${project.shareToken}`
+              : undefined
+          }
           heatmap={
             heatmapTestId && heatmapData
               ? { ...heatmapData, onClear: () => setHeatmapTestId(null) }

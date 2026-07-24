@@ -827,7 +827,9 @@ for (const f of DATA.frames) {
 }
 
 const panel = document.getElementById("panel");
-const TOKEN = decodeURIComponent(location.pathname.split("/p/")[1] || "").replace(/\\/+$/, "");
+const TOKEN = decodeURIComponent(location.pathname.split("/p/")[1] || "").replace(/\\/+$/, "").split("?")[0];
+// ?thread=<id> deep-links a ticket to the exact conversation (opened after pins render).
+const WANTED_THREAD = new URLSearchParams(location.search).get("thread");
 const savedName = () => localStorage.getItem("commons.guestName") || "";
 function nameField(id) {
   return '<input id="' + id + '" placeholder="Your name" value="' + esc(savedName()) + '" maxlength="40" />';
@@ -907,7 +909,7 @@ function addPin(t) {
   const pin = document.createElement("div");
   pin.className = "pin" + (t.resolved ? " resolved" : "");
   pin.style.cssText = "left:" + (x - minX - 12) + "px;top:" + (y - minY - 22) + "px;background:" + first.avatarColor;
-  pin.textContent = first.authorName.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
+  pin.textContent = first.authorName.split(" ").map((p) => (p.replace(/[^\\p{L}\\p{N}]/gu, ""))[0]).filter(Boolean).join("").slice(0, 2).toUpperCase() || "?";
   pin.addEventListener("click", (e) => { e.stopPropagation(); showThread(t); });
   stage.appendChild(pin);
 }
@@ -927,6 +929,18 @@ document.querySelectorAll(".frame").forEach((el, i) => {
   });
 });
 fit();
+
+if (WANTED_THREAD) {
+  const target = DATA.threads.find((t) => t.id === WANTED_THREAD);
+  if (target) {
+    showThread(target);
+    const f = target.frameId && frameById[target.frameId];
+    if (f) {
+      const wrap = document.getElementById("stage-wrap");
+      wrap.scrollTo({ left: Math.max(0, f.x - minX - 100), top: Math.max(0, f.y - minY - 100) });
+    }
+  }
+}
 </script>
 </body>
 </html>`;

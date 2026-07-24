@@ -49,6 +49,8 @@ interface Props {
   onSendToAgent?: (thread: ThreadWithMessages) => void;
   /** Re-derive the section layout from the repo and move frames into it. */
   onTidy?: () => void;
+  /** The project's /p/<token> page when shared — thread panels offer web links. */
+  webLinkBase?: string;
   /** Test-click overlay: dots drawn on frames whose route matches. Coordinates
    *  are normalized by the tester's viewport width, so they scale by frame width. */
   heatmap?: {
@@ -84,6 +86,7 @@ export default function CanvasView({
   onSendToAgent,
   onTidy,
   heatmap,
+  webLinkBase,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [vp, setVp] = useState<Viewport>({ x: 80, y: 80, scale: 0.3 });
@@ -610,6 +613,7 @@ export default function CanvasView({
             mentionUsers={mentionUsers ?? users}
             onClose={() => setSelectedThread(null)}
             onSendToAgent={onSendToAgent && (() => onSendToAgent(selected))}
+            webLinkBase={webLinkBase}
           />
         </div>
       )}
