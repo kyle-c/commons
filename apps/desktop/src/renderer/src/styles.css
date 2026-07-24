@@ -777,6 +777,57 @@ textarea:focus {
   font-weight: 500;
 }
 
+/* Stacked form layout for settings popovers (Preview URL etc.) */
+.popover-form {
+  width: 380px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.popover-form .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.popover-form .form-field > label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.popover-form .form-field > label .hint {
+  font-weight: 400;
+  margin-left: 6px;
+}
+.popover-form .form-field .hint {
+  line-height: 1.45;
+}
+.popover-form .form-field code {
+  font-size: var(--text-xs);
+}
+.popover-form input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+.popover-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.popover-form .form-error {
+  font-size: var(--text-xs);
+  color: var(--danger, #f87171);
+}
+.popover-form .form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 /* Workspaces: grouped home + titlebar popover */
 .workspace-section {
   margin-bottom: 28px;

@@ -84,29 +84,42 @@ function PreviewSettings({
         Preview URL{project.previewUrl ? "" : " ⚠"}
       </button>
       {open && (
-        <div className="titlebar-popover">
-          <label className="hint">Deployed preview base URL (e.g. a Vercel deployment)</label>
-          <input
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="https://myapp-git-main-team.vercel.app"
-            autoFocus
-          />
-          <label className="hint" style={{ marginTop: 8 }}>
-            Branch preview pattern — lets everyone view agent drafts before they merge. Use {"{branch}"} where
-            the branch slug goes (Vercel: myapp-git-{"{branch}"}-team)
-          </label>
-          <input
-            value={pattern}
-            onChange={(e) => setPattern(e.target.value)}
-            placeholder={"https://myapp-git-{branch}-team.vercel.app"}
-          />
-          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 8 }}>
+        <div className="titlebar-popover popover-form">
+          <div className="form-field">
+            <label>Preview URL</label>
+            <span className="hint">
+              The deployed app — teammates without the repo see live frames from here, and it's what user tests
+              run against.
+            </span>
+            <input
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="https://myapp.vercel.app"
+              autoFocus
+            />
+            {!valid && <span className="form-error">Needs to be a full https:// URL</span>}
+          </div>
+          <div className="form-field">
+            <label>
+              Branch preview pattern <span className="hint">optional</span>
+            </label>
+            <span className="hint">
+              Unlocks draft previews and A/B tests. Write {"{branch}"} where the branch slug goes — on Vercel
+              that's <code>myapp-git-{"{branch}"}-team</code>.
+            </span>
+            <input
+              value={pattern}
+              onChange={(e) => setPattern(e.target.value)}
+              placeholder={"https://myapp-git-{branch}-team.vercel.app"}
+            />
+            {!patternValid && <span className="form-error">Needs https:// and a {"{branch}"} placeholder</span>}
+          </div>
+          <div className="form-actions">
             <button className="btn ghost" onClick={() => setOpen(false)}>
               Cancel
             </button>
             <button
-              className="btn"
+              className="btn primary"
               disabled={!valid || !patternValid}
               onClick={async () => {
                 await setPreviewUrl({
