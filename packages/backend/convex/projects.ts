@@ -311,7 +311,26 @@ export const sharePageData = internalQuery({
         };
       })
     );
-    return { name: project.name, projectId: project._id, frames: framesWithSnapshots, threads: threadsWithMessages };
+    // NAR-2: approved design rationale travels with the share page.
+    const approvedAnnotations = await ctx.db
+      .query("annotations")
+      .withIndex("by_project_status", (q) => q.eq("projectId", project._id).eq("status", "approved"))
+      .take(500);
+    const annotations = approvedAnnotations
+      .sort((a, b) => a.order - b.order)
+      .map((a) => ({
+        frameId: a.frameId ?? null,
+        flowTitle: a.flowTitle ?? null,
+        text: a.text,
+        inferred: a.citations.length === 0,
+      }));
+    return {
+      name: project.name,
+      projectId: project._id,
+      frames: framesWithSnapshots,
+      threads: threadsWithMessages,
+      annotations,
+    };
   },
 });
 

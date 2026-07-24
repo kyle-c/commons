@@ -10,6 +10,7 @@
 
 import type * as access from "../access.js";
 import type * as agentSessions from "../agentSessions.js";
+import type * as annotations from "../annotations.js";
 import type * as auth from "../auth.js";
 import type * as comments from "../comments.js";
 import type * as emails from "../emails.js";
@@ -35,6 +36,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   access: typeof access;
   agentSessions: typeof agentSessions;
+  annotations: typeof annotations;
   auth: typeof auth;
   comments: typeof comments;
   emails: typeof emails;

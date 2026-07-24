@@ -167,6 +167,74 @@ export default defineSchema({
     event: v.any(),
   }).index("by_session", ["sessionId"]),
 
+  // Design Context Layer (NAR): one curated rationale claim per row, pinned
+  // to a frame (screen-level) or to a named flow. Generated as drafts by an
+  // annotation pass on the host's machine, then designer-curated. Nothing
+  // reaches stakeholders (canvas layer, share page) until status=approved —
+  // inferred intent presented as fact is worse than no annotation.
+  annotations: defineTable({
+    projectId: v.id("projects"),
+    frameId: v.optional(v.id("frames")),
+    // Set instead of frameId for flow-level claims ("Send money to family").
+    flowTitle: v.optional(v.string()),
+    // The claim, in the designer's voice. Curation edits this in place; the
+    // pre-edit draft is preserved in annotationEdits.
+    text: v.string(),
+    // Receipts. Empty array = inferred (the model guessed; the UI says so).
+    citations: v.array(
+      v.object({
+        kind: v.union(
+          v.literal("commit"),
+          v.literal("doc"),
+          v.literal("code"),
+          v.literal("thread"),
+          v.literal("test")
+        ),
+        ref: v.string(),
+        // Mechanical post-pass: commit hashes checked against the repo.
+        verified: v.optional(v.boolean()),
+      })
+    ),
+    status: v.union(v.literal("draft"), v.literal("approved"), v.literal("rejected")),
+    runId: v.id("annotationRuns"),
+    // Curator (approve/edit/reject) — the voice being learned (NAR-4 corpus).
+    curatorId: v.optional(v.id("users")),
+    curatedAt: v.optional(v.number()),
+    // Stable ordering within a frame/flow group, as generated.
+    order: v.number(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_status", ["projectId", "status"])
+    .index("by_run", ["runId"]),
+
+  // One annotation-generation pass (host machine, Claude on the host's key).
+  // Carries the model's own confidence notes — shown atop the review queue as
+  // "where I was guessing", doubling as a what-evidence-to-collect-next hint.
+  annotationRuns: defineTable({
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+    status: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
+    confidenceNotes: v.optional(v.string()),
+    error: v.optional(v.string()),
+    draftCount: v.optional(v.number()),
+  }).index("by_project", ["projectId"]),
+
+  // The NAR-4 learning corpus: every curation decision as a before/after pair.
+  // Logged from day one so voice-profile synthesis has data before it ships.
+  annotationEdits: defineTable({
+    annotationId: v.id("annotations"),
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+    action: v.union(v.literal("approve"), v.literal("edit"), v.literal("reject")),
+    before: v.string(),
+    // Same as before on plain approves; empty on rejects.
+    after: v.string(),
+    // Curator's tagged reason (tone / ordering / concision / wrong), optional.
+    reason: v.optional(v.string()),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_user", ["userId"]),
+
   // Latest snapshot image per frame (SNAP-3), captured by a host whose dev
   // server is live. Powers the web share page and canvas placeholders.
   frameSnapshots: defineTable({

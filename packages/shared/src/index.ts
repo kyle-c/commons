@@ -141,6 +141,46 @@ export type AgentSessionEvent =
       draft?: AgentDraftInfo;
     };
 
+/** One citation on an annotation claim (NAR). Empty citations = inferred. */
+export interface AnnotationCitation {
+  kind: "commit" | "doc" | "code" | "thread" | "test";
+  ref: string;
+  /** Set by the mechanical post-pass (commit hash exists, path exists, id known). */
+  verified?: boolean;
+}
+
+/** A generated annotation draft, before curation. */
+export interface AnnotationDraft {
+  /** Screen-level: matches a canvas frame by title. */
+  frameTitle?: string;
+  /** Flow-level: a named flow instead of a single screen. */
+  flowTitle?: string;
+  text: string;
+  citations: AnnotationCitation[];
+}
+
+/** Commons-native evidence the renderer hands the generator to mine + cite. */
+export interface AnnotationEvidence {
+  threads: { id: string; frameTitle?: string; summary: string }[];
+  tests: { id: string; summary: string }[];
+}
+
+export interface AnnotationGenerateRequest {
+  repoPath: string;
+  projectName: string;
+  /** Screens to annotate — canvas frames (title + route). */
+  frames: { title: string; routePath?: string }[];
+  evidence?: AnnotationEvidence;
+}
+
+export interface AnnotationGenerateResult {
+  ok: boolean;
+  drafts: AnnotationDraft[];
+  confidenceNotes?: string;
+  costUsd?: number;
+  error?: string;
+}
+
 /** Local git state of a linked working copy (drift visibility). */
 export interface GitRepoStatus {
   branch: string;
@@ -190,6 +230,14 @@ export interface CommonsApi {
   checkGitSetup(probeRemote?: string): Promise<GitSetupStatus>;
   /** Write global git user.name/user.email (the one-click identity fix). */
   setGitIdentity(name: string, email: string): Promise<{ ok: boolean; message: string }>;
+  /**
+   * NAR-1: run an annotation pass against a local working copy (single agent
+   * turn on the host's credentials; mines git history + docs + the passed
+   * Commons evidence). Long-running — minutes; progress streams via
+   * onAnnotatorProgress.
+   */
+  generateAnnotations(request: AnnotationGenerateRequest): Promise<AnnotationGenerateResult>;
+  onAnnotatorProgress(cb: (repoPath: string, summary: string) => void): () => void;
   startAgentSession(options: AgentStartOptions): Promise<AgentSessionInfo>;
   /** Follow-up prompt on an idle session. Rejects while a turn is running. */
   sendAgentPrompt(sessionId: string, prompt: string): Promise<void>;

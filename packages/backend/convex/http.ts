@@ -747,10 +747,13 @@ function sharePageHtml(data: {
     resolvedAt?: number;
     messages: { body: string; at: number; authorName: string; avatarColor: string }[];
   }[];
+  /** NAR-2: approved design rationale (curated; drafts never reach this page). */
+  annotations?: { frameId: string | null; flowTitle: string | null; text: string; inferred: boolean }[];
 }): string {
   const payload = {
     name: data.name,
     deepLink: `commons://project/${data.projectId}/canvas`,
+    annotations: data.annotations ?? [],
     frames: data.frames.map((f) => ({
       id: f._id,
       title: f.title,
@@ -823,6 +826,14 @@ function sharePageHtml(data: {
   #panel textarea { min-height: 64px; }
   #panel .send { background: #4a6fdc; border: none; color: #fff; border-radius: 8px; padding: 8px 14px;
           font: inherit; cursor: pointer; }
+  .note { position: absolute; background: #18181b; border: 1px solid #2a2a2f; border-left: 3px solid #4a6fdc;
+          border-radius: 8px; padding: 10px 12px; color: #a1a1a8; font-size: 13px; line-height: 1.45; z-index: 2; }
+  .note .inf { display: inline-block; margin-left: 8px; padding: 0 8px; border: 1px dashed #8a6d2f; border-radius: 999px;
+          color: #d9a03f; font-size: 10px; }
+  #flow-notes { max-width: 860px; margin: 8px 20px 0; padding: 14px 16px; background: #18181b;
+          border: 1px solid #2a2a2f; border-radius: 12px; }
+  #flow-notes h2 { font-size: 13px; margin: 0 0 8px; color: #a1a1a8; }
+  #flow-notes .fn { margin: 0 0 8px; color: #c9c9cf; font-size: 13px; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -833,6 +844,7 @@ function sharePageHtml(data: {
   <a id="open-app" href="#">Open in Commons →</a>
 </header>
 <div id="stage-wrap"><div id="stage"></div></div>
+<div id="flow-notes" style="display:none"></div>
 <div id="panel"></div>
 <footer>Read-only view shared from Commons · snapshots update as the team works</footer>
 <script>
@@ -848,7 +860,9 @@ const pad = 60;
 const minX = Math.min(...DATA.frames.map((f) => f.x), 0) - pad;
 const minY = Math.min(...DATA.frames.map((f) => f.y), 0) - pad;
 const maxX = Math.max(...DATA.frames.map((f) => f.x + f.w), 800) + pad;
-const maxY = Math.max(...DATA.frames.map((f) => f.y + f.h + HEADER), 600) + pad;
+// Frame notes hang below their screens — leave room for them in the stage.
+const NOTE_ROOM = DATA.annotations.some((a) => a.frameId) ? 220 : 0;
+const maxY = Math.max(...DATA.frames.map((f) => f.y + f.h + HEADER), 600) + pad + NOTE_ROOM;
 const stage = document.getElementById("stage");
 stage.style.width = maxX - minX + "px";
 stage.style.height = maxY - minY + "px";
@@ -882,6 +896,42 @@ for (const f of DATA.frames) {
     el.appendChild(ph);
   }
   stage.appendChild(el);
+}
+
+// NAR-2: the prototype explains itself. Screen notes hang under their frame;
+// flow notes get their own card under the canvas.
+for (const f of DATA.frames) {
+  const notes = DATA.annotations.filter((a) => a.frameId === f.id);
+  let noteY = f.y - minY + f.h + HEADER + 10;
+  for (const note of notes) {
+    const el = document.createElement("div");
+    el.className = "note";
+    el.style.cssText = "left:" + (f.x - minX) + "px;top:" + noteY + "px;width:" + f.w + "px";
+    el.textContent = note.text;
+    if (note.inferred) {
+      const tag = document.createElement("span");
+      tag.className = "inf";
+      tag.title = "The designer's read, not yet backed by a recorded decision";
+      tag.textContent = "inferred";
+      el.appendChild(tag);
+    }
+    stage.appendChild(el);
+    noteY += Math.max(52, 26 + Math.ceil(note.text.length / (f.w / 7)) * 19);
+  }
+}
+const flowNotes = DATA.annotations.filter((a) => !a.frameId);
+if (flowNotes.length > 0) {
+  const box = document.getElementById("flow-notes");
+  box.style.display = "block";
+  const h2 = document.createElement("h2");
+  h2.textContent = "How the flow hangs together";
+  box.appendChild(h2);
+  for (const note of flowNotes) {
+    const p = document.createElement("p");
+    p.className = "fn";
+    p.textContent = (note.flowTitle ? note.flowTitle + ": " : "") + note.text;
+    box.appendChild(p);
+  }
 }
 
 const panel = document.getElementById("panel");
