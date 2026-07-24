@@ -131,6 +131,7 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
           <button
             key={project._id}
             className="project-card"
+            aria-label={`Open ${project.name}`}
             onClick={() => setNav({ screen: "project", projectId: project._id, view: "canvas" })}
           >
             <ProjectCover name={project.name} colors={project.brandColors} />
