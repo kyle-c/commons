@@ -43,12 +43,16 @@ export function sessionToken(): string | undefined {
 }
 
 export function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+  // Letters/digits only — "Priya (PM)" is "PP", never "P(".
+  return (
+    name
+      .split(/\s+/)
+      .map((w) => w.replace(/[^\p{L}\p{N}]/gu, "")[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?"
+  );
 }
 
 export function timeAgo(ts: number): string {
