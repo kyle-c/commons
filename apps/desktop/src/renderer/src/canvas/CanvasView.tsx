@@ -506,7 +506,11 @@ export default function CanvasView({
         {threads.map((thread) => {
           const pos = pinPosition(thread);
           if (!pos) return null;
-          const firstAuthor = thread.messages[0]?.author;
+          const first = thread.messages[0];
+          // Guests (web-share comments) have no author doc — use their name
+          // and a stable neutral color instead of a "?" pin.
+          const pinName = first?.author?.name ?? first?.guestName ?? "?";
+          const pinColor = first?.author?.avatarColor ?? "#9d9da6";
           return (
             <button
               key={thread._id}
@@ -516,12 +520,13 @@ export default function CanvasView({
                 top: pos.y,
                 transform: `scale(${1 / vp.scale}) translate(-4px, -24px)`,
                 transformOrigin: "0 100%",
-                background: thread.resolvedAt ? undefined : firstAuthor?.avatarColor,
+                background: thread.resolvedAt ? undefined : pinColor,
               }}
               onMouseDown={(e) => e.stopPropagation()}
               onClick={() => setSelectedThread(thread._id)}
+              title={pinName}
             >
-              {initials(firstAuthor?.name ?? "?")}
+              {initials(pinName)}
             </button>
           );
         })}
