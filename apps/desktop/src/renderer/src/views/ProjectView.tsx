@@ -10,6 +10,7 @@ import CanvasView from "../canvas/CanvasView";
 import PrototypeView from "./PrototypeView";
 import Inbox from "./Inbox";
 import AgentPanel, { type PanelSession } from "../agents/AgentPanel";
+import NarrationPanel from "./NarrationPanel";
 import ThemeToggle from "./ThemeToggle";
 import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessions";
 import { getConvexUrl, initials, sessionToken } from "../lib/session";
@@ -416,6 +417,13 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   );
 
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
+  const [narrationOpen, setNarrationOpen] = useState(false);
+  // Approved annotations back the canvas Notes layer; drafts stay in the panel.
+  const annotationData = useQuery(api.annotations.forProject, {
+    projectId: nav.projectId,
+    userId: me._id,
+    sessionToken: sessionToken(),
+  });
   const [activeAgentSessionId, setActiveAgentSessionId] = useState<string | null>(null);
   // Current-vs-draft side-by-side (PRJ-14), opened from a draft result row.
   const [compare, setCompare] = useState<{ title: string; routePath?: string; draftPreviewUrl: string } | null>(null);
@@ -597,6 +605,10 @@ export default function ProjectView({ me, nav, setNav }: Props) {
 
   useEffect(
     () => registerShortcut("a", () => setAgentPanelOpen((open) => !open), { description: "Agent sessions" }),
+    []
+  );
+  useEffect(
+    () => registerShortcut("n", () => setNarrationOpen((open) => !open), { description: "Narrate (design notes)" }),
     []
   );
 
@@ -852,6 +864,13 @@ export default function ProjectView({ me, nav, setNav }: Props) {
             ⚡{runningCount > 0 ? ` ${runningCount}` : ""}
           </button>
         )}
+        <button
+          className={`btn ghost ${narrationOpen ? "active" : ""}`}
+          title="Narrate: design rationale annotations (N)"
+          onClick={() => setNarrationOpen((open) => !open)}
+        >
+          ✎{(annotationData?.draftCount ?? 0) > 0 ? ` ${annotationData!.draftCount}` : ""}
+        </button>
         <button className="btn" onClick={copyLink}>
           {copied ? "Copied" : "Copy link"}
         </button>
@@ -938,6 +957,9 @@ export default function ProjectView({ me, nav, setNav }: Props) {
               ? { ...heatmapData, onClear: () => setHeatmapTestId(null) }
               : undefined
           }
+          annotations={annotationData?.annotations
+            .filter((a) => a.status === "approved")
+            .map((a) => ({ _id: a._id, frameId: a.frameId, text: a.text, inferred: a.citations.length === 0 }))}
         />
       ) : (
         <PrototypeView
@@ -957,6 +979,17 @@ export default function ProjectView({ me, nav, setNav }: Props) {
               ? (title, prompt, routePath) => void startAgentSession({ title, prompt, routePath })
               : undefined
           }
+        />
+      )}
+
+      {narrationOpen && (
+        <NarrationPanel
+          me={me}
+          project={project}
+          frames={frames}
+          threads={threads}
+          repoPath={repoPath}
+          onClose={() => setNarrationOpen(false)}
         />
       )}
 

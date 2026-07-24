@@ -58,6 +58,8 @@ interface Props {
     clicksByRoute: Record<string, { fx: number; fy: number; interactive: boolean }[]>;
     onClear: () => void;
   };
+  /** Approved design-rationale annotations (NAR-2) — the Notes layer. */
+  annotations?: { _id: string; frameId?: string | null; text: string; inferred: boolean }[];
 }
 
 /** "/pay/[id]" (or "/pay/:id") matches "/pay/123" — same rule as the tester harness. */
@@ -87,6 +89,7 @@ export default function CanvasView({
   onTidy,
   heatmap,
   webLinkBase,
+  annotations,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [vp, setVp] = useState<Viewport>({ x: 80, y: 80, scale: 0.3 });
@@ -94,6 +97,8 @@ export default function CanvasView({
   vpRef.current = vp;
 
   const [commentMode, setCommentMode] = useState(false);
+  // Notes layer: on by default — the annotations are curated, that's the point.
+  const [notesOn, setNotesOn] = useState(true);
   const [focusedFrame, setFocusedFrame] = useState<Id<"frames"> | null>(null);
   const [selectedThread, setSelectedThread] = useState<Id<"threads"> | null>(initialThreadId ?? null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -512,6 +517,32 @@ export default function CanvasView({
           );
         })}
 
+        {notesOn &&
+          frames.map((frame) => {
+            const notes = (annotations ?? []).filter((a) => a.frameId === frame._id);
+            if (notes.length === 0) return null;
+            const pos = framePos(frame);
+            return (
+              <div
+                key={`notes-${frame._id}`}
+                className="frame-notes"
+                style={{ left: pos.x, top: pos.y + frame.height + 34, width: frame.width }}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                {notes.map((note) => (
+                  <div key={note._id} className="frame-note">
+                    {note.text}
+                    {note.inferred && (
+                      <span className="citation inferred" title="No evidence in the record. The designer approved this as their read">
+                        inferred
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+
         {threads.map((thread) => {
           const pos = pinPosition(thread);
           if (!pos) return null;
@@ -657,6 +688,15 @@ export default function CanvasView({
         >
           💬 Comment
         </button>
+        {(annotations?.length ?? 0) > 0 && (
+          <button
+            className={`btn ghost ${notesOn ? "active" : ""}`}
+            title="Design notes: approved rationale under each screen"
+            onClick={() => setNotesOn((on) => !on)}
+          >
+            ✎ Notes
+          </button>
+        )}
         <button className="btn ghost" onClick={fitToContent} title="Fit to content">
           Fit
         </button>
