@@ -216,6 +216,31 @@ async function detectPackageManager(repoPath: string): Promise<RepoInspection["p
   return "npm";
 }
 
+/**
+ * commons.json — the escape hatch that makes any framework a Commons project
+ * (Vite + React Router, CRA, plain static, anything that serves HTTP):
+ *   { "devCommand": ["npx", "vite", "--port", "{port}"],   // optional; {port} substituted
+ *     "port": 5173,                                        // optional fixed port
+ *     "routes": [{ "path": "/", "title": "Home", "section": "Main" }, …],
+ *     "device": { "width": 390, "height": 844 } }          // optional frame size
+ * Declared routes always win over discovery.
+ */
+interface CommonsConfig {
+  devCommand?: string[];
+  port?: number;
+  routes?: { path: string; title?: string; section?: string }[];
+  device?: { width: number; height: number };
+}
+
+export async function readCommonsConfig(repoPath: string): Promise<CommonsConfig | null> {
+  try {
+    const raw = JSON.parse(await fs.readFile(path.join(repoPath, "commons.json"), "utf8"));
+    return raw && typeof raw === "object" ? (raw as CommonsConfig) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
   let framework: RepoInspection["framework"] = "unknown";
   let name = path.basename(repoPath);
@@ -225,12 +250,33 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
     const deps = { ...pkg.dependencies, ...pkg.devDependencies };
     if (deps.next) framework = "nextjs";
     else if (deps["expo-router"] && deps["react-native-web"]) framework = "expo";
+    else if (deps.vite) framework = "vite";
   } catch {
     // No package.json — leave as unknown; caller surfaces the error state.
   }
 
+  const config = await readCommonsConfig(repoPath);
+  if (config && framework === "unknown") framework = "custom";
+
   const routes: DiscoveredRoute[] = [];
-  if (framework === "expo") {
+  // Declared routes beat discovery — deterministic across every framework.
+  if (config?.routes?.length) {
+    for (const r of config.routes) {
+      if (typeof r?.path !== "string") continue;
+      routes.push({
+        path: r.path,
+        file: "commons.json",
+        dynamic: /[[\]:]/.test(r.path),
+        section: r.section,
+        title: r.title,
+      });
+    }
+  } else if (framework === "vite") {
+    // No filesystem routing convention to walk — start with the root and
+    // point people at commons.json for the rest.
+    routes.push({ path: "/", file: "commons.json (add more routes here)", dynamic: false });
+  }
+  if (routes.length === 0 && framework === "expo") {
     for (const appDir of ["app", "src/app"]) {
       const abs = path.join(repoPath, appDir);
       if (await exists(abs)) {
@@ -239,7 +285,7 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
       }
     }
   }
-  if (framework === "nextjs") {
+  if (routes.length === 0 && framework === "nextjs") {
     for (const appDir of ["app", "src/app"]) {
       const abs = path.join(repoPath, appDir);
       if (await exists(abs)) {
@@ -278,6 +324,10 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
     repoPath,
     name,
     framework,
+    device:
+      config?.device && typeof config.device.width === "number" && typeof config.device.height === "number"
+        ? config.device
+        : undefined,
     packageManager: await detectPackageManager(repoPath),
     routes,
     gitRemote: await detectGitRemote(repoPath),

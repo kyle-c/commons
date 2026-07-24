@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "child_process";
 import net from "net";
 import http from "http";
 import type { DevServerStatus } from "@commons/shared";
-import { inspectRepo } from "./routeDiscovery";
+import { inspectRepo, readCommonsConfig } from "./routeDiscovery";
 
 interface RunningServer {
   child: ChildProcess;
@@ -67,30 +67,41 @@ export async function start(repoPath: string): Promise<DevServerStatus> {
   }
 
   const inspection = await inspectRepo(repoPath);
-  if (inspection.framework === "unknown") {
+  const config = await readCommonsConfig(repoPath);
+  if (inspection.framework === "unknown" && !config?.devCommand) {
     const status: DevServerStatus = {
       state: "error",
-      message: "Commons can run Next.js and Expo (web) projects so far",
+      message: "Add a commons.json with a devCommand to run this project (Next.js, Expo, and Vite are automatic)",
     };
     setStatus(repoPath, status);
     return status;
   }
 
-  const port = await findFreePort(4310);
+  const port = config?.port ?? (await findFreePort(4310));
   const url = `http://localhost:${port}`;
 
   const execBin = { pnpm: "pnpm", yarn: "yarn", bun: "bunx", npm: "npx" }[inspection.packageManager];
-  // expo-router apps serve the web build from the metro dev server (--web).
-  const devCommand =
-    inspection.framework === "expo"
+  // commons.json devCommand wins ({port} substituted); otherwise per-framework
+  // defaults. expo serves the web build from metro (--web); vite --strictPort
+  // keeps the frame URLs honest.
+  const devCommand = config?.devCommand?.length
+    ? config.devCommand.map((part) => part.replace("{port}", String(port)))
+    : inspection.framework === "expo"
       ? ["expo", "start", "--web", "--port", String(port)]
-      : ["next", "dev", "-p", String(port)];
-  const execArgs =
-    inspection.packageManager === "pnpm" || inspection.packageManager === "yarn"
+      : inspection.framework === "vite"
+        ? ["vite", "--port", String(port), "--strictPort"]
+        : ["next", "dev", "-p", String(port)];
+  // A full devCommand names its own binary; framework defaults run via the
+  // package manager's exec shim.
+  const useExec = !config?.devCommand?.length;
+  const spawnBin = useExec ? execBin : devCommand[0];
+  const spawnArgs = useExec
+    ? inspection.packageManager === "pnpm" || inspection.packageManager === "yarn"
       ? ["exec", ...devCommand]
-      : devCommand;
+      : devCommand
+    : devCommand.slice(1);
 
-  const child = spawn(execBin, execArgs, {
+  const child = spawn(spawnBin, spawnArgs, {
     cwd: repoPath,
     // CI=1 keeps the Expo CLI non-interactive and stops it opening a browser.
     env: { ...process.env, PORT: String(port), BROWSER: "none", CI: "1" },

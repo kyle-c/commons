@@ -4,6 +4,8 @@ export interface DiscoveredRoute {
   path: string;
   /** Source file relative to the repo root. */
   file: string;
+  /** Display title override (commons.json); derived from the path otherwise. */
+  title?: string;
   /** True if the path contains dynamic segments and needs sample params before it can render. */
   dynamic: boolean;
   /**
@@ -18,7 +20,9 @@ export interface DiscoveredRoute {
 export interface RepoInspection {
   repoPath: string;
   name: string;
-  framework: "nextjs" | "expo" | "unknown";
+  framework: "nextjs" | "expo" | "vite" | "custom" | "unknown";
+  /** Frame size from commons.json (defaults: expo 390×844, web 1280×800). */
+  device?: { width: number; height: number };
   packageManager: "pnpm" | "yarn" | "npm" | "bun";
   routes: DiscoveredRoute[];
   /** origin URL — the canonical identity a working copy maps to. */

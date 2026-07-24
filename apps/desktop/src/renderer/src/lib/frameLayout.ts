@@ -18,8 +18,8 @@ export interface FrameSpec {
  */
 export function layoutFrames(inspection: RepoInspection): FrameSpec[] {
   const mobile = inspection.framework === "expo";
-  const width = mobile ? 390 : 1280;
-  const height = mobile ? 844 : 800;
+  const width = inspection.device?.width ?? (mobile ? 390 : 1280);
+  const height = inspection.device?.height ?? (mobile ? 844 : 800);
   const gapX = mobile ? 80 : 120;
   const gapY = mobile ? 120 : 160;
   const cols = mobile ? 6 : 3;
@@ -44,7 +44,7 @@ export function layoutFrames(inspection: RepoInspection): FrameSpec[] {
     sectionRoutes.forEach((route, i) => {
       out.push({
         kind: "route" as const,
-        title: route.path === "/" ? "Home" : route.path.split("/").filter(Boolean).join(" / "),
+        title: route.title ?? (route.path === "/" ? "Home" : route.path.split("/").filter(Boolean).join(" / ")),
         routePath: route.path,
         section,
         x: (i % cols) * (width + gapX),
