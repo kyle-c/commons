@@ -72,15 +72,22 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
     }
   };
 
+  const [query, setQuery] = useState("");
+
   // Grouped home: one section per workspace (playground first), so team apps
-  // and personal apps never visually mix.
+  // and personal apps never visually mix. Cards order by activity, not age.
   const sections = (() => {
+    const needle = query.trim().toLowerCase();
+    const visible = (projects ?? []).filter((p) => !needle || p.name.toLowerCase().includes(needle));
     const byWorkspace = new Map<string, { name: string; projects: NonNullable<typeof projects> }>();
-    for (const project of projects ?? []) {
+    for (const project of visible) {
       const key = project.workspaceId ?? "unassigned";
       const name = project.workspaceName ?? "Unassigned";
       if (!byWorkspace.has(key)) byWorkspace.set(key, { name, projects: [] });
       byWorkspace.get(key)!.projects.push(project);
+    }
+    for (const section of byWorkspace.values()) {
+      section.projects.sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
     }
     const order = new Map(workspaces.map((w, i) => [w._id as string, i]));
     return [...byWorkspace.entries()]
@@ -92,6 +99,12 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
     <div className="home">
       <div className="home-header">
         <h1>Projects</h1>
+        <input
+          className="home-search"
+          placeholder="Search projects…  (⌘K anywhere)"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
         <div style={{ position: "relative" }} ref={addMenuRef}>
           <button className="btn primary" onClick={() => setAddMenuOpen(!addMenuOpen)} disabled={adding}>
             {adding ? "Inspecting…" : "+ Add project"}
@@ -135,18 +148,32 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
             onClick={() => setNav({ screen: "project", projectId: project._id, view: "canvas" })}
           >
             <ProjectCover name={project.name} colors={project.brandColors} />
-            <div className="name">{project.name}</div>
             <div className="meta">
               <span>
-                {project.framework === "nextjs" ? "Next.js" : project.framework === "expo" ? "Expo" : "Code"}
+                {project.framework === "nextjs"
+                  ? "Next.js"
+                  : project.framework === "expo"
+                    ? "Expo"
+                    : project.framework === "vite"
+                      ? "Vite"
+                      : "Code"}
               </span>
               {project.visibility === "private" && <span>🔒 private</span>}
-              <span>by {project.creator?.name ?? "unknown"}</span>
-              <span>{timeAgo(project._creationTime)} ago</span>
+              {project.creator && project.creator._id !== me._id && <span>by {project.creator.name}</span>}
+              <span>active {timeAgo(project.lastActivityAt ?? project._creationTime)} ago</span>
             </div>
             <div className="foot">
               <div style={{ display: "flex", gap: 6 }}>
-                <span className="badge">{project.frameCount} frames</span>
+                {project.frameCount === 0 ? (
+                  <span
+                    className="badge setup"
+                    title="Discovery found no screens — add a commons.json (dev command + route list) to light this project up"
+                  >
+                    needs setup
+                  </span>
+                ) : (
+                  <span className="badge">{project.frameCount} frames</span>
+                )}
                 {project.openThreadCount > 0 && (
                   <span className="badge comments">{project.openThreadCount} open threads</span>
                 )}

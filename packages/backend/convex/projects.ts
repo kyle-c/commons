@@ -86,6 +86,17 @@ export const listWithActivity = query({
           .query("threads")
           .withIndex("by_project", (q) => q.eq("projectId", project._id))
           .collect();
+        const sessions = await ctx.db
+          .query("agentSessions")
+          .withIndex("by_project", (q) => q.eq("projectId", project._id))
+          .collect();
+        // "Where is the action": the newest thread/agent session beats the
+        // creation date for ordering and the card's "active … ago" label.
+        const lastActivityAt = Math.max(
+          project._creationTime,
+          ...threads.map((t) => t._creationTime),
+          ...sessions.map((s) => s._creationTime)
+        );
         // Card thumbnail: the canvas as a schematic map — frame rects plus
         // open-thread pin positions, all in canvas coordinates.
         const frameById = new Map(frames.map((f) => [f._id, f]));
@@ -103,6 +114,7 @@ export const listWithActivity = query({
         return {
           ...project,
           workspaceName: project.workspaceId ? workspaceNames.get(project.workspaceId) : undefined,
+          lastActivityAt,
           creator,
           activeUsers: activeUsers.filter(Boolean),
           frameCount: frames.length,
