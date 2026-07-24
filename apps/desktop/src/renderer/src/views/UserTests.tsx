@@ -514,6 +514,8 @@ export default function UserTests({
         />
       )}
 
+      {tests === undefined && <div className="hint">Loading tests…</div>}
+
       {(tests ?? []).map((test) => (
         <div className="user-test-row" key={test._id}>
           <div className="user-test-main">
