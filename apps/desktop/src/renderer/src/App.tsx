@@ -88,6 +88,12 @@ export default function App() {
     }
   }, [session, me]);
 
+  // A stored session validating (me === undefined) is almost certainly about
+  // to succeed — hold a quiet blank beat instead of flashing the sign-in
+  // card at every launch. SignIn renders only with no session or a dead one.
+  if (session && me === undefined) {
+    return <div className="center-screen" />;
+  }
   if (!session || !me) {
     return <SignIn onSignedIn={setSession} />;
   }
