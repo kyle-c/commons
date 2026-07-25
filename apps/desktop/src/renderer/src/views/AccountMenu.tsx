@@ -69,7 +69,7 @@ export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSig
     <div style={{ position: "relative" }} ref={wrapRef}>
       <button
         className="avatar"
-        style={{ background: me.avatarColor, width: 26, height: 26 }}
+        style={{ background: me.avatarColor }}
         title={me.name}
         onClick={() => setOpen(!open)}
       >

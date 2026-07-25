@@ -2029,3 +2029,19 @@ kbd {
 .btn.primary svg {
   color: var(--text-inverse);
 }
+
+/* Titlebar avatars sit among 16px stroke icons — 24px reads heavy there.
+   Everywhere else (pins, member rows, team lists) stays 24px. */
+.titlebar .avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 9px;
+}
+
+/* Home titlebar search: compact sibling of the icon buttons. */
+.titlebar-search {
+  width: 240px;
+  padding: 5px 10px;
+  font-size: var(--text-sm);
+  -webkit-app-region: no-drag;
+}

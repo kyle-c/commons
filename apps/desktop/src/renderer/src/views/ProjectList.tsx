@@ -8,6 +8,11 @@ import { initials, timeAgo, sessionToken } from "../lib/session";
 import { layoutFrames } from "../lib/frameLayout";
 import GitSetupBanner from "./GitSetupBanner";
 import { useMachineId } from "../lib/machine";
+import ThemeToggle from "./ThemeToggle";
+import WorkspacesMenu from "./WorkspacesMenu";
+import Team from "./Team";
+import Inbox from "./Inbox";
+import AccountMenu from "./AccountMenu";
 
 /** Stable color pair derived from the name, for repos with no detectable colors. */
 function fallbackColors(name: string): [string, string] {
@@ -32,7 +37,15 @@ function ProjectCover({ name, colors }: { name: string; colors?: string[] }) {
   );
 }
 
-export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: (nav: Nav) => void }) {
+export default function ProjectList({
+  me,
+  setNav,
+  onSignOut,
+}: {
+  me: Doc<"users">;
+  setNav: (nav: Nav) => void;
+  onSignOut: () => void;
+}) {
   const projects = useQuery(api.projects.listWithActivity, { userId: me._id, sessionToken: sessionToken() });
   const machineId = useMachineId();
   const workspaces = useQuery(api.workspaces.mine, { userId: me._id, sessionToken: sessionToken() }) ?? [];
@@ -96,12 +109,14 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
   })();
 
   return (
-    <div className="home">
-      <div className="home-header">
-        <h1>Projects</h1>
+    <div className="app">
+      {/* The home's actions live in the titlebar, same as a project's do. */}
+      <div className="titlebar">
+        <span className="wordmark">Commons</span>
+        <span className="spacer" />
         <input
-          className="home-search"
-          placeholder="Search projects…  (⌘K anywhere)"
+          className="titlebar-search"
+          placeholder="Search projects…  ⌘K"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -124,6 +139,16 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
             </div>
           )}
         </div>
+        <span className="tb-divider" />
+        <ThemeToggle />
+        <WorkspacesMenu me={me} />
+        <Team me={me} />
+        <Inbox me={me} setNav={setNav} />
+        <AccountMenu me={me} onSignOut={onSignOut} />
+      </div>
+      <div className="home">
+      <div className="home-header">
+        <h1>Projects</h1>
       </div>
 
       <GitSetupBanner me={me} probeRemote={(projects ?? []).find((p) => p.gitRemote)?.gitRemote} />
@@ -212,6 +237,7 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
           </div>
         </div>
       ))}
+      </div>
     </div>
   );
 }

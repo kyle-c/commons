@@ -5,15 +5,10 @@ import type { Id } from "@commons/backend/convex/_generated/dataModel";
 import SignIn from "./views/SignIn";
 import ProjectList from "./views/ProjectList";
 import ProjectView from "./views/ProjectView";
-import Inbox from "./views/Inbox";
-import Team from "./views/Team";
 import Welcome from "./views/Welcome";
 import ShortcutsHelp from "./views/ShortcutsHelp";
 import UpdateChip from "./views/UpdateChip";
-import WorkspacesMenu from "./views/WorkspacesMenu";
 import CommandPalette from "./views/CommandPalette";
-import ThemeToggle from "./views/ThemeToggle";
-import AccountMenu from "./views/AccountMenu";
 import { clearStoredSession, getStoredSession, initials, type StoredSession } from "./lib/session";
 
 export type Nav =
@@ -116,21 +111,12 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      <div className="titlebar">
-        <span className="wordmark">Commons</span>
-        <span className="spacer" />
-        <ThemeToggle />
-        <WorkspacesMenu me={me} />
-        <Team me={me} />
-        <Inbox me={me} setNav={setNav} />
-        <AccountMenu me={me} onSignOut={doSignOut} />
-      </div>
-      <ProjectList me={me} setNav={setNav} />
+    <>
+      <ProjectList me={me} setNav={setNav} onSignOut={doSignOut} />
       <ShortcutsHelp />
       <Welcome name={me.name} />
       <CommandPalette me={me} setNav={setNav} />
       <UpdateChip />
-    </div>
+    </>
   );
 }
