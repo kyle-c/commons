@@ -182,6 +182,13 @@ export async function stop(repoPath: string): Promise<void> {
   servers.delete(repoPath);
 }
 
+/** Ports Commons itself is serving on — external detection excludes these. */
+export function ownedPorts(): number[] {
+  return [...servers.values()]
+    .map((s) => ("port" in s.status ? s.status.port : null))
+    .filter((p): p is number => p !== null);
+}
+
 export function stopAll(): void {
   for (const [repoPath, server] of servers) {
     killTree(server.child);

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Icon, { type IconName } from "./icons";
 
 /**
  * The bare expanded form (input + confirm + dismiss) for callers that supply
@@ -81,6 +82,8 @@ export function PopSection({ label }: { label: string }) {
  */
 export function RevealField({
   actionLabel,
+  icon,
+  connected,
   placeholder,
   submitLabel,
   onSubmit,
@@ -89,6 +92,10 @@ export function RevealField({
   allowEmpty = false,
 }: {
   actionLabel: string;
+  /** [icon] + action — the trigger's leading glyph. */
+  icon?: IconName;
+  /** Shows a quiet success check on the trigger when the value is set. */
+  connected?: boolean;
   placeholder: string;
   submitLabel: string;
   onSubmit: (value: string) => Promise<void> | void;
@@ -126,7 +133,13 @@ export function RevealField({
           setOpenField(true);
         }}
       >
+        {icon && <Icon name={icon} size={14} />}
         {actionLabel}
+        {connected && (
+          <span className="reveal-check" title="Set">
+            <Icon name="check" size={13} />
+          </span>
+        )}
       </button>
     );
   }

@@ -13,6 +13,7 @@ const api: CommonsApi = {
   inspectRepo: (repoPath) => ipcRenderer.invoke("inspect-repo", repoPath),
   startDevServer: (repoPath, name) => ipcRenderer.invoke("start-dev-server", repoPath, name),
   listDevServers: () => ipcRenderer.invoke("list-dev-servers"),
+  detectExternalServers: (repoPaths) => ipcRenderer.invoke("detect-external-servers", repoPaths),
   stopDevServer: (repoPath) => ipcRenderer.invoke("stop-dev-server", repoPath),
   releaseDevServer: (repoPath) => ipcRenderer.invoke("release-dev-server", repoPath),
   getDevServerStatus: (repoPath) => ipcRenderer.invoke("get-dev-server-status", repoPath),

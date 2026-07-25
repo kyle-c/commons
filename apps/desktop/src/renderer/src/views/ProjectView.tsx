@@ -12,7 +12,6 @@ import Inbox from "./Inbox";
 import AgentPanel, { type PanelSession } from "../agents/AgentPanel";
 import NarrationPanel from "./NarrationPanel";
 import ThemeToggle from "./ThemeToggle";
-import ServersMenu from "./ServersMenu";
 import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessions";
 import { getConvexUrl, initials, sessionToken } from "../lib/session";
 import { resolveFrameUrl } from "../lib/frameUrl";
@@ -124,7 +123,9 @@ function SetupPopover({
           )}
           <PopSection label="For everyone else" />
           <RevealField
-            actionLabel={project.previewUrl ? "✓ Live preview connected · change" : "Add the live preview link…"}
+            actionLabel="Preview link"
+            icon="link"
+            connected={!!project.previewUrl}
             placeholder="https://myapp.vercel.app"
             submitLabel="Save"
             allowEmpty
@@ -139,7 +140,9 @@ function SetupPopover({
             }}
           />
           <RevealField
-            actionLabel={project.branchPreviewPattern ? "✓ Draft previews on · change" : "Set up draft previews…"}
+            actionLabel="Draft previews"
+            icon="branch"
+            connected={!!project.branchPreviewPattern}
             placeholder={"https://myapp-git-{branch}-team.vercel.app"}
             submitLabel="Save"
             allowEmpty
@@ -451,6 +454,28 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
   useClickOutside(switcherRef, () => setSwitcherOpen(false), switcherOpen);
+  // Other prototypes this app instance is running — the switcher menu is the
+  // one place to see and stop them (the standalone port viewer merged here).
+  const [runningServers, setRunningServers] = useState<
+    { repoPath: string; name?: string; status: DevServerStatus }[]
+  >([]);
+  const refreshServers = () => void window.commons?.listDevServers().then(setRunningServers);
+  useEffect(() => {
+    if (!window.commons) return;
+    refreshServers();
+    return window.commons.onDevServerStatus(refreshServers);
+  }, []);
+  // Duplicate-port awareness: servers for THIS project started outside
+  // Commons (a terminal `pnpm dev`, a Claude Code session). Detected when
+  // the menu opens; read-only — we never kill other tools' processes.
+  const [externalServers, setExternalServers] = useState<{ port: number; pid: number }[]>([]);
+  useEffect(() => {
+    if (!switcherOpen || !repoPath || !window.commons?.detectExternalServers) return;
+    void window.commons
+      .detectExternalServers([repoPath])
+      .then((found) => setExternalServers(found.map(({ port, pid }) => ({ port, pid }))))
+      .catch(() => setExternalServers([]));
+  }, [switcherOpen, repoPath]);
   const [cloning, setCloning] = useState(false);
 
   // Ambient git: drift is visible on the chip; a fast-forward pull onto a
@@ -911,20 +936,100 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           {switcherOpen && (
             <div className="titlebar-popover switcher-menu">
               {repoPath && (
-                <div className="hint switcher-status">
-                  {devStatus.state === "ready"
-                    ? `dev · :${devStatus.port}`
-                    : devStatus.state === "starting"
-                      ? "dev server starting…"
-                      : devStatus.state === "error"
-                        ? "dev server error"
-                        : "dev server stopped"}
-                  {gitStatus &&
-                    ` · ${gitStatus.branch}${gitStatus.behind > 0 ? ` ↓${gitStatus.behind}` : ""}${
-                      gitStatus.ahead > 0 ? ` ↑${gitStatus.ahead}` : ""
-                    }${gitStatus.dirty ? " •" : ""}`}
+                <div className="switcher-status">
+                  <span className="hint">
+                    {devStatus.state === "ready"
+                      ? `dev · :${devStatus.port}`
+                      : devStatus.state === "starting"
+                        ? "starting…"
+                        : devStatus.state === "error"
+                          ? "dev server error"
+                          : "stopped"}
+                    {gitStatus &&
+                      ` · ${gitStatus.branch}${gitStatus.behind > 0 ? ` ↓${gitStatus.behind}` : ""}${
+                        gitStatus.ahead > 0 ? ` ↑${gitStatus.ahead}` : ""
+                      }${gitStatus.dirty ? " •" : ""}`}
+                  </span>
+                  <span style={{ flex: 1 }} />
+                  {devStatus.state === "ready" && (
+                    <>
+                      <button
+                        className="btn ghost quiet-action"
+                        title="Stop, then start fresh"
+                        onClick={async () => {
+                          await window.commons.stopDevServer(repoPath);
+                          void window.commons.startDevServer(repoPath).then(setDevStatus);
+                        }}
+                      >
+                        Restart
+                      </button>
+                      <button
+                        className="btn ghost quiet-action"
+                        title="Stop this dev server and free its port"
+                        onClick={() => void window.commons.stopDevServer(repoPath)}
+                      >
+                        Stop
+                      </button>
+                    </>
+                  )}
+                  {(devStatus.state === "stopped" || devStatus.state === "error") && (
+                    <button
+                      className="btn ghost quiet-action"
+                      title="Start the dev server"
+                      onClick={() => void window.commons.startDevServer(repoPath).then(setDevStatus)}
+                    >
+                      {devStatus.state === "error" ? "Retry" : "Start"}
+                    </button>
+                  )}
                 </div>
               )}
+              {externalServers.map((ext) => (
+                <div key={ext.pid + ":" + ext.port} className="switcher-status">
+                  <span className="status-dot starting" />
+                  <span
+                    className="hint"
+                    title={`Process ${ext.pid} is serving this project's folder — likely a terminal or coding agent. Stop it there to free the port.`}
+                  >
+                    also on :{ext.port} · outside Commons
+                  </span>
+                </div>
+              ))}
+              {(() => {
+                const others = runningServers.filter(
+                  (srv) => srv.repoPath !== repoPath && srv.status.state !== "stopped"
+                );
+                if (others.length === 0) return null;
+                return (
+                  <>
+                    <PopSection label={`Also running · ${others.length}`} />
+                    {others.map((srv) => (
+                      <div key={srv.repoPath} className="switcher-status">
+                        <span
+                          className={`status-dot ${
+                            srv.status.state === "ready"
+                              ? "ready"
+                              : srv.status.state === "starting"
+                                ? "starting"
+                                : "error"
+                          }`}
+                        />
+                        <span className="hint" title={srv.repoPath}>
+                          {srv.name ?? srv.repoPath.split("/").pop()}
+                          {"port" in srv.status ? ` · :${srv.status.port}` : ""}
+                        </span>
+                        <span style={{ flex: 1 }} />
+                        <button
+                          className="btn ghost quiet-action"
+                          title="Stop this dev server and free its port"
+                          onClick={() => void window.commons.stopDevServer(srv.repoPath)}
+                        >
+                          Stop
+                        </button>
+                      </div>
+                    ))}
+                  </>
+                );
+              })()}
               {getRecents().filter((r) => r.id !== nav.projectId).length > 0 && <PopSection label="Recent" />}
               {getRecents()
                 .filter((r) => r.id !== nav.projectId)
@@ -1054,7 +1159,6 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           onOpenChange={(o) => setSidePanel(o ? "inbox" : null)}
         />
         <span className="tb-divider" />
-        <ServersMenu />
         <ThemeToggle />
         <div className="avatar-stack">
           {activeUsers.map(

@@ -8,6 +8,7 @@ import { inspectRepo } from "./routeDiscovery";
 import * as runner from "./projectRunner";
 import * as agents from "./agents/sessionManager";
 import * as annotator from "./annotator";
+import { detectExternal } from "./externalServers";
 import * as previewHarness from "./previewHarness";
 import * as gitOps from "./gitOps";
 import * as updater from "./updater";
@@ -205,6 +206,10 @@ app.whenReady().then(() => {
   ipcMain.handle("agent-list", () => agents.list());
 
   ipcMain.handle("annotate-project", (_e, request: AnnotationGenerateRequest) => annotator.generate(request));
+
+  ipcMain.handle("detect-external-servers", (_e, repoPaths: string[]) =>
+    detectExternal(repoPaths, runner.ownedPorts())
+  );
 
   runner.onStatusChange((repoPath, status) => {
     mainWindow?.webContents.send("dev-server-status", repoPath, status);

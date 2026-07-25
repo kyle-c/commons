@@ -2564,10 +2564,18 @@ kbd {
   transform-origin: top left;
 }
 .switcher-status {
-  padding: 10px 14px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.switcher-status > .hint {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  border-bottom: 1px solid var(--border-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .switcher-row {
   display: block;
@@ -2635,4 +2643,19 @@ kbd {
 }
 .hint-link:hover {
   text-decoration: underline;
+}
+
+.reveal-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.reveal-trigger svg {
+  color: var(--text-tertiary);
+  flex: none;
+}
+.reveal-check {
+  margin-left: auto;
+  color: var(--success);
+  display: inline-flex;
 }

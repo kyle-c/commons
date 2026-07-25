@@ -214,6 +214,9 @@ export interface CommonsApi {
   startDevServer(repoPath: string, name?: string): Promise<DevServerStatus>;
   /** Port viewer: every dev server this app instance owns. */
   listDevServers(): Promise<{ repoPath: string; name?: string; status: DevServerStatus }[]>;
+  /** Servers OTHER tools started (terminal, Claude Code) whose cwd is inside
+   *  one of these repos — duplicate-port awareness. macOS only; read-only. */
+  detectExternalServers(repoPaths: string[]): Promise<{ repoPath: string; port: number; pid: number }[]>;
   stopDevServer(repoPath: string): Promise<void>;
   /** Leaving a project: stop its dev server after a grace period (reopening cancels). */
   releaseDevServer(repoPath: string): Promise<void>;
