@@ -62,6 +62,41 @@ interface Props {
   annotations?: { _id: string; frameId?: string | null; text: string; inferred: boolean }[];
 }
 
+/**
+ * Multiplayer cursors as an isolated subscriber: cursor writes land every
+ * ~120ms while a teammate moves, and before this split every write
+ * re-rendered every frame on the canvas.
+ */
+function CursorLayer({ me, projectId, scale }: { me: Doc<"users">; projectId: Id<"projects">; scale: number }) {
+  const cursors = useQuery(api.presence.cursorsInProject, { projectId, userId: me._id }) ?? [];
+  // Re-filter periodically so idle teammates' cursors fade even when no new
+  // cursor writes arrive to re-run the query.
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => tick((t) => t + 1), 5_000);
+    return () => clearInterval(interval);
+  }, []);
+  const live = cursors.filter((c) => c.userId !== me._id && Date.now() - c.updatedAt < 10_000);
+  return (
+    <>
+      {live.map((cursor) => (
+        <div
+          key={cursor.userId}
+          className="presence-cursor"
+          style={{ left: cursor.x, top: cursor.y, transform: `scale(${1 / scale})`, transformOrigin: "0 0" }}
+        >
+          <svg width="14" height="16" viewBox="0 0 14 16">
+            <path d="M1 1 L13 7.5 L7.5 9 L4.5 15 Z" fill={cursor.avatarColor} stroke="#101012" strokeWidth="1" />
+          </svg>
+          <span className="tag" style={{ background: cursor.avatarColor }}>
+            {cursor.name.split(" ")[0]}
+          </span>
+        </div>
+      ))}
+    </>
+  );
+}
+
 /** "/pay/[id]" (or "/pay/:id") matches "/pay/123" — same rule as the tester harness. */
 function routeMatches(pattern: string, path: string): boolean {
   const norm = (s: string) => ("/" + s).replace(/\/+/g, "/").replace(/\/$/, "") || "/";
@@ -113,9 +148,9 @@ export default function CanvasView({
   const didFit = useRef(false);
   const [fitRetry, forceRender] = useState(0);
 
-  // Multiplayer cursors: broadcast mine (throttled), render teammates'.
+  // Multiplayer cursors: broadcast mine (throttled); teammates render in
+  // CursorLayer so their churn never touches this tree.
   const moveCursor = useMutation(api.presence.moveCursor);
-  const cursors = useQuery(api.presence.cursorsInProject, { projectId, userId: me._id }) ?? [];
   const lastCursorSend = useRef(0);
   const cursorTrailing = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onCursorMove = (e: React.MouseEvent) => {
@@ -137,14 +172,6 @@ export default function CanvasView({
   useEffect(() => () => {
     if (cursorTrailing.current) clearTimeout(cursorTrailing.current);
   }, []);
-  // Re-filter periodically so idle teammates' cursors fade even when no new
-  // cursor writes arrive to re-run the query.
-  const [, cursorTick] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => cursorTick((t) => t + 1), 5_000);
-    return () => clearInterval(interval);
-  }, []);
-  const liveCursors = cursors.filter((c) => c.userId !== me._id && Date.now() - c.updatedAt < 10_000);
 
   const framePos = (frame: Doc<"frames">) => localPos[frame._id] ?? { x: frame.x, y: frame.y };
 
@@ -701,20 +728,7 @@ export default function CanvasView({
             );
           })}
 
-        {liveCursors.map((cursor) => (
-          <div
-            key={cursor.userId}
-            className="presence-cursor"
-            style={{ left: cursor.x, top: cursor.y, transform: `scale(${1 / vp.scale})`, transformOrigin: "0 0" }}
-          >
-            <svg width="14" height="16" viewBox="0 0 14 16">
-              <path d="M1 1 L13 7.5 L7.5 9 L4.5 15 Z" fill={cursor.avatarColor} stroke="#101012" strokeWidth="1" />
-            </svg>
-            <span className="tag" style={{ background: cursor.avatarColor }}>
-              {cursor.name.split(" ")[0]}
-            </span>
-          </div>
-        ))}
+        <CursorLayer me={me} projectId={projectId} scale={vp.scale} />
       </div>
 
       {draft && (

@@ -78,39 +78,30 @@ export const listWithActivity = query({
         const activeUsers = await Promise.all(
           present.filter((p) => p.lastSeenAt > cutoff).map((p) => ctx.db.get(p.userId))
         );
+        // Bounded reads: the home needs counts and recency, not full
+        // histories. (A dead `thumbnail` payload used to force full thread +
+        // frame collects here on every invalidation — removed.)
         const frames = await ctx.db
           .query("frames")
           .withIndex("by_project", (q) => q.eq("projectId", project._id))
-          .collect();
+          .take(201);
         const threads = await ctx.db
           .query("threads")
           .withIndex("by_project", (q) => q.eq("projectId", project._id))
-          .collect();
-        const sessions = await ctx.db
+          .order("desc")
+          .take(201);
+        const newestSession = await ctx.db
           .query("agentSessions")
           .withIndex("by_project", (q) => q.eq("projectId", project._id))
-          .collect();
+          .order("desc")
+          .first();
         // "Where is the action": the newest thread/agent session beats the
         // creation date for ordering and the card's "active … ago" label.
         const lastActivityAt = Math.max(
           project._creationTime,
-          ...threads.map((t) => t._creationTime),
-          ...sessions.map((s) => s._creationTime)
+          threads[0]?._creationTime ?? 0,
+          newestSession?._creationTime ?? 0
         );
-        // Card thumbnail: the canvas as a schematic map — frame rects plus
-        // open-thread pin positions, all in canvas coordinates.
-        const frameById = new Map(frames.map((f) => [f._id, f]));
-        const openThreads = threads.filter((t) => !t.resolvedAt);
-        const pins = openThreads
-          .map((t) => {
-            if (t.frameId) {
-              const frame = frameById.get(t.frameId);
-              if (!frame) return null;
-              return { x: frame.x + (t.fx ?? 0) * frame.width, y: frame.y + (t.fy ?? 0) * frame.height };
-            }
-            return { x: t.canvasX ?? 0, y: t.canvasY ?? 0 };
-          })
-          .filter((p): p is { x: number; y: number } => p !== null);
         return {
           ...project,
           workspaceName: project.workspaceId ? workspaceNames.get(project.workspaceId) : undefined,
@@ -118,11 +109,7 @@ export const listWithActivity = query({
           creator,
           activeUsers: activeUsers.filter(Boolean),
           frameCount: frames.length,
-          openThreadCount: openThreads.length,
-          thumbnail: {
-            frames: frames.map(({ x, y, width, height }) => ({ x, y, width, height })),
-            pins,
-          },
+          openThreadCount: threads.filter((t) => !t.resolvedAt).length,
         };
       })
     );

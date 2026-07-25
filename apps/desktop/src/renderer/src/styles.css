@@ -2420,3 +2420,9 @@ kbd {
 .ut-empty .hint {
   line-height: 1.5;
 }
+
+/* Offscreen frames skip paint entirely (explicit sizes make this safe);
+   iframes stay alive — only rendering is skipped, not loading. */
+.frame {
+  content-visibility: auto;
+}
