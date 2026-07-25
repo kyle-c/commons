@@ -38,18 +38,35 @@ if (!version) throw new Error("latest-mac.yml has no version field");
 const names = [...new Set([...channelYml.matchAll(/^\s+- url:\s*(.+)$|^path:\s*(.+)$/gm)].map((m) => (m[1] ?? m[2]).trim()))];
 console.log(`Publishing ${version} to ${prod ? "PROD" : "dev"} — files: ${names.join(", ")}`);
 
+// node's fetch (undici) intermittently dies with EPIPE on these ~200MB
+// bodies; curl streams from disk and has never flinched. Try fetch once,
+// fall back to curl.
+async function upload(uploadUrl, filePath) {
+  try {
+    const res = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: readFileSync(filePath),
+    });
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    return (await res.json()).storageId;
+  } catch (error) {
+    console.log(`  fetch upload failed (${error.cause?.code ?? error.message}) — retrying with curl`);
+    const out = execFileSync(
+      "curl",
+      ["-s", "-X", "POST", "-H", "Content-Type: application/octet-stream", "--data-binary", `@${filePath}`, uploadUrl],
+      { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 }
+    );
+    return JSON.parse(out).storageId;
+  }
+}
+
 const files = [];
 for (const name of names) {
   const filePath = path.join(releaseDir, name);
   const size = statSync(filePath).size;
   const uploadUrl = convexRun("updates:createUploadUrl");
-  const res = await fetch(uploadUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/octet-stream" },
-    body: readFileSync(filePath),
-  });
-  if (!res.ok) throw new Error(`upload of ${name} failed: ${res.status} ${await res.text()}`);
-  const { storageId } = await res.json();
+  const storageId = await upload(uploadUrl, filePath);
   files.push({ name, storageId, size });
   console.log(`  uploaded ${name} (${(size / 1e6).toFixed(1)} MB)`);
 }
