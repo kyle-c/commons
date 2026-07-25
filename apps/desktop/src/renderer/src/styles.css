@@ -2351,3 +2351,72 @@ kbd {
 .cover-rename:focus {
   border-color: rgba(255, 255, 255, 0.8);
 }
+
+/* Prototype: route drawer + toolbar */
+.proto-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.route-drawer {
+  width: 224px;
+  flex: none;
+  overflow-y: auto;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-panel);
+  padding: 6px 0 12px;
+  animation: panel-in-left var(--dur-med) var(--ease-out);
+}
+.route-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 14px;
+  border-left: 2px solid transparent;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.route-row:hover {
+  background: var(--bg-hover);
+}
+.route-row.on {
+  border-left-color: var(--accent);
+  background: var(--bg-active);
+}
+.route-row-title {
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.route-row-path {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
+.proto-current {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* User tests: real empty states instead of afterthought paragraphs. */
+.ut-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 18px 4px 12px;
+}
+.ut-empty strong {
+  font-size: var(--text-md);
+}
+.ut-empty .hint {
+  line-height: 1.5;
+}

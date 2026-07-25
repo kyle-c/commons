@@ -4,14 +4,15 @@ import type { DevServerStatus } from "@commons/shared";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { registerShortcut } from "../lib/shortcuts";
 import UserTests from "./UserTests";
+import Icon, { type IconName } from "../components/icons";
 
 // height > 0 marks a framed device — "Open in browser" wraps those in the
 // device-sized preview harness so the browser keeps the form factor.
 const DEVICES = [
-  { label: "iPhone · 390", width: 390, height: 844 },
-  { label: "iPad · 834", width: 834, height: 1194 },
-  { label: "Desktop · 1280", width: 1280, height: 0 },
-  { label: "Fill", width: 0, height: 0 },
+  { label: "iPhone · 390", icon: "smartphone" as IconName, width: 390, height: 844 },
+  { label: "iPad · 834", icon: "tablet" as IconName, width: 834, height: 1194 },
+  { label: "Desktop · 1280", icon: "monitor" as IconName, width: 1280, height: 0 },
+  { label: "Fill the window", icon: "maximize" as IconName, width: 0, height: 0 },
 ] as const;
 
 export default function PrototypeView({
@@ -24,6 +25,7 @@ export default function PrototypeView({
   me,
   onShowHeatmap,
   onSendToAgent,
+  onOpenSetup,
 }: {
   frames: Doc<"frames">[];
   devStatus: DevServerStatus;
@@ -35,11 +37,15 @@ export default function PrototypeView({
   onShowHeatmap?: (testId: Id<"tests">) => void;
   /** #5: launch an agent draft from a failing test task. */
   onSendToAgent?: (title: string, prompt: string, routePath?: string) => void;
+  onOpenSetup?: () => void;
 }) {
   const routes = frames.filter((f) => f.kind === "route");
   const [routePath, setRoutePath] = useState(routes[0]?.routePath ?? "/");
   const [chosenDevice, setDevice] = useState<(typeof DEVICES)[number] | null>(null);
   const [testsOpen, setTestsOpen] = useState(false);
+  // Route drawer: with real projects at 30+ screens, a native select buried
+  // them — a grouped, always-visible list reads like the canvas's sections.
+  const [drawerOpen, setDrawerOpen] = useState(true);
   useEffect(
     () => registerShortcut("u", () => setTestsOpen((open) => !open), { description: "User tests" }),
     []
@@ -58,17 +64,24 @@ export default function PrototypeView({
   return (
     <div className="proto">
       <div className="proto-toolbar">
-        <select value={routePath} onChange={(e) => setRoutePath(e.target.value)}>
-          {routes.map((frame) => (
-            <option key={frame._id} value={frame.routePath ?? "/"}>
-              {frame.title} — {frame.routePath}
-            </option>
-          ))}
-        </select>
+        <button
+          className={`btn ghost ${drawerOpen ? "active" : ""}`}
+          title="Screens"
+          onClick={() => setDrawerOpen((o) => !o)}
+        >
+          <Icon name="list" />
+          <span className="proto-current">{routes.find((f) => (f.routePath ?? "/") === routePath)?.title ?? routePath}</span>
+        </button>
         <div className="seg">
           {DEVICES.map((d) => (
-            <button key={d.label} className={device.label === d.label ? "on" : ""} onClick={() => setDevice(d)}>
-              {d.label}
+            <button
+              key={d.label}
+              className={device.label === d.label ? "on" : ""}
+              aria-label={d.label}
+              title={d.label}
+              onClick={() => setDevice(d)}
+            >
+              <Icon name={d.icon} />
             </button>
           ))}
         </div>
@@ -118,8 +131,37 @@ export default function PrototypeView({
           onShowHeatmap={onShowHeatmap}
           onSendToAgent={onSendToAgent}
           onClose={() => setTestsOpen(false)}
+          onOpenSetup={onOpenSetup}
         />
       )}
+      <div className="proto-body">
+        {drawerOpen && (
+          <div className="route-drawer">
+            {(() => {
+              const groups = new Map<string, Doc<"frames">[]>();
+              for (const frame of routes) {
+                const key = frame.section ?? "";
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key)!.push(frame);
+              }
+              return [...groups.entries()].map(([section, sectionFrames]) => (
+                <div key={section || "ungrouped"}>
+                  {section && <div className="pop-section">{section}</div>}
+                  {sectionFrames.map((frame) => (
+                    <button
+                      key={frame._id}
+                      className={`route-row ${(frame.routePath ?? "/") === routePath ? "on" : ""}`}
+                      onClick={() => setRoutePath(frame.routePath ?? "/")}
+                    >
+                      <span className="route-row-title">{frame.title}</span>
+                      <span className="route-row-path">{frame.routePath}</span>
+                    </button>
+                  ))}
+                </div>
+              ));
+            })()}
+          </div>
+        )}
       <div className="proto-stage">
         {url ? (
           <div className="proto-device" style={device.width ? { width: device.width } : { flex: 1 }}>
@@ -144,6 +186,7 @@ export default function PrototypeView({
                     : "Waiting for a preview — ask a teammate with the repo to publish one"}
           </div>
         )}
+      </div>
       </div>
     </div>
   );

@@ -64,6 +64,20 @@ const PATHS: Record<string, React.ReactNode> = {
     </>
   ),
   play: <path d="M7 4.5 19 12 7 19.5Z" />,
+  smartphone: (
+    <>
+      <rect x="7" y="2" width="10" height="20" rx="2" />
+      <path d="M12 18h.01" />
+    </>
+  ),
+  tablet: (
+    <>
+      <rect x="4" y="2" width="16" height="20" rx="2" />
+      <path d="M12 18h.01" />
+    </>
+  ),
+  maximize: <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />,
+  list: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
 };
 
 export type IconName = keyof typeof PATHS;

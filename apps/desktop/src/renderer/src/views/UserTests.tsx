@@ -457,6 +457,7 @@ export default function UserTests({
   onShowHeatmap,
   onSendToAgent,
   onClose,
+  onOpenSetup,
 }: {
   project: Doc<"projects">;
   me: Doc<"users">;
@@ -464,6 +465,8 @@ export default function UserTests({
   onShowHeatmap?: (testId: Id<"tests">) => void;
   onSendToAgent?: (title: string, prompt: string, routePath?: string) => void;
   onClose: () => void;
+  /** Opens the project-setup popover (where the preview link lives). */
+  onOpenSetup?: () => void;
 }) {
   const tests = useQuery(api.userTests.forProject, { projectId: project._id, userId: me._id, sessionToken: sessionToken() });
   const setStatus = useMutation(api.userTests.setStatus);
@@ -484,9 +487,7 @@ export default function UserTests({
           onClick={() => setCreating(true)}
           disabled={!project.previewUrl}
           title={
-            project.previewUrl
-              ? undefined
-              : "Needs a deployed preview first — set it via “Preview URL” in the titlebar"
+            project.previewUrl ? undefined : "Needs a live preview link first — add it in Project setup"
           }
         >
           + New test
@@ -497,10 +498,32 @@ export default function UserTests({
       </div>
 
       {!project.previewUrl && (
-        <div className="hint">
-          Tests run on the <strong>deployed</strong> app so testers don't need Commons or the repo — this project
-          doesn't have one linked yet. Deploy it (e.g. Vercel), then paste the URL via{" "}
-          <strong>“Preview URL”</strong> in the titlebar and this button unlocks.
+        <div className="ut-empty">
+          <strong>Tests run on the deployed app</strong>
+          <span className="hint">
+            Testers just open a link — no Commons, no repo. First, give this project its live preview link so
+            there's something to send them to.
+          </span>
+          {onOpenSetup && (
+            <button
+              className="btn"
+              onClick={() => {
+                onClose();
+                onOpenSetup();
+              }}
+            >
+              Add a live preview link
+            </button>
+          )}
+        </div>
+      )}
+      {project.previewUrl && (tests ?? []).length === 0 && !creating && (
+        <div className="ut-empty">
+          <strong>Test with real people</strong>
+          <span className="hint">
+            Write a few tasks, send one link. Success rates, times, paths, and click heatmaps come back here
+            while sessions run.
+          </span>
         </div>
       )}
 
