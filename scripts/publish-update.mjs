@@ -63,11 +63,49 @@ async function upload(filePath) {
   throw lastError;
 }
 
+/**
+ * Last resort when this machine's uplink corrupts sustained uploads: the
+ * GitHub release (uploaded earlier in the pipeline, by gh's own transport)
+ * already holds the bytes, so the deployment pulls them itself via
+ * updateIngest:fromUrl. Assumes the release step ran and tag v<version>
+ * carries the artifact.
+ */
+function ingestViaGitHub(name) {
+  const repo = "kyle-c/commons";
+  const tag = `v${version}`;
+  console.log(`  falling back: prod ingests ${name} from the ${tag} GitHub release`);
+  const assets = JSON.parse(
+    execFileSync("gh", ["api", `repos/${repo}/releases/tags/${tag}`, "--jq", "[.assets[] | {id, name}]"], {
+      encoding: "utf8",
+    })
+  );
+  const asset = assets.find((a) => a.name === name);
+  if (!asset) throw new Error(`no asset ${name} on GitHub release ${tag} — run gh release create first`);
+  const token = execFileSync("gh", ["auth", "token"], { encoding: "utf8" }).trim();
+  const headers = execFileSync(
+    "curl",
+    ["-sI", "-H", `Authorization: token ${token}`, "-H", "Accept: application/octet-stream", `https://api.github.com/repos/${repo}/releases/assets/${asset.id}`],
+    { encoding: "utf8" }
+  );
+  const signedUrl = headers
+    .split(/\r?\n/)
+    .find((l) => /^location:/i.test(l))
+    ?.replace(/^location:\s*/i, "")
+    .trim();
+  if (!signedUrl) throw new Error(`no signed URL for asset ${name}`);
+  return convexRun("updateIngest:fromUrl", { url: signedUrl }).storageId;
+}
+
 const files = [];
 for (const name of names) {
   const filePath = path.join(releaseDir, name);
   const size = statSync(filePath).size;
-  const storageId = await upload(filePath);
+  let storageId;
+  try {
+    storageId = await upload(filePath);
+  } catch {
+    storageId = ingestViaGitHub(name);
+  }
   files.push({ name, storageId, size });
   console.log(`  uploaded ${name} (${(size / 1e6).toFixed(1)} MB)`);
 }
