@@ -2098,10 +2098,30 @@ kbd {
 }
 .reveal-trigger {
   display: flex;
-  width: calc(100% - 20px);
-  margin: 2px 10px 8px;
+  width: calc(100% - 28px);
+  margin: 2px 14px 10px;
   justify-content: flex-start;
   color: var(--text-secondary);
+  /* Dashed slot = "something can go here", same language as the new-project
+     tile and the avatar-add circle — plain text didn't read as actionable. */
+  border: 1px dashed var(--border-strong);
+}
+/* Outrank .btn.ghost's transparent border. */
+.btn.ghost.reveal-trigger {
+  border: 1px dashed var(--border-strong);
+}
+.btn.ghost.reveal-trigger:hover {
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.reveal-trigger:hover {
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.seg button svg {
+  display: block;
 }
 .reveal-form {
   padding: 4px 14px 10px;

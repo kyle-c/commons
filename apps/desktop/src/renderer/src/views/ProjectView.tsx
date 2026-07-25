@@ -854,14 +854,21 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           <strong>{project.name}</strong>
         </span>
         <div className="seg">
-          <button className={nav.view === "canvas" ? "on" : ""} onClick={() => setNav({ ...nav, view: "canvas" })}>
-            Canvas
+          <button
+            className={nav.view === "canvas" ? "on" : ""}
+            aria-label="Canvas"
+            title="Canvas: every screen, comments, notes"
+            onClick={() => setNav({ ...nav, view: "canvas" })}
+          >
+            <Icon name="frames" />
           </button>
           <button
             className={nav.view === "prototype" ? "on" : ""}
+            aria-label="Prototype"
+            title="Prototype: the running app, full size"
             onClick={() => setNav({ ...nav, view: "prototype" })}
           >
-            Prototype
+            <Icon name="play" />
           </button>
         </div>
         <span className="spacer" />
