@@ -27,7 +27,6 @@ export default function PrototypeView({
   me,
   onShowHeatmap,
   onSendToAgent,
-  onOpenSetup,
   device,
 }: {
   frames: Doc<"frames">[];
@@ -40,7 +39,6 @@ export default function PrototypeView({
   onShowHeatmap?: (testId: Id<"tests">) => void;
   /** #5: launch an agent draft from a failing test task. */
   onSendToAgent?: (title: string, prompt: string, routePath?: string) => void;
-  onOpenSetup?: () => void;
   /** Chosen in the titlebar's split view switcher. */
   device: ProtoDevice;
 }) {
@@ -118,7 +116,6 @@ export default function PrototypeView({
           onShowHeatmap={onShowHeatmap}
           onSendToAgent={onSendToAgent}
           onClose={() => setTestsOpen(false)}
-          onOpenSetup={onOpenSetup}
         />
       )}
       <div className="proto-body">

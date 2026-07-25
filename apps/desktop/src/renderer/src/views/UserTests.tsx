@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import { getConvexUrl, timeAgo, sessionToken } from "../lib/session";
+import { InlineField } from "../components/popover";
 
 /**
  * Maze-style usability testing, built on what Commons already has: tests run
@@ -457,7 +458,6 @@ export default function UserTests({
   onShowHeatmap,
   onSendToAgent,
   onClose,
-  onOpenSetup,
 }: {
   project: Doc<"projects">;
   me: Doc<"users">;
@@ -465,11 +465,10 @@ export default function UserTests({
   onShowHeatmap?: (testId: Id<"tests">) => void;
   onSendToAgent?: (title: string, prompt: string, routePath?: string) => void;
   onClose: () => void;
-  /** Opens the project-setup popover (where the preview link lives). */
-  onOpenSetup?: () => void;
 }) {
   const tests = useQuery(api.userTests.forProject, { projectId: project._id, userId: me._id, sessionToken: sessionToken() });
   const setStatus = useMutation(api.userTests.setStatus);
+  const setPreviewUrl = useMutation(api.projects.setPreviewUrl);
   const [creating, setCreating] = useState(false);
   const [resultsFor, setResultsFor] = useState<Id<"tests"> | null>(null);
   const site = siteUrl();
@@ -499,30 +498,24 @@ export default function UserTests({
 
       {!project.previewUrl && (
         <div className="ut-empty">
-          <strong>Tests run on the deployed app</strong>
-          <span className="hint">
-            Testers just open a link — no Commons, no repo. First, give this project its live preview link so
-            there's something to send them to.
-          </span>
-          {onOpenSetup && (
-            <button
-              className="btn"
-              onClick={() => {
-                onClose();
-                onOpenSetup();
-              }}
-            >
-              Add a live preview link
-            </button>
-          )}
+          <strong>Tests run on your deployed app</strong>
+          <span className="hint">Paste where it's deployed and tests unlock. Testers open one link, nothing else.</span>
+          <InlineField
+            placeholder="https://myapp.vercel.app"
+            submitLabel="Save"
+            onClose={() => {}}
+            onSubmit={async (url) => {
+              if (!/^https?:\/\/.+/.test(url)) throw new Error("Needs a full https:// link.");
+              await setPreviewUrl({ projectId: project._id, previewUrl: url.replace(/\/+$/, "") });
+            }}
+          />
         </div>
       )}
       {project.previewUrl && (tests ?? []).length === 0 && !creating && (
         <div className="ut-empty">
           <strong>Test with real people</strong>
           <span className="hint">
-            Write a few tasks, send one link. Success rates, times, paths, and click heatmaps come back here
-            while sessions run.
+            Write tasks, send one link. Success rates, times, paths, and click heatmaps come back here.
           </span>
         </div>
       )}
@@ -569,13 +562,6 @@ export default function UserTests({
           </button>
         </div>
       ))}
-
-      {tests && tests.length === 0 && !creating && (
-        <div className="hint">
-          Send a task-based test to anyone with a link — success rates, times, paths and click heatmaps come back
-          here. Testers don't need Commons.
-        </div>
-      )}
 
       {openResults && (
         <TestResults

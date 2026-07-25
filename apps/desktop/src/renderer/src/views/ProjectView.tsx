@@ -1117,7 +1117,6 @@ export default function ProjectView({ me, nav, setNav }: Props) {
               ? (title, prompt, routePath) => void startAgentSession({ title, prompt, routePath })
               : undefined
           }
-          onOpenSetup={() => setPreviewOpen(true)}
           device={protoDevice}
         />
       )}

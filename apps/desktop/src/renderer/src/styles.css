@@ -2476,3 +2476,12 @@ kbd {
 .device-menu button.on {
   color: var(--accent);
 }
+
+/* The locked-state preview field is permanent — no dismiss, no side padding. */
+.ut-empty .reveal-form {
+  padding: 2px 0 0;
+  align-self: stretch;
+}
+.ut-empty .reveal-form-row .btn.ghost {
+  display: none;
+}
