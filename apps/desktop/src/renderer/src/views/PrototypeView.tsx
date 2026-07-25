@@ -8,12 +8,14 @@ import Icon, { type IconName } from "../components/icons";
 
 // height > 0 marks a framed device — "Open in browser" wraps those in the
 // device-sized preview harness so the browser keeps the form factor.
-const DEVICES = [
+// Exported: the titlebar's view switcher owns device selection now.
+export const DEVICES = [
   { label: "iPhone · 390", icon: "smartphone" as IconName, width: 390, height: 844 },
   { label: "iPad · 834", icon: "tablet" as IconName, width: 834, height: 1194 },
   { label: "Desktop · 1280", icon: "monitor" as IconName, width: 1280, height: 0 },
   { label: "Fill the window", icon: "maximize" as IconName, width: 0, height: 0 },
 ] as const;
+export type ProtoDevice = (typeof DEVICES)[number];
 
 export default function PrototypeView({
   frames,
@@ -26,6 +28,7 @@ export default function PrototypeView({
   onShowHeatmap,
   onSendToAgent,
   onOpenSetup,
+  device,
 }: {
   frames: Doc<"frames">[];
   devStatus: DevServerStatus;
@@ -38,10 +41,11 @@ export default function PrototypeView({
   /** #5: launch an agent draft from a failing test task. */
   onSendToAgent?: (title: string, prompt: string, routePath?: string) => void;
   onOpenSetup?: () => void;
+  /** Chosen in the titlebar's split view switcher. */
+  device: ProtoDevice;
 }) {
   const routes = frames.filter((f) => f.kind === "route");
   const [routePath, setRoutePath] = useState(routes[0]?.routePath ?? "/");
-  const [chosenDevice, setDevice] = useState<(typeof DEVICES)[number] | null>(null);
   const [testsOpen, setTestsOpen] = useState(false);
   // Route drawer: with real projects at 30+ screens, a native select buried
   // them — a grouped, always-visible list reads like the canvas's sections.
@@ -50,10 +54,6 @@ export default function PrototypeView({
     () => registerShortcut("u", () => setTestsOpen((open) => !open), { description: "User tests" }),
     []
   );
-  // Mobile projects (phone-sized frames) default to the iPhone preset.
-  const device =
-    chosenDevice ?? (routes.length > 0 && routes.every((f) => f.width <= 500) ? DEVICES[0] : DEVICES[3]);
-
   const source = resolveFrameUrl(routePath, devStatus, previewUrl);
   const url = source?.url ?? null;
   // Route/device switches keep the stage calm: shimmer under the incoming
@@ -72,19 +72,6 @@ export default function PrototypeView({
           <Icon name="list" />
           <span className="proto-current">{routes.find((f) => (f.routePath ?? "/") === routePath)?.title ?? routePath}</span>
         </button>
-        <div className="seg">
-          {DEVICES.map((d) => (
-            <button
-              key={d.label}
-              className={device.label === d.label ? "on" : ""}
-              aria-label={d.label}
-              title={d.label}
-              onClick={() => setDevice(d)}
-            >
-              <Icon name={d.icon} />
-            </button>
-          ))}
-        </div>
         <span className="spacer" style={{ flex: 1 }} />
         <button
           className={`btn ghost ${testsOpen ? "active" : ""}`}

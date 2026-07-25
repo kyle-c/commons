@@ -2448,3 +2448,31 @@ kbd {
   font-size: var(--text-sm);
   font-weight: 600;
 }
+
+/* Split view switcher: the Prototype segment carries the device menu. */
+.seg-wrap {
+  position: relative;
+}
+.device-menu {
+  left: 0;
+  right: auto;
+  width: 190px;
+  transform-origin: top left;
+}
+.device-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.device-menu button:hover {
+  background: var(--bg-hover);
+}
+.device-menu button.on {
+  color: var(--accent);
+}

@@ -7,7 +7,7 @@ import { buildDeepLink } from "@commons/shared";
 import type { Nav } from "../App";
 import type { ThreadWithMessages } from "../comments/types";
 import CanvasView from "../canvas/CanvasView";
-import PrototypeView from "./PrototypeView";
+import PrototypeView, { DEVICES, type ProtoDevice } from "./PrototypeView";
 import Inbox from "./Inbox";
 import AgentPanel, { type PanelSession } from "../agents/AgentPanel";
 import NarrationPanel from "./NarrationPanel";
@@ -437,6 +437,13 @@ export default function ProjectView({ me, nav, setNav }: Props) {
 
   const [devStatus, setDevStatus] = useState<DevServerStatus>({ state: "stopped" });
   const [previewOpen, setPreviewOpen] = useState(false);
+  // Prototype device, owned here because the titlebar's split view switcher
+  // selects it: the Prototype segment shows the current device's icon and,
+  // when already active, opens a small menu of the presets.
+  const [chosenDevice, setChosenDevice] = useState<ProtoDevice | null>(null);
+  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
+  const deviceMenuRef = useRef<HTMLDivElement>(null);
+  useClickOutside(deviceMenuRef, () => setDeviceMenuOpen(false), deviceMenuOpen);
   const [cloning, setCloning] = useState(false);
 
   // Ambient git: drift is visible on the chip; a fast-forward pull onto a
@@ -859,6 +866,12 @@ export default function ProjectView({ me, nav, setNav }: Props) {
 
   // On private projects only members can be @mentioned (the backend enforces
   // this too — the composer just shouldn't offer names that would be dropped).
+  const routeFrames = frames.filter((f) => f.kind === "route");
+  // Mobile projects (phone-sized frames) default to the iPhone preset.
+  const protoDevice =
+    chosenDevice ??
+    (routeFrames.length > 0 && routeFrames.every((f) => f.width <= 500) ? DEVICES[0] : DEVICES[3]);
+
   const mentionUsers =
     project.visibility === "private"
       ? users.filter((u) => u._id === project.createdBy || (project.memberIds ?? []).includes(u._id))
@@ -874,23 +887,52 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           <span className="crumb-prefix">Projects / </span>
           <strong>{project.name}</strong>
         </span>
-        <div className="seg">
-          <button
-            className={nav.view === "canvas" ? "on" : ""}
-            aria-label="Canvas"
-            title="Canvas: every screen, comments, notes"
-            onClick={() => setNav({ ...nav, view: "canvas" })}
-          >
-            <Icon name="frames" />
-          </button>
-          <button
-            className={nav.view === "prototype" ? "on" : ""}
-            aria-label="Prototype"
-            title="Prototype: the running app, full size"
-            onClick={() => setNav({ ...nav, view: "prototype" })}
-          >
-            <Icon name="play" />
-          </button>
+        <div className="seg-wrap" ref={deviceMenuRef}>
+          <div className="seg">
+            <button
+              className={nav.view === "canvas" ? "on" : ""}
+              aria-label="Canvas"
+              title="Canvas: every screen, comments, notes"
+              onClick={() => {
+                setDeviceMenuOpen(false);
+                setNav({ ...nav, view: "canvas" });
+              }}
+            >
+              <Icon name="frames" />
+            </button>
+            <button
+              className={nav.view === "prototype" ? "on" : ""}
+              aria-label="Prototype"
+              title={
+                nav.view === "prototype"
+                  ? `Prototype · ${protoDevice.label}. Click to pick a device`
+                  : "Prototype: the running app, full size"
+              }
+              onClick={() => {
+                if (nav.view === "prototype") setDeviceMenuOpen((o) => !o);
+                else setNav({ ...nav, view: "prototype" });
+              }}
+            >
+              <Icon name={nav.view === "prototype" ? protoDevice.icon : "play"} />
+            </button>
+          </div>
+          {deviceMenuOpen && (
+            <div className="titlebar-popover popover-menu device-menu">
+              {DEVICES.map((d) => (
+                <button
+                  key={d.label}
+                  className={protoDevice.label === d.label ? "on" : ""}
+                  onClick={() => {
+                    setChosenDevice(d);
+                    setDeviceMenuOpen(false);
+                  }}
+                >
+                  <Icon name={d.icon} />
+                  <span>{d.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <span className="spacer" />
         {repoPath && (
@@ -1076,6 +1118,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
               : undefined
           }
           onOpenSetup={() => setPreviewOpen(true)}
+          device={protoDevice}
         />
       )}
 
