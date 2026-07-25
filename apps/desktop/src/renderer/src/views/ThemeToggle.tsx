@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { getThemePreference, setThemePreference, type ThemePreference } from "../lib/theme";
 import { registerShortcut } from "../lib/shortcuts";
+import Icon, { type IconName } from "../components/icons";
 
 const NEXT: Record<ThemePreference, ThemePreference> = { dark: "light", light: "system", system: "dark" };
-const ICON: Record<ThemePreference, string> = { dark: "☾", light: "☀", system: "◐" };
+const ICON: Record<ThemePreference, IconName> = { dark: "moon", light: "sun", system: "monitor" };
 
 /** Titlebar theme control: click cycles dark → light → system; ⌘L toggles. */
 export default function ThemeToggle() {
@@ -24,11 +25,12 @@ export default function ThemeToggle() {
 
   return (
     <button
-      className="btn ghost"
+      className="btn ghost icon-btn"
+      aria-label="Theme"
       title={`Theme: ${pref} — click cycles dark → light → system (⌘L toggles)`}
       onClick={() => set(NEXT[pref])}
     >
-      {ICON[pref]}
+      <Icon name={ICON[pref]} />
     </button>
   );
 }

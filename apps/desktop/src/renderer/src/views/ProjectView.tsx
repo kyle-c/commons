@@ -19,6 +19,7 @@ import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
 import { useClickOutside } from "../lib/useClickOutside";
 import { useMachineId } from "../lib/machine";
+import Icon from "../components/icons";
 
 /** "Fix savings header" → "fix-savings-header" (draft branch slugs). */
 function slugify(text: string): string {
@@ -50,13 +51,25 @@ function buildThreadPrompt(thread: ThreadWithMessages, frame: Doc<"frames"> | un
   ].join("\n");
 }
 
-/** Titlebar popover for the project's deployed preview base URL. */
-function PreviewSettings({
+/**
+ * Project setup, one quiet popover: your working copy on this machine and
+ * the deployed preview URLs. An attention dot on the icon replaces the old
+ * always-visible "Get this project / Locate / Preview URL ⚠" button row.
+ */
+function SetupPopover({
   project,
+  repoPath,
+  cloning,
+  onClone,
+  onLocate,
   open,
   onOpenChange,
 }: {
   project: Doc<"projects">;
+  repoPath?: string;
+  cloning: boolean;
+  onClone: () => void;
+  onLocate: () => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -70,22 +83,45 @@ function PreviewSettings({
   const patternValid = trimmedPattern === "" || (/^https?:\/\/.+/.test(trimmedPattern) && trimmedPattern.includes("{branch}"));
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
+  const needsAttention = !project.previewUrl || (!!window.commons && !repoPath);
 
   return (
     <div style={{ position: "relative" }} ref={wrapRef}>
       <button
-        className={`btn ghost ${open ? "active" : ""}`}
-        title="Where teammates without the repo see this project — frames fall back to this deployed URL when no local dev server is running"
+        className={`btn ghost icon-btn ${open ? "active" : ""}`}
+        aria-label="Project setup"
+        title="Project setup: your working copy + the deployed preview"
         onClick={() => {
           setValue(project.previewUrl ?? "");
           setPattern(project.branchPreviewPattern ?? "");
           setOpen(!open);
         }}
       >
-        Preview URL{project.previewUrl ? "" : " ⚠"}
+        <Icon name="sliders" />
+        {needsAttention && <span className="attention-dot" />}
       </button>
       {open && (
         <div className="titlebar-popover popover-form">
+          {window.commons && !repoPath && (
+            <div className="form-field">
+              <label>This machine</label>
+              <span className="hint">
+                {project.gitRemote
+                  ? "No working copy here yet. Get one to run the app live and host agents."
+                  : "Point Commons at where this project lives on this Mac."}
+              </span>
+              <div style={{ display: "flex", gap: 6 }}>
+                {project.gitRemote && (
+                  <button className="btn" disabled={cloning} onClick={onClone} title={project.gitRemote}>
+                    <Icon name="download" /> {cloning ? "Cloning…" : "Get this project"}
+                  </button>
+                )}
+                <button className="btn ghost" onClick={onLocate}>
+                  {project.gitRemote ? "Locate existing clone…" : "Locate repo on this Mac"}
+                </button>
+              </div>
+            </div>
+          )}
           <div className="form-field">
             <label>Preview URL</label>
             <span className="hint">
@@ -96,7 +132,6 @@ function PreviewSettings({
               value={value}
               onChange={(e) => setValue(e.target.value)}
               placeholder="https://myapp.vercel.app"
-              autoFocus
             />
             {!valid && <span className="form-error">Needs to be a full https:// URL</span>}
           </div>
@@ -179,20 +214,44 @@ function CompareDraft({
   );
 }
 
-/** Creator-only popover: team/private visibility + explicit members on private projects. */
-function SharingSettings({ project, me, users }: { project: Doc<"projects">; me: Doc<"users">; users: Doc<"users">[] }) {
+/**
+ * The titlebar's one loud control. Everyone gets the links (app deep link,
+ * web link when minted); the creator additionally controls visibility,
+ * members, web-link minting, and workspace.
+ */
+function SharePopover({
+  project,
+  me,
+  users,
+  nav,
+}: {
+  project: Doc<"projects">;
+  me: Doc<"users">;
+  users: Doc<"users">[];
+  nav: Extract<Nav, { screen: "project" }>;
+}) {
   const [open, setOpen] = useState(false);
   const setVisibility = useMutation(api.projects.setVisibility);
   const setMembers = useMutation(api.projects.setMembers);
   const moveProject = useMutation(api.workspaces.moveProject);
   const setShareToken = useMutation(api.projects.setShareToken);
-  const [linkCopied, setLinkCopied] = useState(false);
-  const myWorkspaces = useQuery(api.workspaces.mine, open ? { userId: me._id, sessionToken: sessionToken() } : "skip");
+  const [copied, setCopied] = useState<"app" | "web" | null>(null);
+  const isCreator = project.createdBy === me._id;
+  const myWorkspaces = useQuery(
+    api.workspaces.mine,
+    open && isCreator ? { userId: me._id, sessionToken: sessionToken() } : "skip"
+  );
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
   const shareUrl = project.shareToken
     ? `${(getConvexUrl() ?? "").replace(".convex.cloud", ".convex.site")}/p/${project.shareToken}`
     : null;
+
+  const copy = (kind: "app" | "web", text: string) => {
+    void navigator.clipboard.writeText(text);
+    setCopied(kind);
+    setTimeout(() => setCopied(null), 1500);
+  };
 
   const memberIds = project.memberIds ?? [];
   const isPrivate = project.visibility === "private";
@@ -204,76 +263,46 @@ function SharingSettings({ project, me, users }: { project: Doc<"projects">; me:
   return (
     <div style={{ position: "relative" }} ref={wrapRef}>
       <button
-        className={`btn ghost ${open ? "active" : ""}`}
-        title={isPrivate ? "Private — only you and added members" : "Visible to the whole team"}
+        className={`btn primary ${open ? "active" : ""}`}
+        title={isPrivate ? "Private — only you and added members" : "Share this project"}
         onClick={() => setOpen(!open)}
       >
-        {isPrivate ? "🔒 Private" : "Sharing"}
+        <Icon name="share" /> Share
       </button>
       {open && (
         <div className="titlebar-popover" style={{ padding: 12 }}>
-          <div className="seg" style={{ display: "flex", marginBottom: 10 }}>
-            <button
-              className={!isPrivate ? "on" : ""}
-              style={{ flex: 1 }}
-              onClick={() => setVisibility({ projectId: project._id, userId: me._id, visibility: "team" })}
-            >
-              Team
-            </button>
-            <button
-              className={isPrivate ? "on" : ""}
-              style={{ flex: 1 }}
-              onClick={() => setVisibility({ projectId: project._id, userId: me._id, visibility: "private" })}
-            >
-              Private
-            </button>
+          <div className="hint" style={{ marginBottom: 4 }}>
+            Teammates: opens right in Commons
           </div>
-          {isPrivate ? (
-            <>
-              <div className="hint" style={{ marginBottom: 6 }}>
-                Members can see the project and be @mentioned:
-              </div>
-              {users
-                .filter((u) => u._id !== me._id)
-                .map((u) => (
-                  <label key={u._id} className="member-row">
-                    <input type="checkbox" checked={memberIds.includes(u._id)} onChange={() => toggleMember(u._id)} />
-                    <span className="avatar" style={{ background: u.avatarColor }}>
-                      {u.avatarUrl ? <img src={u.avatarUrl} alt="" /> : initials(u.name)}
-                    </span>
-                    {u.name}
-                  </label>
-                ))}
-            </>
-          ) : (
-            <div className="hint">Everyone in this project's workspace can see and comment on it.</div>
-          )}
-          <div className="hint" style={{ margin: "10px 0 4px" }}>
-            Web link — read-only snapshot canvas for anyone, no install:
+          <button
+            className="btn"
+            style={{ width: "100%", marginBottom: 10, justifyContent: "center" }}
+            onClick={() =>
+              copy("app", buildDeepLink({ projectId: nav.projectId, view: nav.view, threadId: nav.threadId }))
+            }
+          >
+            {copied === "app" ? <Icon name="check" /> : <Icon name="link" />} {copied === "app" ? "Copied" : "Copy app link"}
+          </button>
+          <div className="hint" style={{ margin: "0 0 4px" }}>
+            Anyone: read-only snapshot canvas, no install
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: isCreator ? 12 : 0 }}>
             {shareUrl ? (
               <>
-                <button
-                  className="btn"
-                  style={{ flex: 1 }}
-                  onClick={() => {
-                    void navigator.clipboard.writeText(shareUrl);
-                    setLinkCopied(true);
-                    setTimeout(() => setLinkCopied(false), 1500);
-                  }}
-                >
-                  {linkCopied ? "Copied" : "Copy web link"}
+                <button className="btn" style={{ flex: 1, justifyContent: "center" }} onClick={() => copy("web", shareUrl)}>
+                  {copied === "web" ? <Icon name="check" /> : <Icon name="link" />} {copied === "web" ? "Copied" : "Copy web link"}
                 </button>
-                <button
-                  className="btn ghost"
-                  title="Revoke — the link stops working immediately"
-                  onClick={() => void setShareToken({ projectId: project._id, userId: me._id, sessionToken: sessionToken(), enable: false })}
-                >
-                  Revoke
-                </button>
+                {isCreator && (
+                  <button
+                    className="btn ghost"
+                    title="Revoke — the link stops working immediately"
+                    onClick={() => void setShareToken({ projectId: project._id, userId: me._id, sessionToken: sessionToken(), enable: false })}
+                  >
+                    Revoke
+                  </button>
+                )}
               </>
-            ) : (
+            ) : isCreator ? (
               <button
                 className="btn ghost"
                 style={{ flex: 1 }}
@@ -281,31 +310,77 @@ function SharingSettings({ project, me, users }: { project: Doc<"projects">; me:
               >
                 Create web link
               </button>
+            ) : (
+              <span className="hint">No web link yet. The project's creator can mint one here.</span>
             )}
           </div>
-          {myWorkspaces && myWorkspaces.length > 1 && (
+          {isCreator && (
             <>
-              <div className="hint" style={{ margin: "10px 0 4px" }}>
-                Workspace — who this project belongs to:
+              <div className="seg" style={{ display: "flex", marginBottom: 10 }}>
+                <button
+                  className={!isPrivate ? "on" : ""}
+                  style={{ flex: 1 }}
+                  onClick={() => setVisibility({ projectId: project._id, userId: me._id, visibility: "team" })}
+                >
+                  Team
+                </button>
+                <button
+                  className={isPrivate ? "on" : ""}
+                  style={{ flex: 1 }}
+                  onClick={() => setVisibility({ projectId: project._id, userId: me._id, visibility: "private" })}
+                >
+                  Private
+                </button>
               </div>
-              <select
-                value={project.workspaceId ?? ""}
-                onChange={(e) =>
-                  void moveProject({
-                    projectId: project._id,
-                    workspaceId: e.target.value as Id<"workspaces">,
-                    userId: me._id,
-                    sessionToken: sessionToken(),
-                  })
-                }
-              >
-                {myWorkspaces.map((w) => (
-                  <option key={w._id} value={w._id}>
-                    {w.name}
-                    {w.kind === "personal" ? " (just you)" : ` (${w.members.length} members)`}
-                  </option>
-                ))}
-              </select>
+              {isPrivate ? (
+                <>
+                  <div className="hint" style={{ marginBottom: 6 }}>
+                    Members can see the project and be @mentioned:
+                  </div>
+                  {users
+                    .filter((u) => u._id !== me._id)
+                    .map((u) => (
+                      <label key={u._id} className="member-row">
+                        <input
+                          type="checkbox"
+                          checked={memberIds.includes(u._id)}
+                          onChange={() => toggleMember(u._id)}
+                        />
+                        <span className="avatar" style={{ background: u.avatarColor }}>
+                          {u.avatarUrl ? <img src={u.avatarUrl} alt="" /> : initials(u.name)}
+                        </span>
+                        {u.name}
+                      </label>
+                    ))}
+                </>
+              ) : (
+                <div className="hint">Everyone in this project's workspace can see and comment on it.</div>
+              )}
+              {myWorkspaces && myWorkspaces.length > 1 && (
+                <>
+                  <div className="hint" style={{ margin: "10px 0 4px" }}>
+                    Workspace: who this project belongs to
+                  </div>
+                  <select
+                    value={project.workspaceId ?? ""}
+                    onChange={(e) =>
+                      void moveProject({
+                        projectId: project._id,
+                        workspaceId: e.target.value as Id<"workspaces">,
+                        userId: me._id,
+                        sessionToken: sessionToken(),
+                      })
+                    }
+                  >
+                    {myWorkspaces.map((w) => (
+                      <option key={w._id} value={w._id}>
+                        {w.name}
+                        {w.kind === "personal" ? " (just you)" : ` (${w.members.length} members)`}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
             </>
           )}
         </div>
@@ -344,7 +419,6 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   const holderNames = repoHolders.filter((h) => h.userId !== me._id).map((h) => h.name);
 
   const [devStatus, setDevStatus] = useState<DevServerStatus>({ state: "stopped" });
-  const [copied, setCopied] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [cloning, setCloning] = useState(false);
 
@@ -710,14 +784,6 @@ export default function ProjectView({ me, nav, setNav }: Props) {
     };
   }, [repoPath]);
 
-  const copyLink = () => {
-    navigator.clipboard.writeText(
-      buildDeepLink({ projectId: nav.projectId, view: nav.view, threadId: nav.threadId })
-    );
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-
   const locateRepo = async () => {
     if (!window.commons) return;
     const inspection = await window.commons.pickRepo();
@@ -802,7 +868,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           </button>
         </div>
         <span className="spacer" />
-        {repoPath ? (
+        {repoPath && (
           <>
             <span className="status-chip" title={devStatus.state === "error" ? devStatus.message : repoPath}>
               <span className={`status-dot ${devStatus.state}`} />
@@ -839,41 +905,41 @@ export default function ProjectView({ me, nav, setNav }: Props) {
               </button>
             )}
           </>
-        ) : window.commons ? (
-          // Repo powers are desktop-only; the browser web app is the
-          // view/comment/test surface and hides them entirely.
-          <>
-            {project.gitRemote && (
-              <button className="btn" disabled={cloning} onClick={cloneProject} title={project.gitRemote}>
-                {cloning ? "Cloning…" : "Get this project"}
-              </button>
-            )}
-            <button className={project.gitRemote ? "btn ghost" : "btn"} onClick={locateRepo}>
-              {project.gitRemote ? "Locate existing clone…" : "Locate repo on this Mac"}
-            </button>
-          </>
-        ) : null}
-        {project.createdBy === me._id && <SharingSettings project={project} me={me} users={users} />}
-        <PreviewSettings project={project} open={previewOpen} onOpenChange={setPreviewOpen} />
+        )}
+        <SetupPopover
+          project={project}
+          repoPath={repoPath}
+          cloning={cloning}
+          onClone={() => void cloneProject()}
+          onLocate={() => void locateRepo()}
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+        />
+        <span className="tb-divider" />
         {(repoPath || project.gitRemote || convexSessions.length > 0) && (
           <button
-            className={`btn ghost ${agentPanelOpen ? "active" : ""}`}
+            className={`btn ghost icon-btn ${agentPanelOpen ? "active" : ""}`}
+            aria-label="Agent sessions"
             title="Agent sessions (A)"
             onClick={() => setAgentPanelOpen((open) => !open)}
           >
-            ⚡{runningCount > 0 ? ` ${runningCount}` : ""}
+            <Icon name="zap" />
+            {runningCount > 0 && <span className="count-badge live">{runningCount}</span>}
           </button>
         )}
         <button
-          className={`btn ghost ${narrationOpen ? "active" : ""}`}
+          className={`btn ghost icon-btn ${narrationOpen ? "active" : ""}`}
+          aria-label="Narrate"
           title="Narrate: design rationale annotations (N)"
           onClick={() => setNarrationOpen((open) => !open)}
         >
-          ✎{(annotationData?.draftCount ?? 0) > 0 ? ` ${annotationData!.draftCount}` : ""}
+          <Icon name="pen" />
+          {(annotationData?.draftCount ?? 0) > 0 && (
+            <span className="count-badge">{annotationData!.draftCount}</span>
+          )}
         </button>
-        <button className="btn" onClick={copyLink}>
-          {copied ? "Copied" : "Copy link"}
-        </button>
+        <Inbox me={me} setNav={setNav} />
+        <span className="tb-divider" />
         <ThemeToggle />
         <div className="avatar-stack">
           {activeUsers.map(
@@ -885,7 +951,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
               )
           )}
         </div>
-        <Inbox me={me} setNav={setNav} />
+        <SharePopover project={project} me={me} users={users} nav={nav} />
       </div>
 
       {catchUp && !catchUpDismissed && (

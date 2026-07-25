@@ -151,9 +151,9 @@ textarea:focus {
 .titlebar > :not(.crumb):not(.spacer) {
   flex-shrink: 0;
 }
-.titlebar {
-  overflow: hidden; /* graceful clip beats painting outside the bar */
-}
+/* No overflow clip here: it silently swallowed every titlebar popover
+   (they render just past the bar's box). Narrow windows degrade via the
+   crumb ellipsis + non-shrink controls instead. */
 @media (max-width: 1240px) {
   .titlebar {
     gap: 8px;
@@ -1976,4 +1976,56 @@ kbd {
 .pin.pending {
   pointer-events: none;
   animation: pin-pulse 1.1s var(--ease-out) infinite;
+}
+
+/* ---------- Titlebar icon language ----------
+   Chrome controls are 28px icon buttons in one stroke family (components/
+   icons.tsx); labels live in tooltips + the ? cheat sheet. Content surfaces
+   stay text-first. */
+.icon-btn {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  justify-content: center;
+}
+.icon-btn svg {
+  flex: none;
+}
+.count-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+}
+.count-badge.live {
+  background: var(--success);
+}
+.attention-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+  border: 2px solid var(--bg-panel);
+}
+.tb-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border-default);
+  flex: none;
+}
+.btn.primary svg {
+  color: var(--text-inverse);
 }

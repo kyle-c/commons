@@ -6,6 +6,7 @@ import type { Nav } from "../App";
 import { timeAgo } from "../lib/session";
 import { registerShortcut } from "../lib/shortcuts";
 import { useClickOutside } from "../lib/useClickOutside";
+import Icon from "../components/icons";
 
 export default function Inbox({ me, setNav }: { me: Doc<"users">; setNav: (nav: Nav) => void }) {
   const [open, setOpen] = useState(false);
@@ -19,8 +20,14 @@ export default function Inbox({ me, setNav }: { me: Doc<"users">; setNav: (nav: 
 
   return (
     <div style={{ position: "relative" }} ref={wrapRef}>
-      <button className={`btn ghost ${open ? "active" : ""}`} onClick={() => setOpen(!open)} title="Inbox (⌘I)">
-        Inbox{unread > 0 ? ` · ${unread}` : ""}
+      <button
+        className={`btn ghost icon-btn ${open ? "active" : ""}`}
+        onClick={() => setOpen(!open)}
+        aria-label="Inbox"
+        title="Inbox (⌘I)"
+      >
+        <Icon name="bell" />
+        {unread > 0 && <span className="count-badge">{unread > 9 ? "9+" : unread}</span>}
       </button>
       {open && (
         <div className="titlebar-popover">
