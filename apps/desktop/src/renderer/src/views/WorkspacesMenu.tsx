@@ -4,7 +4,7 @@ import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import { initials, sessionToken } from "../lib/session";
 import { useClickOutside } from "../lib/useClickOutside";
-import { RevealField } from "../components/popover";
+import { InlineField } from "../components/popover";
 
 const CREATE_ERRORS: Record<string, string> = {
   invalid_name: "Give the workspace a name.",
@@ -29,6 +29,8 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  // One inline editor open at a time, keyed by workspace + which field.
+  const [editing, setEditing] = useState<{ id: string; field: "member" | "slack" } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
 
@@ -80,41 +82,78 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
               </div>
               {workspace.kind === "team" && (
                 <>
-                  <div className="avatar-stack">
-                    {workspace.members.map((member) => (
-                      <span
-                        key={member._id}
-                        className="avatar"
-                        style={{ background: member.avatarColor }}
-                        title={member.name}
+                  {/* One line: who's here, add someone, Slack state. Actions
+                      sit with their objects instead of stacking as rows. */}
+                  <div className="ws-line">
+                    <div className="avatar-stack">
+                      {workspace.members.map((member) => (
+                        <span
+                          key={member._id}
+                          className="avatar"
+                          style={{ background: member.avatarColor }}
+                          title={member.name}
+                        >
+                          {member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : initials(member.name)}
+                        </span>
+                      ))}
+                      <button
+                        className="avatar avatar-add"
+                        title="Add a member by email"
+                        aria-label="Add member"
+                        onClick={() =>
+                          setEditing((e) =>
+                            e?.id === workspace._id && e.field === "member" ? null : { id: workspace._id, field: "member" }
+                          )
+                        }
                       >
-                        {member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : initials(member.name)}
-                      </span>
-                    ))}
+                        +
+                      </button>
+                    </div>
+                    <span style={{ flex: 1 }} />
+                    <button
+                      className={`slack-chip ${workspace.slackWebhookUrl ? "on" : ""}`}
+                      title={
+                        workspace.slackWebhookUrl
+                          ? "New threads and agent results post to Slack. Click to change."
+                          : "Post new threads and agent results to a Slack channel"
+                      }
+                      onClick={() =>
+                        setEditing((e) =>
+                          e?.id === workspace._id && e.field === "slack" ? null : { id: workspace._id, field: "slack" }
+                        )
+                      }
+                    >
+                      <span className={`status-dot ${workspace.slackWebhookUrl ? "ready" : ""}`} />
+                      Slack
+                    </button>
                   </div>
-                  <RevealField
-                    actionLabel="+ Add member"
-                    placeholder="teammate@company.com"
-                    submitLabel="Add"
-                    onSubmit={(email) => submitMember(workspace._id, email)}
-                  />
-                  <RevealField
-                    actionLabel={workspace.slackWebhookUrl ? "✓ Slack connected · change" : "Connect Slack channel…"}
-                    placeholder="https://hooks.slack.com/services/…"
-                    submitLabel="Save"
-                    allowEmpty
-                    initialValue={workspace.slackWebhookUrl ?? ""}
-                    hint="New threads and agent results post here. Paste an incoming-webhook URL from Slack; save empty to disconnect."
-                    onSubmit={async (url) => {
-                      await setSlackWebhook({
-                        workspaceId: workspace._id,
-                        userId: me._id,
-                        sessionToken: sessionToken(),
-                        webhookUrl: url || undefined,
-                      });
-                      setNotice(url ? "Slack channel saved." : "Slack channel disconnected.");
-                    }}
-                  />
+                  {editing?.id === workspace._id && editing.field === "member" && (
+                    <InlineField
+                      placeholder="teammate@company.com"
+                      submitLabel="Add"
+                      onClose={() => setEditing(null)}
+                      onSubmit={(email) => submitMember(workspace._id, email)}
+                    />
+                  )}
+                  {editing?.id === workspace._id && editing.field === "slack" && (
+                    <InlineField
+                      placeholder="https://hooks.slack.com/services/…"
+                      submitLabel="Save"
+                      allowEmpty
+                      initialValue={workspace.slackWebhookUrl ?? ""}
+                      hint="Paste an incoming-webhook URL from Slack. Save empty to disconnect."
+                      onClose={() => setEditing(null)}
+                      onSubmit={async (url) => {
+                        await setSlackWebhook({
+                          workspaceId: workspace._id,
+                          userId: me._id,
+                          sessionToken: sessionToken(),
+                          webhookUrl: url || undefined,
+                        });
+                        setNotice(url ? "Slack channel saved." : "Slack channel disconnected.");
+                      }}
+                    />
+                  )}
                 </>
               )}
             </div>

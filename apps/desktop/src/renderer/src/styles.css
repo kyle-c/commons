@@ -2105,6 +2105,9 @@ kbd {
 }
 .reveal-form {
   padding: 4px 14px 10px;
+}
+.workspace-row .reveal-form {
+  padding: 4px 0 2px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2129,8 +2132,44 @@ kbd {
 .quiet-action:hover {
   color: var(--danger);
 }
-.workspace-row .avatar-stack {
-  padding: 0 14px;
+.ws-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.avatar.avatar-add {
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.avatar.avatar-add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.slack-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.slack-chip.on {
+  color: var(--text-secondary);
+}
+.slack-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
 }
 .pilot-pulse {
   border-top: 1px solid var(--border-subtle);
