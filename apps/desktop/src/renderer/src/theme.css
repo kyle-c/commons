@@ -5,7 +5,7 @@
   --bg-panel: #17171a;
   --bg-panel-raised: #1d1d21;
   --bg-canvas: #0b0b0d;
-  --canvas-dot: #383840; /* must survive 1px anti-aliasing on #0b0b0d */
+  --canvas-dot: #4a4a55; /* clearly present on #0b0b0d, still behind the work */
   --bg-input: #232328;
   --bg-hover: #232328;
   --bg-active: #2a2a30;
@@ -56,7 +56,7 @@
   --bg-panel: #ffffff;
   --bg-panel-raised: #f7f7f9;
   --bg-canvas: #ebebee;
-  --canvas-dot: #d6d6db;
+  --canvas-dot: #c3c3cc;
   --bg-input: #f1f1f4;
   --bg-hover: #ececef;
   --bg-active: #e3e3e9;
