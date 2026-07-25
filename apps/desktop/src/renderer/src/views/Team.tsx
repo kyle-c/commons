@@ -5,6 +5,7 @@ import type { Doc } from "@commons/backend/convex/_generated/dataModel";
 import { initials, sessionToken } from "../lib/session";
 import { registerShortcut } from "../lib/shortcuts";
 import { useClickOutside } from "../lib/useClickOutside";
+import { PopSection, RevealField } from "../components/popover";
 
 const INVITE_ERRORS = {
   invalid_email: "That doesn't look like an email address.",
@@ -15,9 +16,7 @@ const INVITE_ERRORS = {
 /** Titlebar popover: team members, pending invites, invite-by-email. ⌘T. */
 export default function Team({ me }: { me: Doc<"users"> }) {
   const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const users = useQuery(api.users.list, open ? { userId: me._id, sessionToken: sessionToken() } : "skip") ?? [];
   const pending = useQuery(api.invites.pending, open ? {} : "skip") ?? [];
   const pulse = useQuery(api.metrics.pilot, open ? { userId: me._id } : "skip");
@@ -28,20 +27,13 @@ export default function Team({ me }: { me: Doc<"users"> }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
 
-  const send = async () => {
-    const value = email.trim();
-    if (!value || busy) return;
-    setBusy(true);
-    try {
-      const result = await invite({ email: value, invitedBy: me._id });
-      if (result.ok) {
-        setEmail("");
-        setNotice(`Invited ${value.toLowerCase()} — they'll get an email.`);
-      } else {
-        setNotice(INVITE_ERRORS[result.reason]);
-      }
-    } finally {
-      setBusy(false);
+  const send = async (value: string) => {
+    const result = await invite({ email: value, invitedBy: me._id });
+    if (result.ok) {
+      setNotice(`Invited ${value.toLowerCase()}. They'll get an email.`);
+    } else {
+      setNotice(INVITE_ERRORS[result.reason]);
+      throw new Error(INVITE_ERRORS[result.reason]); // keep the field open for a fix
     }
   };
 
@@ -52,6 +44,7 @@ export default function Team({ me }: { me: Doc<"users"> }) {
       </button>
       {open && (
         <div className="titlebar-popover">
+          <PopSection label={`Members · ${users.length}`} />
           {users.map((user) => (
             <div key={user._id} className="team-row">
               <span className="avatar" style={{ background: user.avatarColor }}>
@@ -66,41 +59,38 @@ export default function Team({ me }: { me: Doc<"users"> }) {
               </span>
             </div>
           ))}
+          {pending.length > 0 && <PopSection label={`Invited · ${pending.length}`} />}
           {pending.map((item) => (
             <div key={item._id} className="team-row pending">
+              <span className="avatar pending-avatar" title="Joins on first sign-in">
+                {initials(item.email)}
+              </span>
               <span className="who">
                 <span className="name">{item.email}</span>
                 <span className="email">invited by {item.inviter?.name ?? "a teammate"}</span>
               </span>
-              <button className="btn ghost" onClick={() => revoke({ inviteId: item._id })}>
+              <button className="btn ghost quiet-action" onClick={() => revoke({ inviteId: item._id })}>
                 Revoke
               </button>
             </div>
           ))}
-          <div className="team-invite">
-            <input
-              value={email}
-              placeholder="teammate@company.com"
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setNotice(null);
-              }}
-              onKeyDown={(e) => e.key === "Enter" && send()}
-            />
-            <button className="btn primary" onClick={send} disabled={!email.trim() || busy}>
-              Invite
-            </button>
-          </div>
+          <RevealField
+            actionLabel="+ Invite by email"
+            placeholder="teammate@company.com"
+            submitLabel="Invite"
+            onSubmit={async (value) => {
+              setNotice(null);
+              await send(value);
+            }}
+          />
           {notice && (
-            <div className="hint" style={{ padding: "0 14px 12px" }}>
+            <div className="hint" style={{ padding: "4px 14px 10px" }}>
               {notice}
             </div>
           )}
           {pulse && (
             <div className="pilot-pulse">
-              <span className="hint" style={{ fontWeight: 600 }}>
-                Pilot pulse (7 days)
-              </span>
+              <PopSection label="Pilot pulse · 7 days" />
               <span className="hint">
                 {pulse.weeklyActiveUsers}/{pulse.totalUsers} active · {pulse.threadsThisWeek} threads
                 {pulse.threadsPriorWeek > 0 && ` (prev ${pulse.threadsPriorWeek})`} · {pulse.draftsPushedThisWeek}{" "}

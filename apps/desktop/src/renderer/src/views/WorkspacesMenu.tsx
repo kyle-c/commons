@@ -4,6 +4,7 @@ import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import { initials, sessionToken } from "../lib/session";
 import { useClickOutside } from "../lib/useClickOutside";
+import { RevealField } from "../components/popover";
 
 const CREATE_ERRORS: Record<string, string> = {
   invalid_name: "Give the workspace a name.",
@@ -24,12 +25,10 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
   const createWorkspace = useMutation(api.workspaces.create);
   const addMember = useMutation(api.workspaces.addMember);
   const setSlackWebhook = useMutation(api.workspaces.setSlackWebhook);
-  const [webhookDraft, setWebhookDraft] = useState<Record<string, string>>({});
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
-  const [memberEmail, setMemberEmail] = useState<Record<string, string>>({});
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
 
@@ -50,15 +49,13 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
     }
   };
 
-  const submitMember = async (workspaceId: Id<"workspaces">) => {
-    const email = (memberEmail[workspaceId] ?? "").trim();
-    if (!email) return;
+  const submitMember = async (workspaceId: Id<"workspaces">, email: string) => {
     const result = await addMember({ workspaceId, userId: me._id, sessionToken: sessionToken(), email });
     if (result.ok) {
-      setMemberEmail((prev) => ({ ...prev, [workspaceId]: "" }));
-      setNotice(result.joined ? `${email} joined.` : `${email} will join when they first sign in — invite sent.`);
+      setNotice(result.joined ? `${email} joined.` : `${email} will join when they first sign in. Invite sent.`);
     } else {
       setNotice(`Couldn't add: ${result.reason}`);
+      throw new Error(result.reason); // keep the field open for a fix
     }
   };
 
@@ -95,49 +92,29 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
                       </span>
                     ))}
                   </div>
-                  <div className="team-invite">
-                    <input
-                      placeholder="Add by email…"
-                      value={memberEmail[workspace._id] ?? ""}
-                      onChange={(e) => setMemberEmail((prev) => ({ ...prev, [workspace._id]: e.target.value }))}
-                      onKeyDown={(e) => e.key === "Enter" && submitMember(workspace._id)}
-                    />
-                    <button className="btn" onClick={() => submitMember(workspace._id)}>
-                      Add
-                    </button>
-                  </div>
-                  <div className="team-invite">
-                    <input
-                      placeholder="Slack webhook URL for this workspace's activity…"
-                      title="New threads and agent results post here — create an incoming webhook in Slack and paste it"
-                      value={webhookDraft[workspace._id] ?? workspace.slackWebhookUrl ?? ""}
-                      onChange={(e) => setWebhookDraft((prev) => ({ ...prev, [workspace._id]: e.target.value }))}
-                    />
-                    <button
-                      className="btn"
-                      disabled={webhookDraft[workspace._id] === undefined}
-                      onClick={async () => {
-                        try {
-                          await setSlackWebhook({
-                            workspaceId: workspace._id,
-                            userId: me._id,
-                            sessionToken: sessionToken(),
-                            webhookUrl: webhookDraft[workspace._id] || undefined,
-                          });
-                          setNotice("Slack channel saved.");
-                          setWebhookDraft((prev) => {
-                            const next = { ...prev };
-                            delete next[workspace._id];
-                            return next;
-                          });
-                        } catch (err) {
-                          setNotice(err instanceof Error ? err.message : String(err));
-                        }
-                      }}
-                    >
-                      Save
-                    </button>
-                  </div>
+                  <RevealField
+                    actionLabel="+ Add member"
+                    placeholder="teammate@company.com"
+                    submitLabel="Add"
+                    onSubmit={(email) => submitMember(workspace._id, email)}
+                  />
+                  <RevealField
+                    actionLabel={workspace.slackWebhookUrl ? "✓ Slack connected · change" : "Connect Slack channel…"}
+                    placeholder="https://hooks.slack.com/services/…"
+                    submitLabel="Save"
+                    allowEmpty
+                    initialValue={workspace.slackWebhookUrl ?? ""}
+                    hint="New threads and agent results post here. Paste an incoming-webhook URL from Slack; save empty to disconnect."
+                    onSubmit={async (url) => {
+                      await setSlackWebhook({
+                        workspaceId: workspace._id,
+                        userId: me._id,
+                        sessionToken: sessionToken(),
+                        webhookUrl: url || undefined,
+                      });
+                      setNotice(url ? "Slack channel saved." : "Slack channel disconnected.");
+                    }}
+                  />
                 </>
               )}
             </div>
@@ -162,7 +139,7 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
               </div>
             </div>
           ) : (
-            <button className="btn ghost" style={{ margin: "4px 14px 12px" }} onClick={() => setCreating(true)}>
+            <button className="btn ghost reveal-trigger" onClick={() => setCreating(true)}>
               + New team workspace
             </button>
           )}

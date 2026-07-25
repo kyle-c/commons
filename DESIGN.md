@@ -67,6 +67,20 @@ The strongest part of the system — protect it:
 - Keyboard hints ride inline as `kbd` glyphs; every shortcut description feeds the `?`
   cheat sheet automatically.
 
+## Interaction model (layers)
+
+Three surface layers, strict rules — never two siblings of the same layer at once:
+
+1. **Popovers** (inbox, team, workspaces, setup, share): transient, anchored to their
+   trigger, dismissed by click-outside or Esc. Built from the popover kit
+   (`components/popover.tsx`): section labels, identity rows with quiet trailing
+   actions, and `RevealField` inputs that exist only while in use — a menu reads as
+   content, not a stack of forms.
+2. **Side panels** (Agent, Narrate): one exclusive slot; opening one closes the other.
+   Panels anchor to the edge their trigger lives on (right cluster → slide from right),
+   so a panel always appears under its button.
+3. **Modals** (compare, welcome): scrim + card, one at a time, Esc closes.
+
 ## Keyboard-first
 
 Every new surface registers a shortcut in `lib/shortcuts.ts` with a description

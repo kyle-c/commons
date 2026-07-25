@@ -20,6 +20,7 @@ import { layoutFrames } from "../lib/frameLayout";
 import { useClickOutside } from "../lib/useClickOutside";
 import { useMachineId } from "../lib/machine";
 import Icon from "../components/icons";
+import { PopSection, RevealField } from "../components/popover";
 
 /** "Fix savings header" → "fix-savings-header" (draft branch slugs). */
 function slugify(text: string): string {
@@ -74,13 +75,7 @@ function SetupPopover({
   onOpenChange: (open: boolean) => void;
 }) {
   const setOpen = onOpenChange;
-  const [value, setValue] = useState("");
-  const [pattern, setPattern] = useState("");
   const setPreviewUrl = useMutation(api.projects.setPreviewUrl);
-  const trimmed = value.trim();
-  const trimmedPattern = pattern.trim();
-  const valid = trimmed === "" || /^https?:\/\/.+/.test(trimmed);
-  const patternValid = trimmedPattern === "" || (/^https?:\/\/.+/.test(trimmedPattern) && trimmedPattern.includes("{branch}"));
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
   const needsAttention = !project.previewUrl || (!!window.commons && !repoPath);
@@ -90,86 +85,78 @@ function SetupPopover({
       <button
         className={`btn ghost icon-btn ${open ? "active" : ""}`}
         aria-label="Project setup"
-        title="Project setup: your working copy + the deployed preview"
-        onClick={() => {
-          setValue(project.previewUrl ?? "");
-          setPattern(project.branchPreviewPattern ?? "");
-          setOpen(!open);
-        }}
+        title="Project setup"
+        onClick={() => setOpen(!open)}
       >
         <Icon name="sliders" />
         {needsAttention && <span className="attention-dot" />}
       </button>
       {open && (
-        <div className="titlebar-popover popover-form">
-          {window.commons && !repoPath && (
-            <div className="form-field">
-              <label>This machine</label>
-              <span className="hint">
-                {project.gitRemote
-                  ? "No working copy here yet. Get one to run the app live and host agents."
-                  : "Point Commons at where this project lives on this Mac."}
-              </span>
-              <div style={{ display: "flex", gap: 6 }}>
-                {project.gitRemote && (
-                  <button className="btn" disabled={cloning} onClick={onClone} title={project.gitRemote}>
-                    <Icon name="download" /> {cloning ? "Cloning…" : "Get this project"}
-                  </button>
-                )}
-                <button className="btn ghost" onClick={onLocate}>
-                  {project.gitRemote ? "Locate existing clone…" : "Locate repo on this Mac"}
-                </button>
-              </div>
-            </div>
+        <div className="titlebar-popover">
+          {window.commons && (
+            <>
+              <PopSection label="On this Mac" />
+              {repoPath ? (
+                <div className="hint" style={{ padding: "0 14px 8px" }}>
+                  ✓ Code linked. Screens render from your local dev server.
+                </div>
+              ) : (
+                <>
+                  <div className="hint" style={{ padding: "0 14px 6px" }}>
+                    Get the code here to see screens live and run the agent.
+                  </div>
+                  <div style={{ display: "flex", gap: 6, padding: "0 14px 10px" }}>
+                    {project.gitRemote && (
+                      <button className="btn" disabled={cloning} onClick={onClone} title={project.gitRemote}>
+                        <Icon name="download" /> {cloning ? "Cloning…" : "Get the code"}
+                      </button>
+                    )}
+                    <button className="btn ghost" onClick={onLocate}>
+                      {project.gitRemote ? "I already have it…" : "Choose the folder…"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
           )}
-          <div className="form-field">
-            <label>Preview URL</label>
-            <span className="hint">
-              The deployed app — teammates without the repo see live frames from here, and it's what user tests
-              run against.
-            </span>
-            <input
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder="https://myapp.vercel.app"
-            />
-            {!valid && <span className="form-error">Needs to be a full https:// URL</span>}
-          </div>
-          <div className="form-field">
-            <label>
-              Branch preview pattern <span className="hint">optional</span>
-            </label>
-            <span className="hint">
-              Unlocks draft previews and A/B tests. Write {"{branch}"} where the branch slug goes — on Vercel
-              that's <code>myapp-git-{"{branch}"}-team</code>.
-            </span>
-            <input
-              value={pattern}
-              onChange={(e) => setPattern(e.target.value)}
-              placeholder={"https://myapp-git-{branch}-team.vercel.app"}
-            />
-            {!patternValid && <span className="form-error">Needs https:// and a {"{branch}"} placeholder</span>}
-          </div>
-          <div className="form-actions">
-            <button className="btn ghost" onClick={() => setOpen(false)}>
-              Cancel
-            </button>
-            <button
-              className="btn primary"
-              disabled={!valid || !patternValid}
-              onClick={async () => {
-                await setPreviewUrl({
-                  projectId: project._id,
-                  previewUrl: trimmed === "" ? undefined : trimmed.replace(/\/+$/, ""),
-                  branchPreviewPattern: trimmedPattern === "" ? undefined : trimmedPattern.replace(/\/+$/, ""),
-                  hasBranchPattern: true,
-                });
-                setOpen(false);
-              }}
-            >
-              Save
-            </button>
-          </div>
+          <PopSection label="For everyone else" />
+          <RevealField
+            actionLabel={project.previewUrl ? "✓ Live preview connected · change" : "Add a live preview link…"}
+            placeholder="https://myapp.vercel.app"
+            submitLabel="Save"
+            allowEmpty
+            initialValue={project.previewUrl ?? ""}
+            hint="Paste where the app is deployed (Vercel, Netlify…). Teammates without the code see screens from this link, and user tests run against it."
+            onSubmit={async (url) => {
+              if (url && !/^https?:\/\/.+/.test(url)) throw new Error("Needs a full https:// link.");
+              await setPreviewUrl({
+                projectId: project._id,
+                previewUrl: url ? url.replace(/\/+$/, "") : undefined,
+              });
+            }}
+          />
+          <RevealField
+            actionLabel={
+              project.branchPreviewPattern ? "✓ Draft previews on · change" : "Turn on draft previews (advanced)…"
+            }
+            placeholder={"https://myapp-git-{branch}-team.vercel.app"}
+            submitLabel="Save"
+            allowEmpty
+            initialValue={project.branchPreviewPattern ?? ""}
+            hint={
+              "If every branch gets its own deploy link, write {branch} where the branch name goes. Lets everyone see agent drafts live and unlocks A/B tests."
+            }
+            onSubmit={async (patternValue) => {
+              if (patternValue && (!/^https?:\/\/.+/.test(patternValue) || !patternValue.includes("{branch}")))
+                throw new Error("Needs https:// and a {branch} placeholder.");
+              await setPreviewUrl({
+                projectId: project._id,
+                previewUrl: project.previewUrl, // preserve — this field only sets the pattern
+                branchPreviewPattern: patternValue ? patternValue.replace(/\/+$/, "") : undefined,
+                hasBranchPattern: true,
+              });
+            }}
+          />
         </div>
       )}
     </div>
@@ -490,8 +477,9 @@ export default function ProjectView({ me, nav, setNav }: Props) {
     heatmapTestId ? { testId: heatmapTestId, userId: me._id, sessionToken: sessionToken() } : "skip"
   );
 
-  const [agentPanelOpen, setAgentPanelOpen] = useState(false);
-  const [narrationOpen, setNarrationOpen] = useState(false);
+  // One side-panel slot: Agent and Narrate are exclusive — opening one
+  // closes the other, and both slide in under their titlebar buttons.
+  const [sidePanel, setSidePanel] = useState<"agents" | "narrate" | null>(null);
   // Approved annotations back the canvas Notes layer; drafts stay in the panel.
   const annotationData = useQuery(api.annotations.forProject, {
     projectId: nav.projectId,
@@ -678,11 +666,11 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   const runningCount = convexSessions.filter((s) => s.status === "running" || s.status === "starting").length;
 
   useEffect(
-    () => registerShortcut("a", () => setAgentPanelOpen((open) => !open), { description: "Agent sessions" }),
+    () => registerShortcut("a", () => setSidePanel((p) => (p === "agents" ? null : "agents")), { description: "Agent sessions" }),
     []
   );
   useEffect(
-    () => registerShortcut("n", () => setNarrationOpen((open) => !open), { description: "Narrate (design notes)" }),
+    () => registerShortcut("n", () => setSidePanel((p) => (p === "narrate" ? null : "narrate")), { description: "Narrate (design notes)" }),
     []
   );
 
@@ -727,7 +715,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
     });
     rememberMapping(info.sessionId, mirrorId);
     setActiveAgentSessionId(mirrorId);
-    setAgentPanelOpen(true);
+    setSidePanel("agents");
   };
 
   const sendThreadToAgent = async (thread: ThreadWithMessages) => {
@@ -918,20 +906,20 @@ export default function ProjectView({ me, nav, setNav }: Props) {
         <span className="tb-divider" />
         {(repoPath || project.gitRemote || convexSessions.length > 0) && (
           <button
-            className={`btn ghost icon-btn ${agentPanelOpen ? "active" : ""}`}
+            className={`btn ghost icon-btn ${sidePanel === "agents" ? "active" : ""}`}
             aria-label="Agent sessions"
             title="Agent sessions (A)"
-            onClick={() => setAgentPanelOpen((open) => !open)}
+            onClick={() => setSidePanel((p) => (p === "agents" ? null : "agents"))}
           >
             <Icon name="zap" />
             {runningCount > 0 && <span className="count-badge live">{runningCount}</span>}
           </button>
         )}
         <button
-          className={`btn ghost icon-btn ${narrationOpen ? "active" : ""}`}
+          className={`btn ghost icon-btn ${sidePanel === "narrate" ? "active" : ""}`}
           aria-label="Narrate"
           title="Narrate: design rationale annotations (N)"
-          onClick={() => setNarrationOpen((open) => !open)}
+          onClick={() => setSidePanel((p) => (p === "narrate" ? null : "narrate"))}
         >
           <Icon name="pen" />
           {(annotationData?.draftCount ?? 0) > 0 && (
@@ -1048,18 +1036,18 @@ export default function ProjectView({ me, nav, setNav }: Props) {
         />
       )}
 
-      {narrationOpen && (
+      {sidePanel === "narrate" && (
         <NarrationPanel
           me={me}
           project={project}
           frames={frames}
           threads={threads}
           repoPath={repoPath}
-          onClose={() => setNarrationOpen(false)}
+          onClose={() => setSidePanel(null)}
         />
       )}
 
-      {agentPanelOpen && (
+      {sidePanel === "agents" && (
         <AgentPanel
           sessions={panelSessions}
           transcript={transcript}
@@ -1073,7 +1061,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
             const localId = mirrorMap[convexId];
             if (localId) void agentControl.stop(localId);
           }}
-          onClose={() => setAgentPanelOpen(false)}
+          onClose={() => setSidePanel(null)}
           onCompareDraft={(draftPreviewUrl, routePath, title) =>
             setCompare({ draftPreviewUrl, routePath, title })
           }

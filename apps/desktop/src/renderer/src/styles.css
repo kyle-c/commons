@@ -1300,10 +1300,10 @@ textarea:focus {
 
 /* Agent sessions panel */
 .agent-panel {
-  animation: panel-in-left var(--dur-med) var(--ease-out);
+  animation: panel-in-right var(--dur-med) var(--ease-out);
   position: fixed;
   top: 56px; /* titlebar (44px) + gutter */
-  left: 12px;
+  right: 12px;
   bottom: 12px;
   width: 380px;
   background: var(--bg-panel);
@@ -2083,4 +2083,62 @@ kbd {
 }
 .new-project-tile:disabled {
   opacity: 0.6;
+}
+
+/* ---------- Popover kit (components/popover.tsx) ----------
+   Menus read as content: section labels, identity rows, quiet trailing
+   actions, and inputs that exist only while in use. */
+.pop-section {
+  padding: 10px 14px 4px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+.reveal-trigger {
+  display: flex;
+  width: calc(100% - 20px);
+  margin: 2px 10px 8px;
+  justify-content: flex-start;
+  color: var(--text-secondary);
+}
+.reveal-form {
+  padding: 4px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reveal-form-row {
+  display: flex;
+  gap: 6px;
+}
+.reveal-form-row input {
+  flex: 1;
+  min-width: 0;
+}
+.avatar.pending-avatar {
+  background: var(--bg-input);
+  color: var(--text-tertiary);
+  border: 1px dashed var(--border-strong);
+}
+.quiet-action {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+.quiet-action:hover {
+  color: var(--danger);
+}
+.workspace-row .avatar-stack {
+  padding: 0 14px;
+}
+.pilot-pulse {
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: 12px;
+}
+.pilot-pulse .hint {
+  padding: 0 14px;
 }
