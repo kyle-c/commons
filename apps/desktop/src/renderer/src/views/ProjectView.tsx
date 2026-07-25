@@ -20,6 +20,7 @@ import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
 import { useClickOutside } from "../lib/useClickOutside";
 import { useMachineId } from "../lib/machine";
+import { getRecents, pushRecent } from "../lib/recents";
 import Icon from "../components/icons";
 import { PopSection, RevealField } from "../components/popover";
 
@@ -79,7 +80,8 @@ function SetupPopover({
   const setPreviewUrl = useMutation(api.projects.setPreviewUrl);
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
-  const needsAttention = !project.previewUrl || (!!window.commons && !repoPath);
+  // Only when this machine can render nothing: no code here AND no preview.
+  const needsAttention = !!window.commons && !repoPath && !project.previewUrl;
 
   return (
     <div style={{ position: "relative" }} ref={wrapRef}>
@@ -99,7 +101,7 @@ function SetupPopover({
               <PopSection label="On this Mac" />
               {repoPath ? (
                 <div className="hint" style={{ padding: "0 14px 8px" }}>
-                  ✓ Code linked. Screens render from your local dev server.
+                  ✓ Linked · running locally
                 </div>
               ) : (
                 <>
@@ -249,7 +251,7 @@ function SharePopover({
   return (
     <div style={{ position: "relative" }} ref={wrapRef}>
       <button
-        className={`btn primary ${open ? "active" : ""}`}
+        className={`btn ${open ? "active" : ""}`}
         title={isPrivate ? "Private — only you and added members" : "Share this project"}
         onClick={() => setOpen(!open)}
       >
@@ -445,6 +447,10 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
   const deviceMenuRef = useRef<HTMLDivElement>(null);
   useClickOutside(deviceMenuRef, () => setDeviceMenuOpen(false), deviceMenuOpen);
+  // Project switcher: name + dev status as one element, recents in the menu.
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const switcherRef = useRef<HTMLDivElement>(null);
+  useClickOutside(switcherRef, () => setSwitcherOpen(false), switcherOpen);
   const [cloning, setCloning] = useState(false);
 
   // Ambient git: drift is visible on the chip; a fast-forward pull onto a
@@ -783,6 +789,11 @@ export default function ProjectView({ me, nav, setNav }: Props) {
     activePanelId ? { sessionId: activePanelId as Id<"agentSessions">, userId: me._id } : "skip"
   ) ?? []) as AgentSessionEvent[];
 
+  const projectName = project?.name;
+  useEffect(() => {
+    if (projectName) pushRecent(nav.projectId, projectName);
+  }, [nav.projectId, projectName]);
+
   // Presence heartbeat while the project is open.
   useEffect(() => {
     heartbeat({ userId: me._id, projectId: nav.projectId });
@@ -887,10 +898,54 @@ export default function ProjectView({ me, nav, setNav }: Props) {
         <button className="btn ghost" onClick={() => setNav({ screen: "home" })}>
           ←
         </button>
-        <span className="crumb">
-          <span className="crumb-prefix">Projects / </span>
-          <strong>{project.name}</strong>
-        </span>
+        <div className="seg-wrap" ref={switcherRef}>
+          <button
+            className="proj-switcher"
+            title={devStatus.state === "ready" ? `Dev server on :${devStatus.port}` : "Switch project"}
+            onClick={() => setSwitcherOpen((o) => !o)}
+          >
+            {repoPath && <span className={`status-dot ${devStatus.state}`} />}
+            <strong>{project.name}</strong>
+            <Icon name="chevron" size={13} />
+          </button>
+          {switcherOpen && (
+            <div className="titlebar-popover switcher-menu">
+              {repoPath && (
+                <div className="hint switcher-status">
+                  {devStatus.state === "ready"
+                    ? `dev · :${devStatus.port}`
+                    : devStatus.state === "starting"
+                      ? "dev server starting…"
+                      : devStatus.state === "error"
+                        ? "dev server error"
+                        : "dev server stopped"}
+                  {gitStatus &&
+                    ` · ${gitStatus.branch}${gitStatus.behind > 0 ? ` ↓${gitStatus.behind}` : ""}${
+                      gitStatus.ahead > 0 ? ` ↑${gitStatus.ahead}` : ""
+                    }${gitStatus.dirty ? " •" : ""}`}
+                </div>
+              )}
+              {getRecents().filter((r) => r.id !== nav.projectId).length > 0 && <PopSection label="Recent" />}
+              {getRecents()
+                .filter((r) => r.id !== nav.projectId)
+                .map((r) => (
+                  <button
+                    key={r.id}
+                    className="switcher-row"
+                    onClick={() => {
+                      setSwitcherOpen(false);
+                      setNav({ screen: "project", projectId: r.id as Id<"projects">, view: "canvas" });
+                    }}
+                  >
+                    {r.name}
+                  </button>
+                ))}
+              <button className="switcher-row all" onClick={() => setNav({ screen: "home" })}>
+                All projects
+              </button>
+            </div>
+          )}
+        </div>
         <div className="seg-wrap" ref={deviceMenuRef}>
           <div className="seg">
             <button
@@ -942,24 +997,6 @@ export default function ProjectView({ me, nav, setNav }: Props) {
         <span className="spacer" />
         {repoPath && (
           <>
-            <span className="status-chip" title={devStatus.state === "error" ? devStatus.message : repoPath}>
-              <span className={`status-dot ${devStatus.state}`} />
-              {devStatus.state === "ready"
-                ? `dev · :${devStatus.port}`
-                : devStatus.state === "starting"
-                  ? "starting…"
-                  : devStatus.state === "error"
-                    ? "dev error"
-                    : "stopped"}
-              {gitStatus && (
-                <span className="git-bit" title={gitStatus.dirty ? "Local changes present" : "Working tree clean"}>
-                  {gitStatus.branch}
-                  {gitStatus.behind > 0 && ` ↓${gitStatus.behind}`}
-                  {gitStatus.ahead > 0 && ` ↑${gitStatus.ahead}`}
-                  {gitStatus.dirty && " •"}
-                </span>
-              )}
-            </span>
             {gitStatus && gitStatus.behind > 0 && (gitStatus.dirty || gitStatus.ahead > 0) && (
               <button
                 className="btn ghost"

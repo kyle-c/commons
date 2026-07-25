@@ -2538,3 +2538,50 @@ kbd {
   font-weight: 400;
   color: var(--text-secondary);
 }
+
+/* Project switcher: name + dev status as one element; recents in the menu. */
+.proj-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.proj-switcher:hover {
+  background: var(--bg-hover);
+}
+.proj-switcher svg {
+  color: var(--text-tertiary);
+}
+.switcher-menu {
+  left: 0;
+  right: auto;
+  width: 260px;
+  transform-origin: top left;
+}
+.switcher-status {
+  padding: 10px 14px 8px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.switcher-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.switcher-row:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.switcher-row.all {
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+}

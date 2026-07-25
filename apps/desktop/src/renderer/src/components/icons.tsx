@@ -80,6 +80,13 @@ const PATHS: Record<string, React.ReactNode> = {
   ),
   maximize: <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />,
   list: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
+  chevron: <path d="M6 9l6 6 6-6" />,
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2Z" />
+    </>
+  ),
   message: <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.5 0-3-.36-4.3-1L3 20l1-5.2A8.5 8.5 0 1 1 21 11.5Z" />,
   flask: (
     <>

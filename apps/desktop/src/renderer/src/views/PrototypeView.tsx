@@ -76,7 +76,7 @@ export default function PrototypeView({
           title="Task-based usability tests, shareable by link (U)"
           onClick={() => setTestsOpen((open) => !open)}
         >
-          <Icon name="flask" /> User tests
+          <Icon name="flask" /> Tests
         </button>
         {source && !source.live && (
           <span className="badge" title="Rendered from the deployed preview">
@@ -85,8 +85,9 @@ export default function PrototypeView({
         )}
         {url && (
           <button
-            className="btn ghost"
-            title={device.height ? `Opens framed at ${device.width}×${device.height}` : "Opens the raw app"}
+            className="btn ghost icon-btn"
+            aria-label="Open in your browser"
+            title={device.height ? `Open in your browser, framed at ${device.width}×${device.height}` : "Open in your browser"}
             onClick={async () => {
               if (!window.commons) {
                 window.open(url);
@@ -104,7 +105,7 @@ export default function PrototypeView({
               await window.commons.openExternal(target);
             }}
           >
-            Open in browser ↗
+            <Icon name="globe" />
           </button>
         )}
       </div>
