@@ -407,7 +407,30 @@ export default function ProjectView({ me, nav, setNav }: Props) {
     api.repoLinks.forUser,
     machineId ? { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken(), machineId } : "skip"
   );
-  const repoPath = repoLink?.repoPath;
+  // Legacy (pre-0.2.4) rows are candidates, not truth — never used directly.
+  const repoLinkIsLegacy = !!repoLink && "legacy" in repoLink && repoLink.legacy === true;
+  const repoPath = repoLink && !repoLinkIsLegacy ? repoLink.repoPath : undefined;
+
+  // Claim-on-verify: if the candidate path is a working copy of this project
+  // on this machine, link it properly (which retires the legacy row).
+  const legacyClaimTried = useRef(false);
+  useEffect(() => {
+    if (legacyClaimTried.current || !repoLinkIsLegacy || !repoLink || !machineId || !window.commons) return;
+    legacyClaimTried.current = true;
+    void (async () => {
+      try {
+        const inspection = await window.commons.inspectRepo(repoLink.repoPath);
+        // Same repo check, tolerant of .git suffix and trailing-slash drift.
+        const norm = (r: string) => r.replace(/\.git$/, "").replace(/\/+$/, "").toLowerCase();
+        if (project?.gitRemote && inspection.gitRemote && norm(inspection.gitRemote) !== norm(project.gitRemote))
+          return;
+        await linkRepo({ projectId: nav.projectId, userId: me._id, repoPath: repoLink.repoPath, machineId });
+      } catch {
+        // Path isn't on this machine — leave the legacy row for its owner.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoLinkIsLegacy, machineId]);
   // Which teammates have live frames — drives viewer empty states.
   const repoHolders = useQuery(api.repoLinks.holders, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() }) ?? [];
   const holderNames = repoHolders.filter((h) => h.userId !== me._id).map((h) => h.name);

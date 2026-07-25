@@ -72,6 +72,16 @@ export const forUser = query({
       .collect();
     // New clients get exactly their machine's row — never another device's
     // path. Old clients (no machineId) get the legacy row, as before.
-    return (machineId ? rows.find((r) => r.machineId === machineId) : rows.find((r) => !r.machineId)) ?? null;
+    // A legacy row surfaced to a new client is a *candidate*, flagged so the
+    // renderer verifies the path is a real working copy on this machine and
+    // claims it (link with machineId retires the legacy row) — heals repos
+    // linked before v0.2.4 without resurrecting the second-laptop bug.
+    if (machineId) {
+      const mine = rows.find((r) => r.machineId === machineId);
+      if (mine) return mine;
+      const legacy = rows.find((r) => !r.machineId);
+      return legacy ? { ...legacy, legacy: true as const } : null;
+    }
+    return rows.find((r) => !r.machineId) ?? null;
   },
 });
