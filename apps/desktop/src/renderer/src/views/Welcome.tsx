@@ -2,7 +2,11 @@ import { useState } from "react";
 
 const SEEN_KEY = "commons.welcomeSeen";
 
-/** One-time orientation card shown after the first sign-in on this machine. */
+/**
+ * One-time orientation card after the first sign-in on this machine. Three
+ * beats, each one thought: wander, react, go deeper. Copy stays universal
+ * across desktop and the browser app (everything mentioned works in both).
+ */
 export default function Welcome({ name }: { name: string }) {
   const [seen, setSeen] = useState(() => localStorage.getItem(SEEN_KEY) === "1");
   if (seen) return null;
@@ -14,23 +18,25 @@ export default function Welcome({ name }: { name: string }) {
           <span>Welcome to Commons, {name.split(" ")[0]} 👋</span>
         </header>
         <div className="welcome-body">
-          <p>One shared canvas where the team designs on the live product.</p>
+          <p className="welcome-lead">
+            Everything on this canvas is the real, running product. Not screenshots. Not mockups.
+          </p>
           <ul>
             <li>
-              <strong>Look around</strong> — open a project, pan with two fingers, pinch or ⌘-scroll to zoom.
-              Click a frame to use the real app inside it; Esc to release.
+              <strong>Wander.</strong> Pan and pinch like a map. Click any screen to use the live app inside
+              it, <kbd>Esc</kbd> to step back out.
             </li>
             <li>
-              <strong>Say something</strong> — press <kbd>C</kbd> and click anywhere on a screen to start a
-              thread. <kbd>@</kbd> mentions a teammate; they get it in their inbox and email.
+              <strong>React.</strong> Press <kbd>C</kbd>, click a pixel, say the thing. <kbd>@</kbd> pulls a
+              teammate in.
             </li>
             <li>
-              <strong>Feel the flow</strong> — the Prototype tab is the running app, full-size, at phone or
-              desktop widths.
+              <strong>Go deeper.</strong> The Prototype tab runs the app full-size, and the notes under each
+              screen explain why it's built that way.
             </li>
           </ul>
           <p className="hint">
-            Press <kbd>?</kbd> anytime for keyboard shortcuts.
+            <kbd>?</kbd> shows every shortcut.
           </p>
         </div>
         <div className="welcome-actions">
@@ -41,7 +47,7 @@ export default function Welcome({ name }: { name: string }) {
               setSeen(true);
             }}
           >
-            Explore projects
+            Look around
           </button>
         </div>
       </div>

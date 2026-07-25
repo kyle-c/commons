@@ -129,8 +129,10 @@ The app should feel faster than it is:
 
 ## Iconography
 
-Text-first. The few glyphs in use are functional identifiers (⚡ agents, 🧪 tests,
-💬 comments, ☾ theme) — do not add decorative icons, icon circles, or illustration.
+Text-first in content; chrome controls use the single 16px stroke-icon family in
+`components/icons.tsx` (currentColor, 1.8 stroke). No emoji in chrome, no decorative
+icons, no icon circles, no illustration. An icon earns its place only as a functional
+identifier with a tooltip and aria-label carrying the words.
 
 ## Accessibility floor
 

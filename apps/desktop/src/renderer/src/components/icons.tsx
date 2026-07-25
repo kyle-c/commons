@@ -78,6 +78,13 @@ const PATHS: Record<string, React.ReactNode> = {
   ),
   maximize: <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />,
   list: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
+  message: <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.5 0-3-.36-4.3-1L3 20l1-5.2A8.5 8.5 0 1 1 21 11.5Z" />,
+  flask: (
+    <>
+      <path d="M10 2v6.3L4.6 17.8A2 2 0 0 0 6.4 21h11.2a2 2 0 0 0 1.8-3.2L14 8.3V2" />
+      <path d="M8.5 2h7M7.2 14.5h9.6" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof PATHS;

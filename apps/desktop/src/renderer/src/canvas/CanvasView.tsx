@@ -10,6 +10,7 @@ import Minimap from "./Minimap";
 import { initials } from "../lib/session";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { registerShortcut } from "../lib/shortcuts";
+import Icon from "../components/icons";
 
 interface Viewport {
   x: number;
@@ -803,7 +804,7 @@ export default function CanvasView({
           title="Comment mode (C)"
           onClick={() => setCommentMode((m) => !m)}
         >
-          💬 Comment
+          <Icon name="message" /> Comment
         </button>
         {(annotations?.length ?? 0) > 0 && (
           <button
@@ -811,7 +812,7 @@ export default function CanvasView({
             title="Design notes: approved rationale under each screen"
             onClick={() => setNotesOn((on) => !on)}
           >
-            ✎ Notes
+            <Icon name="pen" size={14} /> Notes
           </button>
         )}
         <button className="btn ghost" onClick={fitToContent} title="Fit to content">

@@ -1641,12 +1641,29 @@ kbd {
   font-size: var(--text-md);
   line-height: 1.6;
 }
+.welcome-lead {
+  color: var(--text-primary);
+  font-weight: 500;
+}
 .welcome-body ul {
-  margin: 10px 0;
-  padding-left: 18px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+}
+.welcome-body li {
+  animation: rise-in var(--dur-med) var(--ease-out) backwards;
+}
+.welcome-body li:nth-child(2) {
+  animation-delay: 60ms;
+}
+.welcome-body li:nth-child(3) {
+  animation-delay: 120ms;
+}
+.welcome-body li strong {
+  color: var(--text-primary);
 }
 .welcome-actions {
   display: flex;

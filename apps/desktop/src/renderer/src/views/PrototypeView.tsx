@@ -91,7 +91,7 @@ export default function PrototypeView({
           title="Task-based usability tests, shareable by link (U)"
           onClick={() => setTestsOpen((open) => !open)}
         >
-          🧪 User tests
+          <Icon name="flask" /> User tests
         </button>
         {source && !source.live && (
           <span className="badge" title="Rendered from the deployed preview">
