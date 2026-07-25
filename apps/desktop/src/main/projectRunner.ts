@@ -7,6 +7,8 @@ import { inspectRepo, readCommonsConfig } from "./routeDiscovery";
 interface RunningServer {
   child: ChildProcess;
   status: DevServerStatus;
+  /** Project name, for the port viewer. */
+  name?: string;
 }
 
 type StatusListener = (repoPath: string, status: DevServerStatus) => void;
@@ -61,7 +63,7 @@ export function getStatus(repoPath: string): DevServerStatus {
   return servers.get(repoPath)?.status ?? { state: "stopped" };
 }
 
-export async function start(repoPath: string): Promise<DevServerStatus> {
+export async function start(repoPath: string, name?: string): Promise<DevServerStatus> {
   cancelRelease(repoPath);
   const existing = servers.get(repoPath);
   if (existing && existing.status.state !== "error" && existing.status.state !== "stopped") {
@@ -129,7 +131,7 @@ export async function start(repoPath: string): Promise<DevServerStatus> {
     }
   });
 
-  servers.set(repoPath, { child, status: { state: "starting", port } });
+  servers.set(repoPath, { child, status: { state: "starting", port }, name });
   setStatus(repoPath, { state: "starting", port });
 
   try {
@@ -165,6 +167,11 @@ function killTree(child: ChildProcess): void {
   };
   signal("SIGTERM");
   setTimeout(() => signal("SIGKILL"), 3000).unref();
+}
+
+/** The port viewer: every server this app owns, with its status and home. */
+export function list(): { repoPath: string; name?: string; status: DevServerStatus }[] {
+  return [...servers.entries()].map(([repoPath, s]) => ({ repoPath, name: s.name, status: s.status }));
 }
 
 export async function stop(repoPath: string): Promise<void> {

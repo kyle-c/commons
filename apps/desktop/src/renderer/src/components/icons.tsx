@@ -31,10 +31,12 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="M8 21h8M12 17v4" />
     </>
   ),
+  // Share: an arrow leaving through the corner — same 1.8 stroke geometry
+  // as the rest of the family, without the iOS tray-box borrow.
   share: (
     <>
-      <path d="M4 12v7a1.8 1.8 0 0 0 1.8 1.8h12.4A1.8 1.8 0 0 0 20 19v-7" />
-      <path d="M16 6l-4-4-4 4M12 2v13" />
+      <path d="M7 17 17 7" />
+      <path d="M9 7h8v8" />
     </>
   ),
   sliders: (

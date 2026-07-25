@@ -138,7 +138,8 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("inspect-repo", (_e, repoPath: string) => inspectRepo(repoPath));
-  ipcMain.handle("start-dev-server", (_e, repoPath: string) => runner.start(repoPath));
+  ipcMain.handle("start-dev-server", (_e, repoPath: string, name?: string) => runner.start(repoPath, name));
+  ipcMain.handle("list-dev-servers", () => runner.list());
   ipcMain.handle("stop-dev-server", (_e, repoPath: string) => runner.stop(repoPath));
   ipcMain.handle("release-dev-server", (_e, repoPath: string) => runner.release(repoPath));
   ipcMain.handle("get-dev-server-status", (_e, repoPath: string) => runner.getStatus(repoPath));

@@ -8,6 +8,7 @@ import { layoutFrames } from "../lib/frameLayout";
 import GitSetupBanner from "./GitSetupBanner";
 import { useMachineId } from "../lib/machine";
 import ThemeToggle from "./ThemeToggle";
+import ServersMenu from "./ServersMenu";
 import WorkspacesMenu from "./WorkspacesMenu";
 import Team from "./Team";
 import Inbox from "./Inbox";
@@ -136,6 +137,7 @@ export default function ProjectList({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        <ServersMenu />
         <ThemeToggle />
         <WorkspacesMenu me={me} />
         <Team me={me} />

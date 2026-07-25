@@ -12,6 +12,7 @@ import Inbox from "./Inbox";
 import AgentPanel, { type PanelSession } from "../agents/AgentPanel";
 import NarrationPanel from "./NarrationPanel";
 import ThemeToggle from "./ThemeToggle";
+import ServersMenu from "./ServersMenu";
 import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessions";
 import { getConvexUrl, initials, sessionToken } from "../lib/session";
 import { resolveFrameUrl } from "../lib/frameUrl";
@@ -797,7 +798,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
       if (cancelled) return;
       setDevStatus(status);
       if (status.state === "stopped") {
-        window.commons.startDevServer(repoPath).then((s) => !cancelled && setDevStatus(s));
+        window.commons.startDevServer(repoPath, project?.name).then((s) => !cancelled && setDevStatus(s));
       }
     });
     const unsubscribe = window.commons.onDevServerStatus((path, status) => {
@@ -1016,6 +1017,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           onOpenChange={(o) => setSidePanel(o ? "inbox" : null)}
         />
         <span className="tb-divider" />
+        <ServersMenu />
         <ThemeToggle />
         <div className="avatar-stack">
           {activeUsers.map(

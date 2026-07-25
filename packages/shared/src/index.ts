@@ -211,7 +211,9 @@ export interface AuthCallback {
 export interface CommonsApi {
   pickRepo(): Promise<RepoInspection | null>;
   inspectRepo(repoPath: string): Promise<RepoInspection>;
-  startDevServer(repoPath: string): Promise<DevServerStatus>;
+  startDevServer(repoPath: string, name?: string): Promise<DevServerStatus>;
+  /** Port viewer: every dev server this app instance owns. */
+  listDevServers(): Promise<{ repoPath: string; name?: string; status: DevServerStatus }[]>;
   stopDevServer(repoPath: string): Promise<void>;
   /** Leaving a project: stop its dev server after a grace period (reopening cancels). */
   releaseDevServer(repoPath: string): Promise<void>;
