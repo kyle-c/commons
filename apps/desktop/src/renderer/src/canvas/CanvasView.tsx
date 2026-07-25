@@ -99,6 +99,9 @@ export default function CanvasView({
   const [commentMode, setCommentMode] = useState(false);
   // Notes layer: on by default — the annotations are curated, that's the point.
   const [notesOn, setNotesOn] = useState(true);
+  // Perceived speed: keys are `${frameId}:${reloadToken}` so a reload shows
+  // the previous pixels (snapshot underlay) until the fresh iframe paints.
+  const [loadedFrames, setLoadedFrames] = useState<Record<string, boolean>>({});
   const [focusedFrame, setFocusedFrame] = useState<Id<"frames"> | null>(null);
   const [selectedThread, setSelectedThread] = useState<Id<"threads"> | null>(initialThreadId ?? null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -468,7 +471,27 @@ export default function CanvasView({
               </div>
               <div className="frame-body">
                 {url ? (
-                  <iframe key={frameReloadTokens?.[frame._id] ?? 0} src={url} title={frame.title} />
+                  (() => {
+                    const loadKey = `${frame._id}:${frameReloadTokens?.[frame._id] ?? 0}`;
+                    const loaded = loadedFrames[loadKey] === true;
+                    return (
+                      <>
+                        {!loaded &&
+                          (frame.snapshotUrl ? (
+                            <img className="frame-underlay" src={frame.snapshotUrl} alt="" />
+                          ) : (
+                            <div className="frame-booting" />
+                          ))}
+                        <iframe
+                          key={loadKey}
+                          className={loaded ? "loaded" : ""}
+                          src={url}
+                          title={frame.title}
+                          onLoad={() => setLoadedFrames((prev) => ({ ...prev, [loadKey]: true }))}
+                        />
+                      </>
+                    );
+                  })()
                 ) : frame.snapshotUrl ? (
                   // SNAP-3 fallback: last captured state beats an empty box.
                   <img className="frame-snapshot" src={frame.snapshotUrl} alt={frame.title} title="Snapshot — no live preview right now" />

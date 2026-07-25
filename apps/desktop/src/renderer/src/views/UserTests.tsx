@@ -514,7 +514,13 @@ export default function UserTests({
         />
       )}
 
-      {tests === undefined && <div className="hint">Loading tests…</div>}
+      {tests === undefined && (
+        <div aria-hidden style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="skeleton" style={{ height: 40 }} />
+          <div className="skeleton" style={{ height: 40, opacity: 0.7 }} />
+          <div className="skeleton" style={{ height: 40, opacity: 0.4 }} />
+        </div>
+      )}
 
       {(tests ?? []).map((test) => (
         <div className="user-test-row" key={test._id}>

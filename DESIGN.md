@@ -75,8 +75,37 @@ Every new surface registers a shortcut in `lib/shortcuts.ts` with a description
 
 ## Motion
 
-Functional and minimal: state transitions only, nothing decorative. If a section feels
-empty, it needs better content, not animation.
+Functional and minimal: state transitions and perceived speed only, nothing decorative.
+If a section feels empty, it needs better content, not animation.
+
+The system is two durations and one curve, defined once in `styles.css`:
+`--dur-fast` (120ms, hover/press feedback), `--dur-med` (200ms, entrances and
+crossfades), `--ease-out`. Shared keyframes: `rise-in` (lists, cards, messages),
+`pop-in` (popovers, banners, the palette), `fade-in` (overlays), `panel-in-left/right`
+(side panels enter from their own edge), `shimmer` (skeletons). Do not invent new
+durations or curves per component.
+
+Rules of thumb:
+- Feedback is instant-feeling: press states (`.btn:active` scale 0.97) and hovers use
+  `--dur-fast`; anything slower reads as lag, the opposite of the goal.
+- Entrances only; exits are instant. Users wait for arrivals, never for departures.
+- Never animate layout the user is actively manipulating (canvas pan/zoom, frame drag,
+  live cursors) — direct manipulation must track the hand 1:1.
+- `prefers-reduced-motion` collapses the entire system to instant (global block at the
+  end of `styles.css`); every animation must remain purely an enhancement.
+
+## Perceived speed
+
+The app should feel faster than it is:
+- A frame never flashes blank while its iframe boots: the latest snapshot (or a shimmer)
+  shows instantly underneath and the live view fades in over it (`.frame-underlay`,
+  `.frame-booting`, `iframe.loaded`).
+- Query-backed surfaces show skeletons in the shape of their content (`.skeleton`,
+  `.skeleton-card`), not text or spinners — shimmer reads as "already working".
+- Whole-screen loading text appears only after a 150ms delay (`.center-screen`), so
+  fast loads never show a loading state at all.
+- Grids and queues stagger their entrance (30ms steps, capped) so screens read as
+  assembling instantly rather than popping in as one block.
 
 ## Iconography
 

@@ -128,6 +128,19 @@ export default function ProjectList({ me, setNav }: { me: Doc<"users">; setNav: 
 
       <GitSetupBanner me={me} probeRemote={(projects ?? []).find((p) => p.gitRemote)?.gitRemote} />
 
+      {projects === undefined && (
+        // Perceived speed: the grid's shape lands before the data does.
+        <div className="project-grid">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="project-card skeleton-card" aria-hidden>
+              <div className="project-cover skeleton" />
+              <div className="skeleton" style={{ height: 14, width: "55%" }} />
+              <div className="skeleton" style={{ height: 20, width: "40%" }} />
+            </div>
+          ))}
+        </div>
+      )}
+
       {projects && projects.length === 0 && (
         <div className="empty-state">
           No projects yet.
