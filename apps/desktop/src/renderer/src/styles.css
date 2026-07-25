@@ -348,8 +348,11 @@ textarea:focus {
 
 /* ---------- Centered screens (setup / sign-in) ---------- */
 
-.center-screen {
+.center-screen.hint {
+  /* loading text only: waits 150ms so fast loads never show it */
   animation: fade-in var(--dur-med) var(--ease-out) 150ms backwards;
+}
+.center-screen {
   height: 100%;
   display: flex;
   align-items: center;
@@ -358,6 +361,7 @@ textarea:focus {
   gap: 24px;
 }
 .center-card {
+  animation: rise-in var(--dur-med) var(--ease-out);
   width: 380px;
   background: var(--bg-panel);
   border: 1px solid var(--border-default);
@@ -792,7 +796,8 @@ textarea:focus {
   overflow: auto;
 }
 .proto-device {
-  background: #fff;
+  position: relative;
+  background: var(--bg-panel);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-strong);
   overflow: hidden;
@@ -801,6 +806,12 @@ textarea:focus {
 .proto-device iframe {
   border: none;
   flex: 1;
+  opacity: 0;
+  transition: opacity var(--dur-med) var(--ease-out);
+}
+.proto-device iframe.loaded {
+  opacity: 1;
+  background: #fff;
 }
 
 .hint {
@@ -1573,6 +1584,7 @@ textarea:focus {
 
 /* Overlays: welcome card + shortcuts cheat sheet */
 .overlay-scrim {
+  animation: fade-in var(--dur-fast) var(--ease-out);
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
@@ -1582,6 +1594,7 @@ textarea:focus {
   z-index: 50;
 }
 .overlay-card {
+  animation: pop-in var(--dur-med) var(--ease-out);
   width: 440px;
   max-width: calc(100vw - 48px);
   max-height: calc(100vh - 96px);
@@ -1954,3 +1967,13 @@ kbd {
 
 .narration-item:nth-child(n + 2) { animation-delay: 30ms; }
 .narration-item:nth-child(n + 4) { animation-delay: 60ms; }
+
+@keyframes pin-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+.pin.pending {
+  pointer-events: none;
+  animation: pin-pulse 1.1s var(--ease-out) infinite;
+}

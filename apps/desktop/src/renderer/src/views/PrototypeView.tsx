@@ -50,6 +50,10 @@ export default function PrototypeView({
 
   const source = resolveFrameUrl(routePath, devStatus, previewUrl);
   const url = source?.url ?? null;
+  // Route/device switches keep the stage calm: shimmer under the incoming
+  // iframe, fade it in on load — no white flash between screens.
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  const loaded = url !== null && loadedUrl === url;
 
   return (
     <div className="proto">
@@ -119,7 +123,13 @@ export default function PrototypeView({
       <div className="proto-stage">
         {url ? (
           <div className="proto-device" style={device.width ? { width: device.width } : { flex: 1 }}>
-            <iframe src={url} title="Prototype" />
+            {!loaded && <div className="frame-booting" />}
+            <iframe
+              src={url}
+              title="Prototype"
+              className={loaded ? "loaded" : ""}
+              onLoad={() => setLoadedUrl(url)}
+            />
           </div>
         ) : (
           <div className="center-screen hint">

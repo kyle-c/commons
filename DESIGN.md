@@ -90,7 +90,13 @@ Rules of thumb:
   `--dur-fast`; anything slower reads as lag, the opposite of the goal.
 - Entrances only; exits are instant. Users wait for arrivals, never for departures.
 - Never animate layout the user is actively manipulating (canvas pan/zoom, frame drag,
-  live cursors) — direct manipulation must track the hand 1:1.
+  live cursors) — direct manipulation must track the hand 1:1. Commanded moves (⌘±,
+  Fit) are the exception: they glide (~200ms rAF tween) to preserve spatial context,
+  land instantly under reduced motion or a hidden window, and any hand input cancels
+  the glide mid-flight.
+- Optimistic UI over waiting: user-created objects (comment pins) appear the moment
+  they're submitted, marked visually in-flight (translucent pulse) until the server
+  confirms; on failure they retract and the input returns.
 - `prefers-reduced-motion` collapses the entire system to instant (global block at the
   end of `styles.css`); every animation must remain purely an enhancement.
 

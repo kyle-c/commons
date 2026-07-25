@@ -148,7 +148,42 @@ export default function CanvasView({
 
   const framePos = (frame: Doc<"frames">) => localPos[frame._id] ?? { x: frame.x, y: frame.y };
 
-  const fitTo = (target: Doc<"frames">[], maxScale = 1) => {
+  /**
+   * Commanded viewport moves (⌘±, Fit) glide instead of snapping — a short
+   * tween keeps spatial context. Direct manipulation (wheel, pinch, drag)
+   * stays 1:1 and cancels any glide in flight.
+   */
+  const vpAnimation = useRef<number | null>(null);
+  const cancelVpAnimation = () => {
+    if (vpAnimation.current !== null) {
+      cancelAnimationFrame(vpAnimation.current);
+      vpAnimation.current = null;
+    }
+  };
+  useEffect(() => cancelVpAnimation, []);
+  const animateVp = (target: Viewport, duration = 220) => {
+    // Reduced motion, or a hidden window where rAF never ticks: land instantly.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.visibilityState === "hidden") {
+      setVp(target);
+      return;
+    }
+    cancelVpAnimation();
+    const from = vpRef.current;
+    const start = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const k = 1 - Math.pow(1 - t, 3);
+      setVp({
+        scale: from.scale + (target.scale - from.scale) * k,
+        x: from.x + (target.x - from.x) * k,
+        y: from.y + (target.y - from.y) * k,
+      });
+      vpAnimation.current = t < 1 ? requestAnimationFrame(step) : null;
+    };
+    vpAnimation.current = requestAnimationFrame(step);
+  };
+
+  const fitTo = (target: Doc<"frames">[], maxScale = 1, animate = true) => {
     const el = wrapRef.current;
     if (!el || target.length === 0) return;
     const minX = Math.min(...target.map((f) => f.x));
@@ -160,11 +195,13 @@ export default function CanvasView({
       0.05,
       Math.min((el.clientWidth - pad * 2) / (maxX - minX), (el.clientHeight - pad * 2) / (maxY - minY), maxScale)
     );
-    setVp({
+    const next = {
       scale,
       x: (el.clientWidth - (maxX - minX) * scale) / 2 - minX * scale,
       y: (el.clientHeight - (maxY - minY) * scale) / 2 - minY * scale,
-    });
+    };
+    if (animate) animateVp(next);
+    else setVp(next);
   };
   const fitToContent = () => fitTo(frames);
 
@@ -178,7 +215,7 @@ export default function CanvasView({
     const cy = el.clientHeight / 2;
     const scale = Math.min(2, Math.max(0.05, v.scale * factor));
     const k = scale / v.scale;
-    setVp({ scale, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k });
+    animateVp({ scale, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k }, 160);
   };
   const fitRef = useRef(fitToContent);
   fitRef.current = fitToContent;
@@ -207,7 +244,7 @@ export default function CanvasView({
       const minY = Math.min(...frames.map((f) => f.y));
       target = frames.filter((f) => f.y <= minY + first.height * 2.2);
     }
-    fitTo(target, 0.6);
+    fitTo(target, 0.6, false); // first paint lands framed, no glide
   };
 
   useEffect(() => {
@@ -240,6 +277,7 @@ export default function CanvasView({
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      cancelVpAnimation(); // the hand always wins over a glide
       const v = vpRef.current;
       if (e.ctrlKey || e.metaKey) {
         const rect = el.getBoundingClientRect();
@@ -293,6 +331,7 @@ export default function CanvasView({
     setFocusedFrame(null);
     setSelectedThread(null);
     setDraft(null);
+    cancelVpAnimation();
     const start = { x: e.clientX, y: e.clientY, vx: vpRef.current.x, vy: vpRef.current.y };
     const move = (ev: MouseEvent) =>
       setVp({ ...vpRef.current, x: start.vx + ev.clientX - start.x, y: start.vy + ev.clientY - start.y });
@@ -345,22 +384,38 @@ export default function CanvasView({
     }
   };
 
+  // Optimistic posting: the pin lands the moment you hit Comment; the
+  // mutation catches up behind it. On failure the pin retracts and the
+  // composer reopens at the same spot.
+  const [pendingPin, setPendingPin] = useState<
+    (Pick<Draft, "frameId" | "fx" | "fy" | "canvasX" | "canvasY"> & { threadId?: string }) | null
+  >(null);
+  useEffect(() => {
+    if (pendingPin?.threadId && threads.some((t) => t._id === pendingPin.threadId)) setPendingPin(null);
+  }, [threads, pendingPin]);
+
   const submitDraft = async (body: string, mentions: Id<"users">[]) => {
     if (!draft) return;
-    const threadId = await createThread({
-      projectId,
-      createdBy: me._id,
-      body,
-      mentions,
+    const coords = {
       frameId: draft.frameId,
       fx: draft.fx,
       fy: draft.fy,
       canvasX: draft.canvasX,
       canvasY: draft.canvasY,
-    });
+    };
+    const restore = draft;
+    setPendingPin(coords);
     setDraft(null);
     setCommentMode(false);
-    setSelectedThread(threadId);
+    try {
+      const threadId = await createThread({ projectId, createdBy: me._id, body, mentions, ...coords });
+      setPendingPin((p) => (p ? { ...p, threadId } : p));
+      setSelectedThread(threadId);
+    } catch {
+      setPendingPin(null);
+      setDraft(restore);
+      alert("The comment didn't post — check your connection and try again.");
+    }
   };
 
   const pinPosition = (thread: ThreadWithMessages): { x: number; y: number } | null => {
@@ -593,6 +648,31 @@ export default function CanvasView({
             </button>
           );
         })}
+
+        {pendingPin &&
+          (() => {
+            const frame = pendingPin.frameId ? frames.find((f) => f._id === pendingPin.frameId) : undefined;
+            const pos = frame
+              ? {
+                  x: framePos(frame).x + (pendingPin.fx ?? 0) * frame.width,
+                  y: framePos(frame).y + (pendingPin.fy ?? 0) * frame.height,
+                }
+              : { x: pendingPin.canvasX ?? 0, y: pendingPin.canvasY ?? 0 };
+            return (
+              <span
+                className="pin pending"
+                style={{
+                  left: pos.x,
+                  top: pos.y,
+                  transform: `scale(${1 / vp.scale}) translate(-4px, -24px)`,
+                  transformOrigin: "0 100%",
+                  background: me.avatarColor,
+                }}
+              >
+                {initials(me.name)}
+              </span>
+            );
+          })()}
 
         {farZoom &&
           frames.map((frame) => {
