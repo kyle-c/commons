@@ -213,6 +213,8 @@ export interface CommonsApi {
   inspectRepo(repoPath: string): Promise<RepoInspection>;
   startDevServer(repoPath: string): Promise<DevServerStatus>;
   stopDevServer(repoPath: string): Promise<void>;
+  /** Leaving a project: stop its dev server after a grace period (reopening cancels). */
+  releaseDevServer(repoPath: string): Promise<void>;
   getDevServerStatus(repoPath: string): Promise<DevServerStatus>;
   onDevServerStatus(cb: (repoPath: string, status: DevServerStatus) => void): () => void;
   onDeepLink(cb: (link: DeepLink) => void): () => void;

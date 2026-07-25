@@ -57,10 +57,12 @@ function pollUntilReady(url: string, timeoutMs: number): Promise<void> {
 }
 
 export function getStatus(repoPath: string): DevServerStatus {
+  cancelRelease(repoPath); // a mounted project view is re-acquiring
   return servers.get(repoPath)?.status ?? { state: "stopped" };
 }
 
 export async function start(repoPath: string): Promise<DevServerStatus> {
+  cancelRelease(repoPath);
   const existing = servers.get(repoPath);
   if (existing && existing.status.state !== "error" && existing.status.state !== "stopped") {
     return existing.status;
@@ -106,7 +108,9 @@ export async function start(repoPath: string): Promise<DevServerStatus> {
     // CI=1 keeps the Expo CLI non-interactive and stops it opening a browser.
     env: { ...process.env, PORT: String(port), BROWSER: "none", CI: "1" },
     stdio: ["ignore", "pipe", "pipe"],
-    detached: false,
+    // Own process group: package-manager shims spawn the real server as a
+    // grandchild, and that grandchild holds the port — group-kill or leak.
+    detached: true,
   });
 
   let stderrTail = "";
@@ -134,7 +138,7 @@ export async function start(repoPath: string): Promise<DevServerStatus> {
     setStatus(repoPath, status);
     return status;
   } catch (err) {
-    child.kill();
+    killTree(child);
     const status: DevServerStatus = {
       state: "error",
       message: err instanceof Error ? err.message : String(err),
@@ -144,17 +148,63 @@ export async function start(repoPath: string): Promise<DevServerStatus> {
   }
 }
 
+/** Kill the server's whole process group; escalate if it lingers. */
+function killTree(child: ChildProcess): void {
+  const pid = child.pid;
+  const signal = (sig: NodeJS.Signals) => {
+    try {
+      if (pid) process.kill(-pid, sig); // negative pid = the process group
+      else child.kill(sig);
+    } catch {
+      try {
+        child.kill(sig);
+      } catch {
+        /* already gone */
+      }
+    }
+  };
+  signal("SIGTERM");
+  setTimeout(() => signal("SIGKILL"), 3000).unref();
+}
+
 export async function stop(repoPath: string): Promise<void> {
   const server = servers.get(repoPath);
   if (!server) return;
   setStatus(repoPath, { state: "stopped" });
-  server.child.kill("SIGTERM");
+  killTree(server.child);
   servers.delete(repoPath);
 }
 
 export function stopAll(): void {
   for (const [repoPath, server] of servers) {
-    server.child.kill("SIGTERM");
+    killTree(server.child);
     servers.delete(repoPath);
+  }
+}
+
+/**
+ * Leaving a project releases its server: a short grace period keeps the
+ * fast-return case instant, then the port is freed. Reopening (start or a
+ * status check from a mounted project view) cancels the pending stop.
+ */
+const RELEASE_GRACE_MS = 5 * 60_000;
+const pendingRelease = new Map<string, ReturnType<typeof setTimeout>>();
+
+export function release(repoPath: string): void {
+  if (!servers.has(repoPath)) return;
+  cancelRelease(repoPath);
+  const timer = setTimeout(() => {
+    pendingRelease.delete(repoPath);
+    void stop(repoPath);
+  }, RELEASE_GRACE_MS);
+  timer.unref();
+  pendingRelease.set(repoPath, timer);
+}
+
+export function cancelRelease(repoPath: string): void {
+  const timer = pendingRelease.get(repoPath);
+  if (timer) {
+    clearTimeout(timer);
+    pendingRelease.delete(repoPath);
   }
 }

@@ -140,6 +140,7 @@ app.whenReady().then(() => {
   ipcMain.handle("inspect-repo", (_e, repoPath: string) => inspectRepo(repoPath));
   ipcMain.handle("start-dev-server", (_e, repoPath: string) => runner.start(repoPath));
   ipcMain.handle("stop-dev-server", (_e, repoPath: string) => runner.stop(repoPath));
+  ipcMain.handle("release-dev-server", (_e, repoPath: string) => runner.release(repoPath));
   ipcMain.handle("get-dev-server-status", (_e, repoPath: string) => runner.getStatus(repoPath));
   ipcMain.handle("open-external", (_e, url: string) => shell.openExternal(url));
   ipcMain.handle(

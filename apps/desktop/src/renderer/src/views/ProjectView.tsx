@@ -806,6 +806,9 @@ export default function ProjectView({ me, nav, setNav }: Props) {
     return () => {
       cancelled = true;
       unsubscribe();
+      // Back to the dashboard (or a different project): free the port after
+      // a grace window — fast return stays instant, idle servers die.
+      void window.commons.releaseDevServer?.(repoPath).catch(() => {});
     };
   }, [repoPath]);
 
@@ -917,18 +920,19 @@ export default function ProjectView({ me, nav, setNav }: Props) {
             </button>
           </div>
           {deviceMenuOpen && (
-            <div className="titlebar-popover popover-menu device-menu">
+            <div className="device-menu">
               {DEVICES.map((d) => (
                 <button
                   key={d.label}
                   className={protoDevice.label === d.label ? "on" : ""}
+                  aria-label={d.label}
+                  title={d.label}
                   onClick={() => {
                     setChosenDevice(d);
                     setDeviceMenuOpen(false);
                   }}
                 >
                   <Icon name={d.icon} />
-                  <span>{d.label}</span>
                 </button>
               ))}
             </div>
