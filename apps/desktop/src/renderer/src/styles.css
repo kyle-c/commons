@@ -309,6 +309,11 @@ textarea:focus {
   animation: pop-in var(--dur-fast) var(--ease-out);
 }
 
+/* Setup carries little content since the icon+action trigger rework. */
+.titlebar-popover.setup-pop {
+  width: 272px;
+}
+
 .team-row {
   display: flex;
   align-items: center;

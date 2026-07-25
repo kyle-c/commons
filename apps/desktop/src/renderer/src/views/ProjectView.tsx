@@ -94,7 +94,7 @@ function SetupPopover({
         {needsAttention && <span className="attention-dot" />}
       </button>
       {open && (
-        <div className="titlebar-popover">
+        <div className="titlebar-popover setup-pop">
           {window.commons && (
             <>
               <PopSection label="On this Mac" />
@@ -107,7 +107,7 @@ function SetupPopover({
                   <div className="hint" style={{ padding: "0 14px 6px" }}>
                     With the code on this Mac, screens render live and you can run the agent.
                   </div>
-                  <div style={{ display: "flex", gap: 6, padding: "0 14px 10px" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 14px 10px" }}>
                     {project.gitRemote && (
                       <button className="btn" disabled={cloning} onClick={onClone} title={project.gitRemote}>
                         <Icon name="download" /> {cloning ? "Cloning…" : "Get the code"}
