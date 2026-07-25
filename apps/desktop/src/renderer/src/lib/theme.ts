@@ -26,6 +26,17 @@ export function setThemePreference(pref: ThemePreference): void {
   apply(pref);
 }
 
+/** What the user actually sees right now — "system" resolved to a mode. */
+export function effectiveTheme(): "dark" | "light" {
+  return resolve(getThemePreference());
+}
+
+/** Notifies when the effective theme may have changed via macOS appearance. */
+export function onSystemThemeChange(cb: () => void): () => void {
+  media.addEventListener("change", cb);
+  return () => media.removeEventListener("change", cb);
+}
+
 /** Call once at startup; keeps "system" in sync with macOS appearance. */
 export function initTheme(): void {
   apply(getThemePreference());
