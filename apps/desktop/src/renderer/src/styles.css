@@ -2293,3 +2293,41 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Card rename: pen fades in on hover; the cover's name becomes an input.
+   Colors here are cover-local (covers are brand gradients, not theme
+   surfaces), matching the existing white-on-gradient name. */
+.project-card {
+  position: relative;
+}
+.card-edit {
+  position: absolute;
+  top: 26px;
+  right: 26px;
+  z-index: 2;
+  opacity: 0;
+  color: var(--text-inverse);
+  background: rgba(0, 0, 0, 0.28);
+  border-color: transparent;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.project-card:hover .card-edit,
+.card-edit:focus-visible {
+  opacity: 1;
+}
+.card-edit:hover {
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--text-inverse);
+}
+.cover-rename {
+  width: 80%;
+  text-align: center;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-inverse);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+}
+.cover-rename:focus {
+  border-color: rgba(255, 255, 255, 0.8);
+}

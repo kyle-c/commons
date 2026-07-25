@@ -22,6 +22,7 @@ import type * as presence from "../presence.js";
 import type * as projects from "../projects.js";
 import type * as repoLinks from "../repoLinks.js";
 import type * as slack from "../slack.js";
+import type * as updateIngest from "../updateIngest.js";
 import type * as updates from "../updates.js";
 import type * as userTests from "../userTests.js";
 import type * as users from "../users.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   projects: typeof projects;
   repoLinks: typeof repoLinks;
   slack: typeof slack;
+  updateIngest: typeof updateIngest;
   updates: typeof updates;
   userTests: typeof userTests;
   users: typeof users;

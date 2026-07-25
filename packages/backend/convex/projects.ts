@@ -436,6 +436,25 @@ export const rediscover = mutation({
   },
 });
 
+// Rename from the home card's hover affordance. Any workspace member can
+// rename — same trust level as moving frames on the shared canvas.
+export const rename = mutation({
+  args: {
+    projectId: v.id("projects"),
+    name: v.string(),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const viewerId = await resolveViewer(ctx, args);
+    const project = await accessibleProject(ctx, args.projectId, viewerId);
+    if (!project) throw new Error("You don't have access to this project.");
+    const name = args.name.trim().slice(0, 60);
+    if (!name) throw new Error("A project needs a name.");
+    await ctx.db.patch(args.projectId, { name });
+  },
+});
+
 // Canonical identity of the project's code source (e.g. the origin URL).
 export const setGitRemote = mutation({
   args: { projectId: v.id("projects"), gitRemote: v.string() },

@@ -12,6 +12,7 @@ import WorkspacesMenu from "./WorkspacesMenu";
 import Team from "./Team";
 import Inbox from "./Inbox";
 import AccountMenu from "./AccountMenu";
+import Icon from "../components/icons";
 
 /** Stable color pair derived from the name, for repos with no detectable colors. */
 function fallbackColors(name: string): [string, string] {
@@ -21,8 +22,9 @@ function fallbackColors(name: string): [string, string] {
   return [`hsl(${h}, 45%, 38%)`, `hsl(${(h + 45) % 360}, 50%, 26%)`];
 }
 
-/** Card cover: project name over a gradient of the repo's brand colors. */
-function ProjectCover({ name, colors }: { name: string; colors?: string[] }) {
+/** Card cover: project name over a gradient of the repo's brand colors.
+ *  Children (the inline rename input) replace the name while editing. */
+function ProjectCover({ name, colors, children }: { name: string; colors?: string[]; children?: React.ReactNode }) {
   const [c1, c2] =
     colors && colors.length >= 2
       ? [colors[0], colors[1]]
@@ -31,7 +33,7 @@ function ProjectCover({ name, colors }: { name: string; colors?: string[] }) {
         : fallbackColors(name);
   return (
     <div className="project-cover" style={{ background: `linear-gradient(160deg, ${c1}, ${c2})` }}>
-      <span>{name}</span>
+      {children ?? <span>{name}</span>}
     </div>
   );
 }
@@ -50,7 +52,19 @@ export default function ProjectList({
   const workspaces = useQuery(api.workspaces.mine, { userId: me._id, sessionToken: sessionToken() }) ?? [];
   const create = useMutation(api.projects.create);
   const linkRepo = useMutation(api.repoLinks.link);
+  const renameProject = useMutation(api.projects.rename);
   const [adding, setAdding] = useState(false);
+  // Inline rename, entered from the card's hover pen. Enter/blur commit,
+  // Esc cancels; committing a no-op or empty value just closes the field.
+  const [renaming, setRenaming] = useState<{ id: Id<"projects">; value: string; original: string } | null>(null);
+  const commitRename = async () => {
+    if (!renaming) return;
+    const { id, value, original } = renaming;
+    setRenaming(null);
+    const name = value.trim();
+    if (!name || name === original) return;
+    await renameProject({ projectId: id, name, userId: me._id, sessionToken: sessionToken() }).catch(() => {});
+  };
 
   const addProject = async (workspaceId: Id<"workspaces">) => {
     if (adding) return;
@@ -161,13 +175,47 @@ export default function ProjectList({
           {sections.length > 1 && <h2 className="workspace-heading">{section.name}</h2>}
           <div className="project-grid">
             {section.projects.map((project) => (
-          <button
+          <div
             key={project._id}
             className="project-card"
+            role="button"
+            tabIndex={0}
             aria-label={`Open ${project.name}`}
             onClick={() => setNav({ screen: "project", projectId: project._id, view: "canvas" })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && renaming?.id !== project._id) {
+                setNav({ screen: "project", projectId: project._id, view: "canvas" });
+              }
+            }}
           >
-            <ProjectCover name={project.name} colors={project.brandColors} />
+            <ProjectCover name={project.name} colors={project.brandColors}>
+              {renaming?.id === project._id ? (
+                <input
+                  className="cover-rename"
+                  autoFocus
+                  value={renaming.value}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
+                  onBlur={() => void commitRename()}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === "Enter") void commitRename();
+                    if (e.key === "Escape") setRenaming(null);
+                  }}
+                />
+              ) : undefined}
+            </ProjectCover>
+            <button
+              className="btn ghost icon-btn card-edit"
+              aria-label={`Rename ${project.name}`}
+              title="Rename"
+              onClick={(e) => {
+                e.stopPropagation();
+                setRenaming({ id: project._id, value: project.name, original: project.name });
+              }}
+            >
+              <Icon name="pen" size={13} />
+            </button>
             <div className="meta">
               <span>
                 {project.framework === "nextjs"
@@ -214,7 +262,7 @@ export default function ProjectList({
                 )}
               </div>
             </div>
-          </button>
+          </div>
             ))}
             {section.key !== "unassigned" && !query.trim() && (
               <button
