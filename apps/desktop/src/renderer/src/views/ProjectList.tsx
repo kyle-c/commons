@@ -1,5 +1,4 @@
-import { useRef, useState } from "react";
-import { useClickOutside } from "../lib/useClickOutside";
+import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
@@ -52,12 +51,8 @@ export default function ProjectList({
   const create = useMutation(api.projects.create);
   const linkRepo = useMutation(api.repoLinks.link);
   const [adding, setAdding] = useState(false);
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
-  const addMenuRef = useRef<HTMLDivElement>(null);
-  useClickOutside(addMenuRef, () => setAddMenuOpen(false), addMenuOpen);
 
   const addProject = async (workspaceId: Id<"workspaces">) => {
-    setAddMenuOpen(false);
     if (adding) return;
     if (!window.commons) {
       alert("Adding local repos needs the desktop app.");
@@ -89,10 +84,16 @@ export default function ProjectList({
 
   // Grouped home: one section per workspace (playground first), so team apps
   // and personal apps never visually mix. Cards order by activity, not age.
+  // Every workspace gets a section even when empty — its section is where
+  // the "+ New project" tile lives (creation happens where the project will
+  // land, so nobody answers a which-workspace menu).
   const sections = (() => {
     const needle = query.trim().toLowerCase();
     const visible = (projects ?? []).filter((p) => !needle || p.name.toLowerCase().includes(needle));
     const byWorkspace = new Map<string, { name: string; projects: NonNullable<typeof projects> }>();
+    if (!needle && projects !== undefined) {
+      for (const workspace of workspaces) byWorkspace.set(workspace._id, { name: workspace.name, projects: [] });
+    }
     for (const project of visible) {
       const key = project.workspaceId ?? "unassigned";
       const name = project.workspaceName ?? "Unassigned";
@@ -110,36 +111,17 @@ export default function ProjectList({
 
   return (
     <div className="app">
-      {/* The home's actions live in the titlebar, same as a project's do. */}
+      {/* The home's titlebar: search centered like a macOS toolbar; creation
+          lives down in the grid where the project will actually land. */}
       <div className="titlebar">
         <span className="wordmark">Commons</span>
         <span className="spacer" />
         <input
-          className="titlebar-search"
+          className="titlebar-search centered"
           placeholder="Search projects…  ⌘K"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <div style={{ position: "relative" }} ref={addMenuRef}>
-          <button className="btn primary" onClick={() => setAddMenuOpen(!addMenuOpen)} disabled={adding}>
-            {adding ? "Inspecting…" : "+ Add project"}
-          </button>
-          {addMenuOpen && (
-            <div className="titlebar-popover popover-menu">
-              {workspaces.map((workspace) => (
-                <button key={workspace._id} onClick={() => addProject(workspace._id)}>
-                  <strong>{workspace.name}</strong>
-                  <span className="hint">
-                    {workspace.kind === "personal"
-                      ? "Just you — your playground"
-                      : `${workspace.members.length} member${workspace.members.length === 1 ? "" : "s"}${workspace.domain ? ` · @${workspace.domain}` : ""}`}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <span className="tb-divider" />
         <ThemeToggle />
         <WorkspacesMenu me={me} />
         <Team me={me} />
@@ -234,6 +216,18 @@ export default function ProjectList({
             </div>
           </button>
             ))}
+            {section.key !== "unassigned" && !query.trim() && (
+              <button
+                className="new-project-tile"
+                disabled={adding}
+                onClick={() => void addProject(section.key as Id<"workspaces">)}
+              >
+                <strong>{adding ? "Inspecting…" : "+ New project"}</strong>
+                <span className="hint">
+                  {window.commons ? "Point Commons at a local repo" : "Needs the desktop app"}
+                </span>
+              </button>
+            )}
           </div>
         </div>
       ))}

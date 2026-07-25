@@ -2045,3 +2045,42 @@ kbd {
   font-size: var(--text-sm);
   -webkit-app-region: no-drag;
 }
+
+/* Centered home search — macOS-toolbar convention. Absolute so the uneven
+   left/right clusters can't pull it off center. */
+.titlebar {
+  position: relative;
+}
+.titlebar-search.centered {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 300px;
+}
+
+/* Creation lives in the grid: a quiet tile at the end of each workspace's
+   row, where the new project will actually land. */
+.new-project-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 180px;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  background: transparent;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.new-project-tile:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background: var(--bg-panel);
+}
+.new-project-tile:disabled {
+  opacity: 0.6;
+}
