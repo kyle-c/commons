@@ -38,35 +38,36 @@ if (!version) throw new Error("latest-mac.yml has no version field");
 const names = [...new Set([...channelYml.matchAll(/^\s+- url:\s*(.+)$|^path:\s*(.+)$/gm)].map((m) => (m[1] ?? m[2]).trim()))];
 console.log(`Publishing ${version} to ${prod ? "PROD" : "dev"} — files: ${names.join(", ")}`);
 
-// node's fetch (undici) intermittently dies with EPIPE on these ~200MB
-// bodies; curl streams from disk and has never flinched. Try fetch once,
-// fall back to curl.
-async function upload(uploadUrl, filePath) {
-  try {
-    const res = await fetch(uploadUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/octet-stream" },
-      body: readFileSync(filePath),
-    });
-    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-    return (await res.json()).storageId;
-  } catch (error) {
-    console.log(`  fetch upload failed (${error.cause?.code ?? error.message}) — retrying with curl`);
-    const out = execFileSync(
-      "curl",
-      ["-s", "-X", "POST", "-H", "Content-Type: application/octet-stream", "--data-binary", `@${filePath}`, uploadUrl],
-      { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 }
-    );
-    return JSON.parse(out).storageId;
+// These ~200MB uploads flake (node fetch EPIPEs, curl hits send errors on a
+// bad network moment). Retry with backoff, minting a fresh upload URL each
+// attempt — a partially consumed URL can't be trusted twice.
+async function upload(filePath) {
+  let lastError;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const uploadUrl = convexRun("updates:createUploadUrl");
+    try {
+      const out = execFileSync(
+        "curl",
+        // Full-speed uploads hit SSL "bad record mac" on flaky moments; a
+        // capped rate has been reliable and only adds ~30s per file.
+        ["-sS", "--fail", "--limit-rate", "8M", "-X", "POST", "-H", "Content-Type: application/octet-stream", "--data-binary", `@${filePath}`, uploadUrl],
+        { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 }
+      );
+      return JSON.parse(out).storageId;
+    } catch (error) {
+      lastError = error;
+      console.log(`  upload attempt ${attempt} failed (${error.status ?? error.message}) — retrying in ${attempt * 3}s`);
+      await new Promise((r) => setTimeout(r, attempt * 3000));
+    }
   }
+  throw lastError;
 }
 
 const files = [];
 for (const name of names) {
   const filePath = path.join(releaseDir, name);
   const size = statSync(filePath).size;
-  const uploadUrl = convexRun("updates:createUploadUrl");
-  const storageId = await upload(uploadUrl, filePath);
+  const storageId = await upload(filePath);
   files.push({ name, storageId, size });
   console.log(`  uploaded ${name} (${(size / 1e6).toFixed(1)} MB)`);
 }
