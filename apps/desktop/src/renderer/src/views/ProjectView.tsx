@@ -257,116 +257,125 @@ function SharePopover({
         <Icon name="share" /> Share
       </button>
       {open && (
-        <div className="titlebar-popover" style={{ padding: 12 }}>
-          <div className="hint" style={{ marginBottom: 4 }}>
-            Teammates: opens right in Commons
-          </div>
+        <div className="titlebar-popover">
+          <PopSection label="Links" />
           <button
-            className="btn"
-            style={{ width: "100%", marginBottom: 10, justifyContent: "center" }}
+            className="link-row"
             onClick={() =>
               copy("app", buildDeepLink({ projectId: nav.projectId, view: nav.view, threadId: nav.threadId }))
             }
           >
-            {copied === "app" ? <Icon name="check" /> : <Icon name="link" />} {copied === "app" ? "Copied" : "Copy app link"}
+            <Icon name={copied === "app" ? "check" : "link"} />
+            <span className="lr-text">
+              <span className="lr-title">{copied === "app" ? "Copied" : "Copy app link"}</span>
+              <span className="lr-sub">Opens in Commons. Teammates only.</span>
+            </span>
           </button>
-          <div className="hint" style={{ margin: "0 0 4px" }}>
-            Anyone: read-only snapshot canvas, no install
-          </div>
-          <div style={{ display: "flex", gap: 6, marginBottom: isCreator ? 12 : 0 }}>
-            {shareUrl ? (
-              <>
-                <button className="btn" style={{ flex: 1, justifyContent: "center" }} onClick={() => copy("web", shareUrl)}>
-                  {copied === "web" ? <Icon name="check" /> : <Icon name="link" />} {copied === "web" ? "Copied" : "Copy web link"}
+          {shareUrl ? (
+            <div className="link-row" role="button" tabIndex={0} onClick={() => copy("web", shareUrl)}>
+              <Icon name={copied === "web" ? "check" : "link"} />
+              <span className="lr-text">
+                <span className="lr-title">{copied === "web" ? "Copied" : "Copy web link"}</span>
+                <span className="lr-sub">Read-only canvas for anyone. No install.</span>
+              </span>
+              {isCreator && (
+                <button
+                  className="btn ghost quiet-action"
+                  title="The link stops working immediately"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void setShareToken({ projectId: project._id, userId: me._id, sessionToken: sessionToken(), enable: false });
+                  }}
+                >
+                  Revoke
                 </button>
-                {isCreator && (
-                  <button
-                    className="btn ghost"
-                    title="Revoke — the link stops working immediately"
-                    onClick={() => void setShareToken({ projectId: project._id, userId: me._id, sessionToken: sessionToken(), enable: false })}
-                  >
-                    Revoke
-                  </button>
-                )}
-              </>
-            ) : isCreator ? (
-              <button
-                className="btn ghost"
-                style={{ flex: 1 }}
-                onClick={() => void setShareToken({ projectId: project._id, userId: me._id, sessionToken: sessionToken(), enable: true })}
-              >
-                Create web link
-              </button>
-            ) : (
-              <span className="hint">No web link yet. The project's creator can mint one here.</span>
-            )}
-          </div>
+              )}
+            </div>
+          ) : isCreator ? (
+            <button
+              className="link-row"
+              onClick={() => void setShareToken({ projectId: project._id, userId: me._id, sessionToken: sessionToken(), enable: true })}
+            >
+              <Icon name="share" />
+              <span className="lr-text">
+                <span className="lr-title">Create web link</span>
+                <span className="lr-sub">Read-only canvas for anyone. No install.</span>
+              </span>
+            </button>
+          ) : (
+            <div className="hint" style={{ padding: "0 14px 8px" }}>
+              No web link yet. The project's creator can mint one here.
+            </div>
+          )}
           {isCreator && (
             <>
-              <div className="seg" style={{ display: "flex", marginBottom: 10 }}>
-                <button
-                  className={!isPrivate ? "on" : ""}
-                  style={{ flex: 1 }}
-                  onClick={() => setVisibility({ projectId: project._id, userId: me._id, visibility: "team" })}
-                >
-                  Team
-                </button>
-                <button
-                  className={isPrivate ? "on" : ""}
-                  style={{ flex: 1 }}
-                  onClick={() => setVisibility({ projectId: project._id, userId: me._id, visibility: "private" })}
-                >
-                  Private
-                </button>
-              </div>
-              {isPrivate ? (
-                <>
-                  <div className="hint" style={{ marginBottom: 6 }}>
-                    Members can see the project and be @mentioned:
-                  </div>
-                  {users
-                    .filter((u) => u._id !== me._id)
-                    .map((u) => (
-                      <label key={u._id} className="member-row">
-                        <input
-                          type="checkbox"
-                          checked={memberIds.includes(u._id)}
-                          onChange={() => toggleMember(u._id)}
-                        />
-                        <span className="avatar" style={{ background: u.avatarColor }}>
-                          {u.avatarUrl ? <img src={u.avatarUrl} alt="" /> : initials(u.name)}
-                        </span>
-                        {u.name}
-                      </label>
-                    ))}
-                </>
-              ) : (
-                <div className="hint">Everyone in this project's workspace can see and comment on it.</div>
-              )}
-              {myWorkspaces && myWorkspaces.length > 1 && (
-                <>
-                  <div className="hint" style={{ margin: "10px 0 4px" }}>
-                    Workspace: who this project belongs to
-                  </div>
-                  <select
-                    value={project.workspaceId ?? ""}
-                    onChange={(e) =>
-                      void moveProject({
-                        projectId: project._id,
-                        workspaceId: e.target.value as Id<"workspaces">,
-                        userId: me._id,
-                        sessionToken: sessionToken(),
-                      })
-                    }
+              <PopSection label="Access" />
+              <div style={{ padding: "0 14px 10px" }}>
+                <div className="seg" style={{ display: "flex", marginBottom: 8 }}>
+                  <button
+                    className={!isPrivate ? "on" : ""}
+                    style={{ flex: 1 }}
+                    onClick={() => setVisibility({ projectId: project._id, userId: me._id, visibility: "team" })}
                   >
-                    {myWorkspaces.map((w) => (
-                      <option key={w._id} value={w._id}>
-                        {w.name}
-                        {w.kind === "personal" ? " (just you)" : ` (${w.members.length} members)`}
-                      </option>
-                    ))}
-                  </select>
-                </>
+                    Team
+                  </button>
+                  <button
+                    className={isPrivate ? "on" : ""}
+                    style={{ flex: 1 }}
+                    onClick={() => setVisibility({ projectId: project._id, userId: me._id, visibility: "private" })}
+                  >
+                    Private
+                  </button>
+                </div>
+                {isPrivate ? (
+                  <>
+                    <div className="hint" style={{ marginBottom: 6 }}>
+                      Members can see the project and be @mentioned:
+                    </div>
+                    {users
+                      .filter((u) => u._id !== me._id)
+                      .map((u) => (
+                        <label key={u._id} className="member-row">
+                          <input
+                            type="checkbox"
+                            checked={memberIds.includes(u._id)}
+                            onChange={() => toggleMember(u._id)}
+                          />
+                          <span className="avatar" style={{ background: u.avatarColor }}>
+                            {u.avatarUrl ? <img src={u.avatarUrl} alt="" /> : initials(u.name)}
+                          </span>
+                          {u.name}
+                        </label>
+                      ))}
+                  </>
+                ) : (
+                  <div className="hint">Everyone in this workspace can see and comment.</div>
+                )}
+              </div>
+              {myWorkspaces && myWorkspaces.length > 1 && (
+                <div className="field-row">
+                  <span className="hint">Workspace</span>
+                  <span className="select-wrap">
+                    <select
+                      value={project.workspaceId ?? ""}
+                      onChange={(e) =>
+                        void moveProject({
+                          projectId: project._id,
+                          workspaceId: e.target.value as Id<"workspaces">,
+                          userId: me._id,
+                          sessionToken: sessionToken(),
+                        })
+                      }
+                    >
+                      {myWorkspaces.map((w) => (
+                        <option key={w._id} value={w._id}>
+                          {w.name}
+                          {w.kind === "personal" ? " (just you)" : ` (${w.members.length} members)`}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                </div>
               )}
             </>
           )}
@@ -479,7 +488,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
 
   // One side-panel slot: Agent and Narrate are exclusive — opening one
   // closes the other, and both slide in under their titlebar buttons.
-  const [sidePanel, setSidePanel] = useState<"agents" | "narrate" | null>(null);
+  const [sidePanel, setSidePanel] = useState<"agents" | "narrate" | "inbox" | null>(null);
   // Approved annotations back the canvas Notes layer; drafts stay in the panel.
   const annotationData = useQuery(api.annotations.forProject, {
     projectId: nav.projectId,
@@ -926,7 +935,12 @@ export default function ProjectView({ me, nav, setNav }: Props) {
             <span className="count-badge">{annotationData!.draftCount}</span>
           )}
         </button>
-        <Inbox me={me} setNav={setNav} />
+        <Inbox
+          me={me}
+          setNav={setNav}
+          open={sidePanel === "inbox"}
+          onOpenChange={(o) => setSidePanel(o ? "inbox" : null)}
+        />
         <span className="tb-divider" />
         <ThemeToggle />
         <div className="avatar-stack">

@@ -2181,3 +2181,115 @@ kbd {
 .pilot-pulse .hint {
   padding: 0 14px;
 }
+
+/* Share popover link rows: icon, title + plain-speech sub, quiet trailing. */
+.link-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 14px;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.link-row:hover {
+  background: var(--bg-hover);
+}
+.link-row > svg {
+  flex: none;
+  color: var(--text-tertiary);
+}
+.lr-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lr-title {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+.lr-sub {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px 12px;
+}
+.select-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: 1;
+}
+.select-wrap select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 6px 28px 6px 10px;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.select-wrap select:hover {
+  border-color: var(--border-strong);
+}
+.select-wrap::after {
+  content: "⌄";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-60%);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+/* Inbox as a side panel: a queue to work through, not a menu. */
+.inbox-panel {
+  width: 380px;
+}
+.inbox-body {
+  flex: 1;
+  overflow-y: auto;
+}
+.inbox-empty {
+  padding: 32px 16px;
+  text-align: center;
+}
+.inbox-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.inbox-item:hover {
+  background: var(--bg-hover);
+}
+.inbox-item.read {
+  opacity: 0.55;
+}
+.inbox-item-head {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.inbox-item-body {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
