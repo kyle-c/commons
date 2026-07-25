@@ -130,8 +130,14 @@ export function RevealField({
       </button>
     );
   }
+  const openLabel = actionLabel
+    .replace(/^[✓+]\s*/, "")
+    .replace(/\s*·\s*change$/, "")
+    .replace(/…$/, "")
+    .replace(/\s*\(advanced\)$/, "");
   return (
     <div className="reveal-form">
+      <span className="reveal-label">{openLabel}</span>
       {hint && <span className="hint">{hint}</span>}
       {error && <span className="form-error">{error}</span>}
       <div className="reveal-form-row">

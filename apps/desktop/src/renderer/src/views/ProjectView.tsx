@@ -103,7 +103,7 @@ function SetupPopover({
               ) : (
                 <>
                   <div className="hint" style={{ padding: "0 14px 6px" }}>
-                    Get the code here to see screens live and run the agent.
+                    With the code on this Mac, screens render live and you can run the agent.
                   </div>
                   <div style={{ display: "flex", gap: 6, padding: "0 14px 10px" }}>
                     {project.gitRemote && (
@@ -121,12 +121,12 @@ function SetupPopover({
           )}
           <PopSection label="For everyone else" />
           <RevealField
-            actionLabel={project.previewUrl ? "✓ Live preview connected · change" : "Add a live preview link…"}
+            actionLabel={project.previewUrl ? "✓ Live preview connected · change" : "Add the live preview link…"}
             placeholder="https://myapp.vercel.app"
             submitLabel="Save"
             allowEmpty
             initialValue={project.previewUrl ?? ""}
-            hint="Paste where the app is deployed (Vercel, Netlify…). Teammates without the code see screens from this link, and user tests run against it."
+            hint="Teammates without the code see screens from this link, and user tests run against it."
             onSubmit={async (url) => {
               if (url && !/^https?:\/\/.+/.test(url)) throw new Error("Needs a full https:// link.");
               await setPreviewUrl({
@@ -136,15 +136,13 @@ function SetupPopover({
             }}
           />
           <RevealField
-            actionLabel={
-              project.branchPreviewPattern ? "✓ Draft previews on · change" : "Turn on draft previews (advanced)…"
-            }
+            actionLabel={project.branchPreviewPattern ? "✓ Draft previews on · change" : "Set up draft previews…"}
             placeholder={"https://myapp-git-{branch}-team.vercel.app"}
             submitLabel="Save"
             allowEmpty
             initialValue={project.branchPreviewPattern ?? ""}
             hint={
-              "If every branch gets its own deploy link, write {branch} where the branch name goes. Lets everyone see agent drafts live and unlocks A/B tests."
+              "Write {branch} where the branch name goes in your per-branch deploy link. Everyone sees agent drafts live, and A/B tests unlock."
             }
             onSubmit={async (patternValue) => {
               if (patternValue && (!/^https?:\/\/.+/.test(patternValue) || !patternValue.includes("{branch}")))
