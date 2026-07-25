@@ -5,7 +5,7 @@
   --bg-panel: #17171a;
   --bg-panel-raised: #1d1d21;
   --bg-canvas: #0b0b0d;
-  --canvas-dot: #232329;
+  --canvas-dot: #383840; /* must survive 1px anti-aliasing on #0b0b0d */
   --bg-input: #232328;
   --bg-hover: #232328;
   --bg-active: #2a2a30;
