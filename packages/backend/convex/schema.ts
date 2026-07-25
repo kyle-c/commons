@@ -119,6 +119,8 @@ export default defineSchema({
     // Two most prominent colors from the repo's stylesheets — drives the
     // project card cover.
     brandColors: v.optional(v.array(v.string())),
+    // Custom uploaded card cover (Convex storage); beats the brand gradient.
+    coverImageId: v.optional(v.id("_storage")),
     // Web share (SNAP-4/DL-3 lite): anyone with /p/<shareToken> gets the
     // read-only snapshot canvas + threads. Minted/revoked in Sharing.
     shareToken: v.optional(v.string()),

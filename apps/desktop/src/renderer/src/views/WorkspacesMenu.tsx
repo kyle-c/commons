@@ -141,7 +141,22 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
                       submitLabel="Save"
                       allowEmpty
                       initialValue={workspace.slackWebhookUrl ?? ""}
-                      hint="Paste an incoming-webhook URL from Slack. Save empty to disconnect."
+                      hint={
+                        <>
+                          Posts new threads and agent results to a channel you pick. In Slack, create an
+                          incoming webhook and paste its URL here (save empty to disconnect).{" "}
+                          <button
+                            className="hint-link"
+                            onClick={() => {
+                              const guide = "https://api.slack.com/messaging/webhooks";
+                              if (window.commons) void window.commons.openExternal(guide);
+                              else window.open(guide, "_blank");
+                            }}
+                          >
+                            Slack's 2-minute guide ↗
+                          </button>
+                        </>
+                      }
                       onClose={() => setEditing(null)}
                       onSubmit={async (url) => {
                         await setSlackWebhook({

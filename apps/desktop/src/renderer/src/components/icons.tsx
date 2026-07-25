@@ -60,9 +60,10 @@ const PATHS: Record<string, React.ReactNode> = {
   check: <path d="M20 6 9 17l-5-5" />,
   frames: (
     <>
-      <rect x="3" y="3" width="9" height="12" rx="1.5" />
-      <rect x="15" y="7" width="6" height="10" rx="1.5" />
-      <path d="M7 21h10" />
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
     </>
   ),
   play: <path d="M7 4.5 19 12 7 19.5Z" />,
@@ -81,6 +82,13 @@ const PATHS: Record<string, React.ReactNode> = {
   maximize: <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />,
   list: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
   chevron: <path d="M6 9l6 6 6-6" />,
+  image: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+    </>
+  ),
   globe: (
     <>
       <circle cx="12" cy="12" r="10" />

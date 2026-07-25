@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
@@ -25,7 +25,17 @@ function fallbackColors(name: string): [string, string] {
 
 /** Card cover: project name over a gradient of the repo's brand colors.
  *  Children (the inline rename input) replace the name while editing. */
-function ProjectCover({ name, colors, children }: { name: string; colors?: string[]; children?: React.ReactNode }) {
+function ProjectCover({
+  name,
+  colors,
+  coverUrl,
+  children,
+}: {
+  name: string;
+  colors?: string[];
+  coverUrl?: string | null;
+  children?: React.ReactNode;
+}) {
   const [c1, c2] =
     colors && colors.length >= 2
       ? [colors[0], colors[1]]
@@ -33,7 +43,8 @@ function ProjectCover({ name, colors, children }: { name: string; colors?: strin
         ? [colors[0], `color-mix(in srgb, ${colors[0]} 55%, #101012)`]
         : fallbackColors(name);
   return (
-    <div className="project-cover" style={{ background: `linear-gradient(160deg, ${c1}, ${c2})` }}>
+    <div className="project-cover" style={coverUrl ? undefined : { background: `linear-gradient(160deg, ${c1}, ${c2})` }}>
+      {coverUrl && <img className="cover-img" src={coverUrl} alt="" />}
       {children ?? <span>{name}</span>}
     </div>
   );
@@ -54,6 +65,17 @@ export default function ProjectList({
   const create = useMutation(api.projects.create);
   const linkRepo = useMutation(api.repoLinks.link);
   const renameProject = useMutation(api.projects.rename);
+  const setCover = useMutation(api.projects.setCover);
+  const generateUploadUrl = useMutation(api.comments.generateUploadUrl);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const [coverTarget, setCoverTarget] = useState<Id<"projects"> | null>(null);
+  const uploadCover = async (file: File) => {
+    if (!coverTarget) return;
+    const url = await generateUploadUrl();
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": file.type }, body: file });
+    const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+    await setCover({ projectId: coverTarget, storageId, userId: me._id, sessionToken: sessionToken() });
+  };
   const [adding, setAdding] = useState(false);
   // Inline rename, entered from the card's hover pen. Enter/blur commit,
   // Esc cancels; committing a no-op or empty value just closes the field.
@@ -145,6 +167,17 @@ export default function ProjectList({
         <AccountMenu me={me} onSignOut={onSignOut} />
       </div>
       <div className="home">
+      <input
+        ref={coverInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void uploadCover(file);
+        }}
+      />
       <div className="home-header">
         <h1>Projects</h1>
       </div>
@@ -190,7 +223,7 @@ export default function ProjectList({
               }
             }}
           >
-            <ProjectCover name={project.name} colors={project.brandColors}>
+            <ProjectCover name={project.name} colors={project.brandColors} coverUrl={project.coverUrl}>
               {renaming?.id === project._id ? (
                 <input
                   className="cover-rename"
@@ -207,17 +240,31 @@ export default function ProjectList({
                 />
               ) : undefined}
             </ProjectCover>
-            <button
-              className="btn ghost icon-btn card-edit"
-              aria-label={`Rename ${project.name}`}
-              title="Rename"
-              onClick={(e) => {
-                e.stopPropagation();
-                setRenaming({ id: project._id, value: project.name, original: project.name });
-              }}
-            >
-              <Icon name="pen" size={13} />
-            </button>
+            <span className="card-actions">
+              <button
+                className="btn ghost icon-btn card-edit"
+                aria-label={`Rename ${project.name}`}
+                title="Rename"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setRenaming({ id: project._id, value: project.name, original: project.name });
+                }}
+              >
+                <Icon name="pen" size={13} />
+              </button>
+              <button
+                className="btn ghost icon-btn card-edit"
+                aria-label={`Change ${project.name}'s cover image`}
+                title="Cover image"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCoverTarget(project._id);
+                  coverInputRef.current?.click();
+                }}
+              >
+                <Icon name="image" size={13} />
+              </button>
+            </span>
             <div className="meta">
               <span>
                 {project.framework === "nextjs"

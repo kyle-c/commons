@@ -104,6 +104,7 @@ export const listWithActivity = query({
         );
         return {
           ...project,
+          coverUrl: project.coverImageId ? await ctx.storage.getUrl(project.coverImageId) : null,
           workspaceName: project.workspaceId ? workspaceNames.get(project.workspaceId) : undefined,
           lastActivityAt,
           creator,
@@ -420,6 +421,24 @@ export const rediscover = mutation({
       }
       await ctx.db.insert("frames", { projectId, ...frame });
     }
+  },
+});
+
+// Custom card cover from the home card's hover affordance. Any member;
+// replacing deletes the old file.
+export const setCover = mutation({
+  args: {
+    projectId: v.id("projects"),
+    storageId: v.id("_storage"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const viewerId = await resolveViewer(ctx, args);
+    const project = await accessibleProject(ctx, args.projectId, viewerId);
+    if (!project) throw new Error("You don't have access to this project.");
+    if (project.coverImageId) await ctx.storage.delete(project.coverImageId).catch(() => {});
+    await ctx.db.patch(args.projectId, { coverImageId: args.storageId });
   },
 });
 

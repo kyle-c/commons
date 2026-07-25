@@ -17,7 +17,7 @@ export function InlineField({
   submitLabel: string;
   onSubmit: (value: string) => Promise<void> | void;
   onClose: () => void;
-  hint?: string;
+  hint?: React.ReactNode;
   initialValue?: string;
   allowEmpty?: boolean;
 }) {
@@ -92,7 +92,7 @@ export function RevealField({
   placeholder: string;
   submitLabel: string;
   onSubmit: (value: string) => Promise<void> | void;
-  hint?: string;
+  hint?: React.ReactNode;
   initialValue?: string;
   allowEmpty?: boolean;
 }) {
