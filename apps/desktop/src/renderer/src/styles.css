@@ -2458,26 +2458,26 @@ kbd {
   font-weight: 600;
 }
 
-/* Split view switcher: the Prototype segment carries the device menu — a
-   tray that unfolds out of the control itself. Same surface, borders merged
-   with a 1px overlap, corners squared at the joint; labels live in tooltips. */
+/* Split view switcher: the Prototype segment's device tray extends the
+   selected pill itself — same background, same width, joined corners. The
+   current device lives in the pill; the tray offers only the others. */
 .seg-wrap {
   position: relative;
 }
-.seg.menu-open {
+.seg button.menu-open {
+  border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
 }
 .device-menu {
+  /* Anchored to the pill, which sits inset by the seg's 2px padding + 1px
+     border; buttons share the pill's padding so widths match intrinsically. */
   position: absolute;
-  top: calc(100% - 1px);
-  right: 0;
+  top: calc(100% - 3px);
+  right: 3px;
   display: flex;
   flex-direction: column;
-  padding: 2px;
-  gap: 2px;
-  background: var(--bg-input);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
+  background: var(--bg-active);
+  border-radius: 4px;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   box-shadow: var(--shadow-panel);
@@ -2495,21 +2495,17 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 28px;
-  border-radius: 4px;
+  padding: 6px 12px;
   color: var(--text-secondary);
-  transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+  transition: color var(--dur-fast) var(--ease-out);
 }
 .device-menu button:hover {
-  background: var(--bg-hover);
   color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
 }
-.device-menu button.on {
-  background: var(--bg-active);
-  color: var(--accent);
+.device-menu button:last-child {
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
 }
 
 /* The locked-state preview field is permanent — no dismiss, no side padding. */
@@ -2833,4 +2829,18 @@ kbd {
   margin-left: auto;
   font-size: var(--text-xs);
   padding: 2px 8px;
+}
+
+/* Prototype toolbar address chip: where you are, in URL terms. */
+.proto-address {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  padding: 4px 10px;
+  border-radius: 6px;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

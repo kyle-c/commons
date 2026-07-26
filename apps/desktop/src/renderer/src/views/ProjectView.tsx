@@ -1060,7 +1060,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           )}
         </div>
         <div className="seg-wrap" ref={deviceMenuRef}>
-          <div className={`seg ${deviceMenuOpen ? "menu-open" : ""}`}>
+          <div className="seg">
             <button
               className={nav.view === "canvas" ? "on" : ""}
               aria-label="Canvas"
@@ -1073,7 +1073,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
               <Icon name="frames" />
             </button>
             <button
-              className={nav.view === "prototype" ? "on" : ""}
+              className={`${nav.view === "prototype" ? "on" : ""} ${deviceMenuOpen ? "menu-open" : ""}`}
               aria-label="Prototype"
               title={
                 nav.view === "prototype"
@@ -1090,10 +1090,9 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           </div>
           {deviceMenuOpen && (
             <div className="device-menu">
-              {DEVICES.map((d) => (
+              {DEVICES.filter((d) => d.label !== protoDevice.label).map((d) => (
                 <button
                   key={d.label}
-                  className={protoDevice.label === d.label ? "on" : ""}
                   aria-label={d.label}
                   title={d.label}
                   onClick={() => {

@@ -63,13 +63,18 @@ export default function PrototypeView({
     <div className="proto">
       <div className="proto-toolbar">
         <button
-          className={`btn ghost ${drawerOpen ? "active" : ""}`}
+          className={`btn ghost icon-btn ${drawerOpen ? "active" : ""}`}
+          aria-label="Screens"
           title="Screens"
           onClick={() => setDrawerOpen((o) => !o)}
         >
           <Icon name="list" />
-          <span className="proto-current">{routes.find((f) => (f.routePath ?? "/") === routePath)?.title ?? routePath}</span>
         </button>
+        {/* Where you are, address-bar style: a changing path reads as
+            location, where a changing button label read as a moving target. */}
+        <span className="proto-address" title="Current screen">
+          {routePath}
+        </span>
         <span className="spacer" style={{ flex: 1 }} />
         <button
           className={`btn ghost ${testsOpen ? "active" : ""}`}
