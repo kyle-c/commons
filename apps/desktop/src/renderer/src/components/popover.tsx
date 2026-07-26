@@ -126,7 +126,7 @@ export function RevealField({
   if (!openField) {
     return (
       <button
-        className="btn ghost reveal-trigger"
+        className={`btn ghost reveal-trigger ${connected ? "connected" : ""}`}
         onClick={() => {
           setValue(initialValue);
           setError(null);

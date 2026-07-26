@@ -309,9 +309,15 @@ textarea:focus {
   animation: pop-in var(--dur-fast) var(--ease-out);
 }
 
-/* Setup carries little content since the icon+action trigger rework. */
+/* Setup conforms to its content: the slot buttons hug their text and the
+   popover hugs the buttons. Expanded forms get room via the max clamp. */
 .titlebar-popover.setup-pop {
-  width: 272px;
+  width: max-content;
+  min-width: 216px;
+  max-width: 300px;
+}
+.setup-pop .reveal-form {
+  min-width: 248px;
 }
 
 .team-row {
@@ -2124,17 +2130,21 @@ kbd {
 }
 .reveal-trigger {
   display: flex;
-  width: calc(100% - 28px);
+  width: fit-content;
   margin: 2px 14px 10px;
   justify-content: flex-start;
   color: var(--text-secondary);
   /* Dashed slot = "something can go here", same language as the new-project
-     tile and the avatar-add circle — plain text didn't read as actionable. */
+     tile and the avatar-add circle — plain text didn't read as actionable.
+     Once the slot is filled (connected), the border goes solid. */
   border: 1px dashed var(--border-strong);
 }
 /* Outrank .btn.ghost's transparent border. */
 .btn.ghost.reveal-trigger {
   border: 1px dashed var(--border-strong);
+}
+.btn.ghost.reveal-trigger.connected {
+  border-style: solid;
 }
 .btn.ghost.reveal-trigger:hover {
   background: transparent;
@@ -2667,7 +2677,6 @@ kbd {
   flex: none;
 }
 .reveal-check {
-  margin-left: auto;
   color: var(--success);
   display: inline-flex;
 }
