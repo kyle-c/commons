@@ -15,6 +15,16 @@ import Inbox from "./Inbox";
 import AccountMenu from "./AccountMenu";
 import Icon from "../components/icons";
 
+/** Shared lifecycle labels: what kind of feedback a project wants right now. */
+const STATUSES = [
+  { value: "exploring", label: "Exploring", color: "#5b8def" },
+  { value: "in-review", label: "In review", color: "#e0a03f" },
+  { value: "testing", label: "Testing", color: "#a78bfa" },
+  { value: "shipped", label: "Shipped", color: "#4bb885" },
+  { value: "parked", label: "Parked", color: "#8b8b94" },
+] as const;
+type ProjectStatus = (typeof STATUSES)[number]["value"];
+
 /** Stable color pair derived from the name, for repos with no detectable colors. */
 function fallbackColors(name: string): [string, string] {
   let hash = 0;
@@ -66,6 +76,11 @@ export default function ProjectList({
   const linkRepo = useMutation(api.repoLinks.link);
   const renameProject = useMutation(api.projects.rename);
   const setCover = useMutation(api.projects.setCover);
+  const togglePin = useMutation(api.projects.togglePin);
+  const setArchived = useMutation(api.projects.setArchived);
+  const setStatus = useMutation(api.projects.setStatus);
+  const [statusMenuFor, setStatusMenuFor] = useState<Id<"projects"> | null>(null);
+  const [archivedOpen, setArchivedOpen] = useState<Record<string, boolean>>({});
   const generateUploadUrl = useMutation(api.comments.generateUploadUrl);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverTarget, setCoverTarget] = useState<Id<"projects"> | null>(null);
@@ -127,24 +142,40 @@ export default function ProjectList({
   const sections = (() => {
     const needle = query.trim().toLowerCase();
     const visible = (projects ?? []).filter((p) => !needle || p.name.toLowerCase().includes(needle));
-    const byWorkspace = new Map<string, { name: string; projects: NonNullable<typeof projects> }>();
+    const byWorkspace = new Map<
+      string,
+      { name: string; projects: NonNullable<typeof projects>; archived: NonNullable<typeof projects> }
+    >();
     if (!needle && projects !== undefined) {
-      for (const workspace of workspaces) byWorkspace.set(workspace._id, { name: workspace.name, projects: [] });
+      for (const workspace of workspaces) {
+        byWorkspace.set(workspace._id, { name: workspace.name, projects: [], archived: [] });
+      }
     }
     for (const project of visible) {
       const key = project.workspaceId ?? "unassigned";
       const name = project.workspaceName ?? "Unassigned";
-      if (!byWorkspace.has(key)) byWorkspace.set(key, { name, projects: [] });
-      byWorkspace.get(key)!.projects.push(project);
+      if (!byWorkspace.has(key)) byWorkspace.set(key, { name, projects: [], archived: [] });
+      byWorkspace.get(key)![project.archivedAt ? "archived" : "projects"].push(project);
     }
     for (const section of byWorkspace.values()) {
-      section.projects.sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
+      // Pins float to the front of their section; activity orders the rest.
+      section.projects.sort(
+        (a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0)
+      );
+      section.archived.sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0));
     }
     const order = new Map(workspaces.map((w, i) => [w._id as string, i]));
     return [...byWorkspace.entries()]
       .sort(([a], [b]) => (order.get(a) ?? 99) - (order.get(b) ?? 99))
       .map(([key, section]) => ({ key, ...section }));
   })();
+
+  // "Needs you": projects where teammates opened threads since your last
+  // visit. Self-clearing — going back to the project advances your visit
+  // marker and the entry drops out.
+  const needsYou = (projects ?? [])
+    .filter((p) => !p.archivedAt && (p.newThreadsSinceVisit ?? 0) > 0)
+    .sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
 
   return (
     <div className="app">
@@ -205,6 +236,40 @@ export default function ProjectList({
         </div>
       )}
 
+      {needsYou.length > 0 && !query.trim() && (
+        <div className="needs-you">
+          <h2 className="workspace-heading">Needs you</h2>
+          <div className="needs-you-row">
+            {needsYou.map((project) => {
+              const [c1, c2] =
+                project.brandColors && project.brandColors.length >= 2
+                  ? [project.brandColors[0], project.brandColors[1]]
+                  : fallbackColors(project.name);
+              return (
+                <button
+                  key={project._id}
+                  className="needs-you-card"
+                  onClick={() => setNav({ screen: "project", projectId: project._id, view: "canvas" })}
+                >
+                  <span
+                    className="ny-swatch"
+                    style={
+                      project.coverUrl
+                        ? { backgroundImage: `url(${project.coverUrl})`, backgroundSize: "cover" }
+                        : { background: `linear-gradient(160deg, ${c1}, ${c2})` }
+                    }
+                  />
+                  <span className="ny-name">{project.name}</span>
+                  <span className="ny-reason">
+                    {project.newThreadsSinceVisit} new thread{project.newThreadsSinceVisit === 1 ? "" : "s"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {sections.map((section) => (
         <div key={section.key} className="workspace-section">
           {sections.length > 1 && <h2 className="workspace-heading">{section.name}</h2>}
@@ -242,6 +307,17 @@ export default function ProjectList({
             </ProjectCover>
             <span className="card-actions">
               <button
+                className={`btn ghost icon-btn card-edit ${project.pinned ? "pinned" : ""}`}
+                aria-label={project.pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}
+                title={project.pinned ? "Unpin" : "Pin to top"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void togglePin({ projectId: project._id, userId: me._id, sessionToken: sessionToken() });
+                }}
+              >
+                <Icon name="pin" size={13} />
+              </button>
+              <button
                 className="btn ghost icon-btn card-edit"
                 aria-label={`Rename ${project.name}`}
                 title="Rename"
@@ -264,6 +340,17 @@ export default function ProjectList({
               >
                 <Icon name="image" size={13} />
               </button>
+              <button
+                className="btn ghost icon-btn card-edit"
+                aria-label={`Archive ${project.name}`}
+                title="Archive (share links stay alive)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void setArchived({ projectId: project._id, archived: true, userId: me._id, sessionToken: sessionToken() });
+                }}
+              >
+                <Icon name="archive" size={13} />
+              </button>
             </span>
             <div className="meta">
               <span>
@@ -280,7 +367,55 @@ export default function ProjectList({
               <span>active {timeAgo(project.lastActivityAt ?? project._creationTime)} ago</span>
             </div>
             <div className="foot">
-              <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <span className="status-wrap" onClick={(e) => e.stopPropagation()}>
+                  {(() => {
+                    const current = STATUSES.find((s) => s.value === project.status);
+                    return (
+                      <button
+                        className={`status-chip ${current ? "" : "unset"}`}
+                        title="Project status: tells teammates what feedback is wanted"
+                        onClick={() => setStatusMenuFor(statusMenuFor === project._id ? null : project._id)}
+                      >
+                        {current ? (
+                          <>
+                            <span className="status-swatch" style={{ background: current.color }} />
+                            {current.label}
+                          </>
+                        ) : (
+                          "+ Status"
+                        )}
+                      </button>
+                    );
+                  })()}
+                  {statusMenuFor === project._id && (
+                    <>
+                      <span className="menu-backdrop" onClick={() => setStatusMenuFor(null)} />
+                      <span className="status-menu">
+                        {STATUSES.map((s) => (
+                          <button
+                            key={s.value}
+                            className={project.status === s.value ? "on" : ""}
+                            onClick={() => {
+                              setStatusMenuFor(null);
+                              void setStatus({
+                                projectId: project._id,
+                                status: (project.status === s.value ? undefined : s.value) as
+                                  | ProjectStatus
+                                  | undefined,
+                                userId: me._id,
+                                sessionToken: sessionToken(),
+                              });
+                            }}
+                          >
+                            <span className="status-swatch" style={{ background: s.color }} />
+                            {s.label}
+                          </button>
+                        ))}
+                      </span>
+                    </>
+                  )}
+                </span>
                 {project.frameCount === 0 ? (
                   <span
                     className="badge setup"
@@ -326,6 +461,50 @@ export default function ProjectList({
               </button>
             )}
           </div>
+          {section.archived.length > 0 && (
+            <>
+              <button
+                className="archived-toggle"
+                onClick={() => setArchivedOpen({ ...archivedOpen, [section.key]: !archivedOpen[section.key] })}
+              >
+                <Icon name="chevron" size={12} />
+                Archived · {section.archived.length}
+              </button>
+              {archivedOpen[section.key] && (
+                <div className="project-grid archived-grid">
+                  {section.archived.map((project) => (
+                    <div
+                      key={project._id}
+                      className="project-card archived"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Open ${project.name} (archived)`}
+                      onClick={() => setNav({ screen: "project", projectId: project._id, view: "canvas" })}
+                    >
+                      <ProjectCover name={project.name} colors={project.brandColors} coverUrl={project.coverUrl} />
+                      <div className="meta">
+                        <span>archived {timeAgo(project.archivedAt ?? 0)} ago</span>
+                        <button
+                          className="btn ghost restore-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void setArchived({
+                              projectId: project._id,
+                              archived: false,
+                              userId: me._id,
+                              sessionToken: sessionToken(),
+                            });
+                          }}
+                        >
+                          Restore
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
       ))}
       </div>

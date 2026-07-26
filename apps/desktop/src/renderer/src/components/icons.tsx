@@ -6,6 +6,19 @@
 
 const PATHS: Record<string, React.ReactNode> = {
   zap: <path d="M13 2 4.8 13.2H11L10 22l9.2-11.2H13L13 2Z" />,
+  pin: (
+    <>
+      <path d="M12 15v6" />
+      <path d="M8.5 3.5h7L15 9.5l3 3.5H6l3-3.5Z" />
+    </>
+  ),
+  archive: (
+    <>
+      <rect x="3" y="4" width="18" height="5" rx="1" />
+      <path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9" />
+      <path d="M10 13h4" />
+    </>
+  ),
   pen: (
     <>
       <path d="M12 20h9" />

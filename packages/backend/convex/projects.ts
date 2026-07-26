@@ -53,20 +53,29 @@ export const get = query({
   handler: async (ctx, args) => accessibleProject(ctx, args.projectId, await resolveViewer(ctx, args)),
 });
 
-// Home view: every active project this user can see, with creator + presence.
+// Home view: every project this user can see (archived included, flagged by
+// archivedAt — the client tucks those behind a per-workspace toggle), with
+// creator, presence, the viewer's pins, and the "needs you" signal.
 export const listWithActivity = query({
   args: { userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const userId = await resolveViewer(ctx, args);
     const projects = await ctx.db.query("projects").collect();
     const visible = await Promise.all(projects.map((p) => canAccessProject(ctx, p, userId)));
-    const active = projects.filter((p, i) => !p.archivedAt && visible[i]);
+    const active = projects.filter((_, i) => visible[i]);
     const workspaceNames = new Map<string, string>();
     for (const p of active) {
       if (p.workspaceId && !workspaceNames.has(p.workspaceId)) {
         workspaceNames.set(p.workspaceId, (await ctx.db.get(p.workspaceId))?.name ?? "");
       }
     }
+    const pins = userId
+      ? await ctx.db
+          .query("projectPins")
+          .withIndex("by_user", (q) => q.eq("userId", userId))
+          .collect()
+      : [];
+    const pinned = new Set(pins.map((p) => p.projectId as string));
     const cutoff = Date.now() - 60_000;
     return await Promise.all(
       active.map(async (project) => {
@@ -102,6 +111,19 @@ export const listWithActivity = query({
           threads[0]?._creationTime ?? 0,
           newestSession?._creationTime ?? 0
         );
+        // "Needs you": threads someone else opened after your previous visit
+        // ended. Only fires on projects you've actually been to — the strip
+        // is a return prompt, not a discovery feed.
+        const visit = userId
+          ? await ctx.db
+              .query("presence")
+              .withIndex("by_user_project", (q) => q.eq("userId", userId).eq("projectId", project._id))
+              .unique()
+          : null;
+        const since = visit?.previousVisitAt;
+        const newThreadsSinceVisit = since
+          ? threads.filter((t) => t._creationTime > since && t.createdBy !== userId).length
+          : 0;
         return {
           ...project,
           coverUrl: project.coverImageId ? await ctx.storage.getUrl(project.coverImageId) : null,
@@ -111,6 +133,8 @@ export const listWithActivity = query({
           activeUsers: activeUsers.filter(Boolean),
           frameCount: frames.length,
           openThreadCount: threads.filter((t) => !t.resolvedAt).length,
+          pinned: pinned.has(project._id),
+          newThreadsSinceVisit,
         };
       })
     );
@@ -360,6 +384,71 @@ export const archive = mutation({
   args: { projectId: v.id("projects") },
   handler: async (ctx, { projectId }) => {
     await ctx.db.patch(projectId, { archivedAt: Date.now() });
+  },
+});
+
+// Archive/restore from the home card. Any workspace member — same trust
+// level as rename. Archiving hides the card (share links stay alive);
+// restoring puts it back in the grid.
+export const setArchived = mutation({
+  args: {
+    projectId: v.id("projects"),
+    archived: v.boolean(),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const viewerId = await resolveViewer(ctx, args);
+    const project = await accessibleProject(ctx, args.projectId, viewerId);
+    if (!project) throw new Error("You don't have access to this project.");
+    await ctx.db.patch(args.projectId, { archivedAt: args.archived ? Date.now() : undefined });
+  },
+});
+
+// Shared lifecycle label on the card. Any member; undefined clears it.
+export const setStatus = mutation({
+  args: {
+    projectId: v.id("projects"),
+    status: v.optional(
+      v.union(
+        v.literal("exploring"),
+        v.literal("in-review"),
+        v.literal("testing"),
+        v.literal("shipped"),
+        v.literal("parked")
+      )
+    ),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const viewerId = await resolveViewer(ctx, args);
+    const project = await accessibleProject(ctx, args.projectId, viewerId);
+    if (!project) throw new Error("You don't have access to this project.");
+    await ctx.db.patch(args.projectId, { status: args.status });
+  },
+});
+
+// Personal pin: sorts the project first in its section on this user's home.
+export const togglePin = mutation({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const viewerId = await resolveViewer(ctx, args);
+    if (!viewerId) throw new Error("Sign in to pin projects.");
+    if (!(await accessibleProject(ctx, args.projectId, viewerId))) {
+      throw new Error("You don't have access to this project.");
+    }
+    const existing = await ctx.db
+      .query("projectPins")
+      .withIndex("by_user_project", (q) => q.eq("userId", viewerId).eq("projectId", args.projectId))
+      .unique();
+    if (existing) await ctx.db.delete(existing._id);
+    else await ctx.db.insert("projectPins", { userId: viewerId, projectId: args.projectId });
+    return !existing;
   },
 });
 

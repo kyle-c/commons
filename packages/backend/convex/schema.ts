@@ -125,6 +125,17 @@ export default defineSchema({
     // read-only snapshot canvas + threads. Minted/revoked in Sharing.
     shareToken: v.optional(v.string()),
     archivedAt: v.optional(v.number()),
+    // Shared lifecycle label ("what kind of feedback is wanted here").
+    // Absent = unlabeled; any workspace member can set it from the card.
+    status: v.optional(
+      v.union(
+        v.literal("exploring"),
+        v.literal("in-review"),
+        v.literal("testing"),
+        v.literal("shipped"),
+        v.literal("parked")
+      )
+    ),
   }).index("by_share_token", ["shareToken"]),
 
   // Where each teammate's working copy of a project lives, per machine —
@@ -299,6 +310,15 @@ export default defineSchema({
     messageId: v.id("messages"),
     readAt: v.optional(v.number()),
   }).index("by_user", ["userId"]),
+
+  // Personal curation: a pinned project sorts first in its workspace section
+  // on the pinner's home. One row per (user, project); unpin deletes it.
+  projectPins: defineTable({
+    userId: v.id("users"),
+    projectId: v.id("projects"),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_project", ["userId", "projectId"]),
 
   // Presence heartbeat per user per project. previousVisitAt marks when the
   // *prior* visit ended (set when a heartbeat lands after a >10min gap) —
