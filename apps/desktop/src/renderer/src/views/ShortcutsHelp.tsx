@@ -11,6 +11,14 @@ export default function ShortcutsHelp() {
     () => registerShortcut("?", () => setOpen((o) => !o), { description: "Keyboard shortcuts" }),
     []
   );
+  // Help > Keyboard Shortcuts opens the same sheet.
+  useEffect(() => {
+    const onMenu = (e: Event) => {
+      if ((e as CustomEvent).detail?.type === "shortcuts") setOpen((o) => !o);
+    };
+    window.addEventListener("commons:menu", onMenu);
+    return () => window.removeEventListener("commons:menu", onMenu);
+  }, []);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);

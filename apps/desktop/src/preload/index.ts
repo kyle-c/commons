@@ -5,6 +5,7 @@ import type {
   CommonsApi,
   DeepLink,
   DevServerStatus,
+  MenuAction,
   UpdateStatus,
 } from "@commons/shared";
 
@@ -32,6 +33,12 @@ const api: CommonsApi = {
     ipcRenderer.on("auth-callback", handler);
     return () => ipcRenderer.removeListener("auth-callback", handler);
   },
+  onMenuAction: (cb) => {
+    const handler = (_e: unknown, action: MenuAction) => cb(action);
+    ipcRenderer.on("menu-action", handler);
+    return () => ipcRenderer.removeListener("menu-action", handler);
+  },
+  setMenuRecents: (recents) => ipcRenderer.send("menu-recents", recents),
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
   wrapPreviewUrl: (url, opts) => ipcRenderer.invoke("wrap-preview-url", url, opts),
   getGitStatus: (repoPath) => ipcRenderer.invoke("git-status", repoPath),

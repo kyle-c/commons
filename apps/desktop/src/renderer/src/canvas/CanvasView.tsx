@@ -254,7 +254,20 @@ export default function CanvasView({
       registerShortcut("-", () => zoomBy(0.8), { meta: true, description: "Zoom out" }),
       registerShortcut("0", () => fitRef.current(), { meta: true, description: "Fit to content" }),
     ];
-    return () => unregister.forEach((fn) => fn());
+    // View > Zoom In/Out/Fit — the menu shows the shortcuts but the keys
+    // stay renderer-owned; menu clicks arrive as this event instead.
+    const onMenu = (e: Event) => {
+      const action = (e as CustomEvent).detail;
+      if (action?.type !== "zoom") return;
+      if (action.dir === "in") zoomBy(1.25);
+      else if (action.dir === "out") zoomBy(0.8);
+      else fitRef.current();
+    };
+    window.addEventListener("commons:menu", onMenu);
+    return () => {
+      unregister.forEach((fn) => fn());
+      window.removeEventListener("commons:menu", onMenu);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

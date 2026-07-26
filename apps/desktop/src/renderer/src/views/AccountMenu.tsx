@@ -16,6 +16,16 @@ export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSig
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
 
+  // Commons > Settings… (⌘,) opens this menu — it's where the account-level
+  // knobs live until a dedicated settings surface exists.
+  useEffect(() => {
+    const onMenu = (e: Event) => {
+      if ((e as CustomEvent).detail?.type === "settings") setOpen(true);
+    };
+    window.addEventListener("commons:menu", onMenu);
+    return () => window.removeEventListener("commons:menu", onMenu);
+  }, []);
+
   const generateUploadUrl = useMutation(api.users.generateAvatarUploadUrl);
   const setAvatarImage = useMutation(api.users.setAvatarImage);
   const resetAvatar = useMutation(api.users.resetAvatar);

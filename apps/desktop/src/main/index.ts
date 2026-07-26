@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, Menu } from "electron";
+import { app, shell, BrowserWindow, ipcMain, dialog } from "electron";
 import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
@@ -9,6 +9,7 @@ import * as runner from "./projectRunner";
 import * as agents from "./agents/sessionManager";
 import * as annotator from "./annotator";
 import { detectExternal } from "./externalServers";
+import * as appMenu from "./appMenu";
 import * as previewHarness from "./previewHarness";
 import * as gitOps from "./gitOps";
 import * as updater from "./updater";
@@ -18,6 +19,10 @@ import { fixPath } from "./fixPath";
 // Must run before anything spawns npx/pnpm/yarn/bunx — GUI-launched apps get
 // a PATH that's missing wherever those actually live (see fixPath.ts).
 fixPath();
+
+// Dev runs otherwise show the npm package name ("@commons/desktop") in the
+// About/Hide/Quit items; packaged builds get it from productName.
+app.setName("Commons");
 
 // Main-process failures forward to the renderer, which owns error reporting
 // (POST /api/error). Handlers keep the app alive — a background failure
@@ -103,31 +108,11 @@ app.on("open-url", (event, url) => {
   else pendingDeepLink = url;
 });
 
-// Default menu binds ⌘+/⌘−/⌘0 to chrome zoom; drop those roles so the
-// renderer can use them for canvas zoom instead.
-function installAppMenu(): void {
-  Menu.setApplicationMenu(
-    Menu.buildFromTemplate([
-      { role: "appMenu" },
-      { role: "fileMenu" },
-      { role: "editMenu" },
-      {
-        label: "View",
-        submenu: [
-          { role: "reload" },
-          { role: "forceReload" },
-          { role: "toggleDevTools" },
-          { type: "separator" },
-          { role: "togglefullscreen" },
-        ],
-      },
-      { role: "windowMenu" },
-    ])
-  );
-}
-
 app.whenReady().then(() => {
-  installAppMenu();
+  appMenu.install(() => mainWindow);
+  ipcMain.on("menu-recents", (_e, recents: { id: string; name: string }[]) => {
+    if (Array.isArray(recents)) appMenu.setRecents(recents.filter((r) => r?.id && r?.name));
+  });
   ipcMain.handle("pick-repo", async () => {
     if (!mainWindow) return null;
     const result = await dialog.showOpenDialog(mainWindow, {

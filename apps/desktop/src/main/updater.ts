@@ -46,3 +46,22 @@ export function status(): UpdateStatus {
 export function installNow(): void {
   if (updateReady) autoUpdater.quitAndInstall();
 }
+
+/**
+ * Menu-triggered check ("Check for Updates…"). Unlike the silent background
+ * loop, this one reports back so the menu handler can show a dialog.
+ */
+export async function checkNow(): Promise<
+  { result: "dev" } | { result: "ready"; version: string } | { result: "downloading"; version: string } | { result: "current" }
+> {
+  if (!app.isPackaged) return { result: "dev" };
+  if (updateReady) return { result: "ready", version: autoUpdater.currentVersion.version };
+  try {
+    const check = await autoUpdater.checkForUpdates();
+    const found = check?.updateInfo.version;
+    if (found && found !== app.getVersion()) return { result: "downloading", version: found };
+  } catch {
+    // Offline or feed unreachable — same answer as "nothing new".
+  }
+  return { result: "current" };
+}

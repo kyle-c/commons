@@ -207,6 +207,19 @@ export interface AuthCallback {
   state: string;
 }
 
+/**
+ * A native menu bar command relayed to the renderer. The menu is the
+ * discoverability surface for the app's keyboard-first commands; each action
+ * mirrors something the renderer already knows how to do.
+ */
+export type MenuAction =
+  | { type: "new-project" }
+  | { type: "open-project"; projectId: string }
+  | { type: "set-view"; view: "canvas" | "prototype" }
+  | { type: "zoom"; dir: "in" | "out" | "fit" }
+  | { type: "shortcuts" }
+  | { type: "settings" };
+
 /** IPC surface exposed to the renderer as window.commons. */
 export interface CommonsApi {
   pickRepo(): Promise<RepoInspection | null>;
@@ -224,6 +237,10 @@ export interface CommonsApi {
   onDevServerStatus(cb: (repoPath: string, status: DevServerStatus) => void): () => void;
   onDeepLink(cb: (link: DeepLink) => void): () => void;
   onAuthCallback(cb: (auth: AuthCallback) => void): () => void;
+  /** Native menu bar commands (File > New Project, View > Canvas, …). */
+  onMenuAction(cb: (action: MenuAction) => void): () => void;
+  /** Feed the File > Open Recent submenu (renderer owns the recents list). */
+  setMenuRecents(recents: { id: string; name: string }[]): void;
   openExternal(url: string): Promise<void>;
   /** Wrap a localhost dev URL in the device-sized preview harness page. */
   wrapPreviewUrl(url: string, opts: { width: number; height: number; title?: string }): Promise<string>;

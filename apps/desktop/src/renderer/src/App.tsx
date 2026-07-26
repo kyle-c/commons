@@ -10,6 +10,7 @@ import ShortcutsHelp from "./views/ShortcutsHelp";
 import UpdateChip from "./views/UpdateChip";
 import CommandPalette from "./views/CommandPalette";
 import { clearStoredSession, getStoredSession, initials, type StoredSession } from "./lib/session";
+import { getRecents } from "./lib/recents";
 
 export type Nav =
   | { screen: "home" }
@@ -54,6 +55,28 @@ export default function App() {
         frameId: link.frameId as Id<"frames"> | undefined,
         threadId: link.threadId as Id<"threads"> | undefined,
       });
+    });
+  }, []);
+
+  // Native menu bar: navigation actions land here; view-local ones (zoom,
+  // overlays) re-broadcast as window events for whichever surface is mounted.
+  useEffect(() => {
+    if (!window.commons) return;
+    window.commons.setMenuRecents(getRecents());
+    return window.commons.onMenuAction((action) => {
+      switch (action.type) {
+        case "new-project":
+          setNav({ screen: "home" });
+          break;
+        case "open-project":
+          setNav({ screen: "project", projectId: action.projectId as Id<"projects">, view: "canvas" });
+          break;
+        case "set-view":
+          setNav((prev) => (prev.screen === "project" ? { ...prev, view: action.view } : prev));
+          break;
+        default:
+          window.dispatchEvent(new CustomEvent("commons:menu", { detail: action }));
+      }
     });
   }, []);
 

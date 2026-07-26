@@ -816,7 +816,15 @@ export default function ProjectView({ me, nav, setNav }: Props) {
 
   const projectName = project?.name;
   useEffect(() => {
-    if (projectName) pushRecent(nav.projectId, projectName);
+    if (!projectName) return;
+    pushRecent(nav.projectId, projectName);
+    window.commons?.setMenuRecents(getRecents());
+    // Window title carries the project, so the Window menu and Mission
+    // Control show which Commons window is which.
+    document.title = `${projectName} · Commons`;
+    return () => {
+      document.title = "Commons";
+    };
   }, [nav.projectId, projectName]);
 
   // Presence heartbeat while the project is open.
