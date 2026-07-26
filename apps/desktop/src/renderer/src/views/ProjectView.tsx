@@ -1052,7 +1052,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
           )}
         </div>
         <div className="seg-wrap" ref={deviceMenuRef}>
-          <div className="seg">
+          <div className={`seg ${deviceMenuOpen ? "menu-open" : ""}`}>
             <button
               className={nav.view === "canvas" ? "on" : ""}
               aria-label="Canvas"

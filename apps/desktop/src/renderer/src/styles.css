@@ -2459,32 +2459,43 @@ kbd {
 }
 
 /* Split view switcher: the Prototype segment carries the device menu — a
-   narrow icon strip the width of the segment it hangs from; labels live in
-   tooltips. */
+   tray that unfolds out of the control itself. Same surface, borders merged
+   with a 1px overlap, corners squared at the joint; labels live in tooltips. */
 .seg-wrap {
   position: relative;
 }
+.seg.menu-open {
+  border-bottom-right-radius: 0;
+}
 .device-menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% - 1px);
   right: 0;
   display: flex;
   flex-direction: column;
-  padding: 3px;
+  padding: 2px;
   gap: 2px;
-  background: var(--bg-panel);
+  background: var(--bg-input);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
   box-shadow: var(--shadow-panel);
   z-index: 100;
-  transform-origin: top right;
-  animation: pop-in var(--dur-fast) var(--ease-out);
+  transform-origin: top;
+  animation: unfold var(--dur-fast) var(--ease-out);
+}
+@keyframes unfold {
+  from {
+    transform: scaleY(0.8);
+    opacity: 0;
+  }
 }
 .device-menu button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
+  width: 42px;
   height: 28px;
   border-radius: 4px;
   color: var(--text-secondary);
