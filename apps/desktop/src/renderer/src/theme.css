@@ -7,7 +7,7 @@
   --bg-panel: #21221d;
   --bg-panel-raised: #272822;
   --bg-canvas: #141511;
-  --canvas-dot: #4f5046; /* clearly present on the canvas, still behind the work */
+  --canvas-dot: #3d3e35; /* present on the canvas without competing with the work */
   --bg-input: #2b2c25;
   --bg-hover: #2b2c25;
   --bg-active: #33342c;
