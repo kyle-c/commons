@@ -24,6 +24,18 @@ fixPath();
 // About/Hide/Quit items; packaged builds get it from productName.
 app.setName("Commons");
 
+// Packaged builds get the icon from build/icon.icns via electron-builder;
+// dev runs would otherwise wear the stock Electron dock icon.
+if (!app.isPackaged) {
+  app.whenReady().then(() => {
+    try {
+      app.dock?.setIcon(path.join(__dirname, "../../build/icon.png"));
+    } catch {
+      // Missing file in an odd checkout — the default icon is fine in dev.
+    }
+  });
+}
+
 // Main-process failures forward to the renderer, which owns error reporting
 // (POST /api/error). Handlers keep the app alive — a background failure
 // shouldn't take down the canvas someone is presenting from.

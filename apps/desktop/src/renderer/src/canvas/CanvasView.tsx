@@ -233,6 +233,24 @@ export default function CanvasView({
   };
   const fitToContent = () => fitTo(frames);
 
+  // "Overview" is a round trip, not a one-way fit: first press shows
+  // everything, second press returns to where you were. Any direct
+  // manipulation (wheel, drag) means you've picked a new spot, so the
+  // return leg is cancelled and the toggle disarms.
+  const [overviewFrom, setOverviewFrom] = useState<Viewport | null>(null);
+  const overviewFromRef = useRef<Viewport | null>(null);
+  overviewFromRef.current = overviewFrom;
+  const toggleOverview = () => {
+    const back = overviewFromRef.current;
+    if (back) {
+      setOverviewFrom(null);
+      animateVp(back);
+    } else {
+      setOverviewFrom({ ...vpRef.current });
+      fitToContent();
+    }
+  };
+
   // ⌘+/⌘− zoom the canvas around its center; ⌘0 fits to content. The app menu
   // drops Electron's chrome-zoom roles so these keys reach us (main/index.ts).
   const zoomBy = (factor: number) => {
@@ -245,14 +263,14 @@ export default function CanvasView({
     const k = scale / v.scale;
     animateVp({ scale, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k }, 160);
   };
-  const fitRef = useRef(fitToContent);
-  fitRef.current = fitToContent;
+  const fitRef = useRef(toggleOverview);
+  fitRef.current = toggleOverview;
   useEffect(() => {
     const unregister = [
       registerShortcut("=", () => zoomBy(1.25), { meta: true, description: "Zoom in" }),
       registerShortcut("+", () => zoomBy(1.25), { meta: true }), // ⌘⇧= on most layouts
       registerShortcut("-", () => zoomBy(0.8), { meta: true, description: "Zoom out" }),
-      registerShortcut("0", () => fitRef.current(), { meta: true, description: "Fit to content" }),
+      registerShortcut("0", () => fitRef.current(), { meta: true, description: "Overview (and back)" }),
     ];
     // View > Zoom In/Out/Fit — the menu shows the shortcuts but the keys
     // stay renderer-owned; menu clicks arrive as this event instead.
@@ -319,6 +337,7 @@ export default function CanvasView({
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       cancelVpAnimation(); // the hand always wins over a glide
+      if (overviewFromRef.current) setOverviewFrom(null);
       const v = vpRef.current;
       if (e.ctrlKey || e.metaKey) {
         const rect = el.getBoundingClientRect();
@@ -373,6 +392,7 @@ export default function CanvasView({
     setSelectedThread(null);
     setDraft(null);
     cancelVpAnimation();
+    if (overviewFromRef.current) setOverviewFrom(null);
     const start = { x: e.clientX, y: e.clientY, vx: vpRef.current.x, vy: vpRef.current.y };
     const move = (ev: MouseEvent) =>
       setVp({ ...vpRef.current, x: start.vx + ev.clientX - start.x, y: start.vy + ev.clientY - start.y });
@@ -828,8 +848,12 @@ export default function CanvasView({
             <Icon name="pen" size={14} /> Notes
           </button>
         )}
-        <button className="btn ghost" onClick={fitToContent} title="Fit to content">
-          Fit
+        <button
+          className={`btn ghost ${overviewFrom ? "active" : ""}`}
+          onClick={toggleOverview}
+          title={overviewFrom ? "Back to where you were (⌘0)" : "See everything, press again to come back (⌘0)"}
+        >
+          Overview
         </button>
         {onTidy && (
           <button className="btn ghost" onClick={onTidy} title="Re-lay out frames by section (moves frames for everyone)">
