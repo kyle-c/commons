@@ -70,10 +70,14 @@ export default function PrototypeView({
         >
           <Icon name="list" />
         </button>
-        {/* Where you are, address-bar style: a changing path reads as
-            location, where a changing button label read as a moving target. */}
+        {/* Where you are, address-bar style: screen name plus its path, the
+            same pairing the drawer rows and frame headers use. A bare "/"
+            read as a mystery glyph. */}
         <span className="proto-address" title="Current screen">
-          {routePath}
+          <span className="pa-name">
+            {routes.find((f) => (f.routePath ?? "/") === routePath)?.title ?? "Screen"}
+          </span>
+          <span className="pa-path">{routePath}</span>
         </span>
         <span className="spacer" style={{ flex: 1 }} />
         <button

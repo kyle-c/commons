@@ -479,7 +479,7 @@ export default function UserTests({
   return (
     <div className="user-tests" onMouseDown={(e) => e.stopPropagation()}>
       <div className="user-tests-head">
-        <strong>User tests</strong>
+        <strong>Tests</strong>
         <span style={{ flex: 1 }} />
         <button
           className="btn primary"
@@ -498,8 +498,8 @@ export default function UserTests({
 
       {!project.previewUrl && (
         <div className="ut-empty">
-          <strong>Tests run on your deployed app</strong>
-          <span className="hint">Paste where it's deployed and tests unlock. Testers open one link, nothing else.</span>
+          <strong>Tests run on your live app</strong>
+          <span className="hint">Paste its link to start. Testers just open a link, no account.</span>
           <InlineField
             placeholder="https://myapp.vercel.app"
             submitLabel="Save"
