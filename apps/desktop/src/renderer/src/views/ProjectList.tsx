@@ -367,11 +367,14 @@ export default function ProjectList({
               <span>active {timeAgo(project.lastActivityAt ?? project._creationTime)} ago</span>
             </div>
             <div className="foot">
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <span className="status-wrap" onClick={(e) => e.stopPropagation()}>
-                  {(() => {
-                    const current = STATUSES.find((s) => s.value === project.status);
-                    return (
+              {/* Left-aligned plain-text signals, status first — it's the
+                  card's primary "what does this project want" line. Frame
+                  counts are plumbing; they live inside the project now. */}
+              <div className="foot-signals">
+                {(() => {
+                  const current = STATUSES.find((s) => s.value === project.status);
+                  const chip = (
+                    <span className="status-wrap" onClick={(e) => e.stopPropagation()}>
                       <button
                         className={`status-chip ${current ? "" : "unset"}`}
                         title="Project status: tells teammates what feedback is wanted"
@@ -386,49 +389,57 @@ export default function ProjectList({
                           "+ Status"
                         )}
                       </button>
-                    );
-                  })()}
-                  {statusMenuFor === project._id && (
+                      {statusMenuFor === project._id && (
+                        <>
+                          <span className="menu-backdrop" onClick={() => setStatusMenuFor(null)} />
+                          <span className="status-menu">
+                            {STATUSES.map((s) => (
+                              <button
+                                key={s.value}
+                                className={project.status === s.value ? "on" : ""}
+                                onClick={() => {
+                                  setStatusMenuFor(null);
+                                  void setStatus({
+                                    projectId: project._id,
+                                    status: (project.status === s.value ? undefined : s.value) as
+                                      | ProjectStatus
+                                      | undefined,
+                                    userId: me._id,
+                                    sessionToken: sessionToken(),
+                                  });
+                                }}
+                              >
+                                <span className="status-swatch" style={{ background: s.color }} />
+                                {s.label}
+                              </button>
+                            ))}
+                          </span>
+                        </>
+                      )}
+                    </span>
+                  );
+                  return (
                     <>
-                      <span className="menu-backdrop" onClick={() => setStatusMenuFor(null)} />
-                      <span className="status-menu">
-                        {STATUSES.map((s) => (
-                          <button
-                            key={s.value}
-                            className={project.status === s.value ? "on" : ""}
-                            onClick={() => {
-                              setStatusMenuFor(null);
-                              void setStatus({
-                                projectId: project._id,
-                                status: (project.status === s.value ? undefined : s.value) as
-                                  | ProjectStatus
-                                  | undefined,
-                                userId: me._id,
-                                sessionToken: sessionToken(),
-                              });
-                            }}
-                          >
-                            <span className="status-swatch" style={{ background: s.color }} />
-                            {s.label}
-                          </button>
-                        ))}
-                      </span>
+                      {/* A set status leads; the unset affordance trails so its
+                          hover reveal never shoves the other signals around. */}
+                      {current && chip}
+                      {project.frameCount === 0 && (
+                        <span
+                          className="signal warn"
+                          title="Discovery found no screens — add a commons.json (dev command + route list) to light this project up"
+                        >
+                          needs setup
+                        </span>
+                      )}
+                      {project.openThreadCount > 0 && (
+                        <span className="signal comment">
+                          {project.openThreadCount} open thread{project.openThreadCount === 1 ? "" : "s"}
+                        </span>
+                      )}
+                      {!current && chip}
                     </>
-                  )}
-                </span>
-                {project.frameCount === 0 ? (
-                  <span
-                    className="badge setup"
-                    title="Discovery found no screens — add a commons.json (dev command + route list) to light this project up"
-                  >
-                    needs setup
-                  </span>
-                ) : (
-                  <span className="badge">{project.frameCount} frames</span>
-                )}
-                {project.openThreadCount > 0 && (
-                  <span className="badge comments">{project.openThreadCount} open threads</span>
-                )}
+                  );
+                })()}
               </div>
               <div className="avatar-stack">
                 {project.activeUsers.map(
