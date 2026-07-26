@@ -413,8 +413,11 @@ textarea:focus {
   margin-bottom: 24px;
 }
 .home-header h1 {
-  font-size: var(--text-xl);
+  /* Display moments carry the brand's editorial serif; the tool stays sans. */
+  font-family: var(--font-display);
+  font-size: 24px;
   font-weight: 600;
+  letter-spacing: 0.01em;
 }
 .project-grid {
   display: grid;

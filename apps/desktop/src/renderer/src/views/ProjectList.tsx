@@ -17,11 +17,11 @@ import Icon from "../components/icons";
 
 /** Shared lifecycle labels: what kind of feedback a project wants right now. */
 const STATUSES = [
-  { value: "exploring", label: "Exploring", color: "#5b8def" },
-  { value: "in-review", label: "In review", color: "#e0a03f" },
-  { value: "testing", label: "Testing", color: "#a78bfa" },
-  { value: "shipped", label: "Shipped", color: "#4bb885" },
-  { value: "parked", label: "Parked", color: "#8b8b94" },
+  { value: "exploring", label: "Exploring", color: "#6b93c9" },
+  { value: "in-review", label: "In review", color: "#c9902e" },
+  { value: "testing", label: "Testing", color: "#3e9c8f" },
+  { value: "shipped", label: "Shipped", color: "#58a86b" },
+  { value: "parked", label: "Parked", color: "#8f8d80" },
 ] as const;
 type ProjectStatus = (typeof STATUSES)[number]["value"];
 
@@ -50,7 +50,7 @@ function ProjectCover({
     colors && colors.length >= 2
       ? [colors[0], colors[1]]
       : colors?.length === 1
-        ? [colors[0], `color-mix(in srgb, ${colors[0]} 55%, #101012)`]
+        ? [colors[0], `color-mix(in srgb, ${colors[0]} 55%, #1a1b17)`]
         : fallbackColors(name);
   return (
     <div className="project-cover" style={coverUrl ? undefined : { background: `linear-gradient(160deg, ${c1}, ${c2})` }}>

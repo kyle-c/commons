@@ -50,7 +50,7 @@ function page(target: string, width: number, height: number, title: string): str
   html, body { height: 100%; margin: 0; }
   body {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 12px; background: #101012;
+    gap: 12px; background: #1a1b17;
     font: 12px -apple-system, BlinkMacSystemFont, sans-serif; color: #9d9da6;
   }
   .device {

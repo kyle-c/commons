@@ -87,7 +87,7 @@ function CursorLayer({ me, projectId, scale }: { me: Doc<"users">; projectId: Id
           style={{ left: cursor.x, top: cursor.y, transform: `scale(${1 / scale})`, transformOrigin: "0 0" }}
         >
           <svg width="14" height="16" viewBox="0 0 14 16">
-            <path d="M1 1 L13 7.5 L7.5 9 L4.5 15 Z" fill={cursor.avatarColor} stroke="#101012" strokeWidth="1" />
+            <path d="M1 1 L13 7.5 L7.5 9 L4.5 15 Z" fill={cursor.avatarColor} stroke="#1a1b17" strokeWidth="1" />
           </svg>
           <span className="tag" style={{ background: cursor.avatarColor }}>
             {cursor.name.split(" ")[0]}

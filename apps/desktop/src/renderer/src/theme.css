@@ -1,38 +1,41 @@
-/* Commons design tokens — pro-tool dark chrome. All colors come from here. */
+/* Commons design tokens — "Unified Craft": sand and paper warmth over a
+   grounded moss/bronze depth, one palette flexing across both modes.
+   All colors come from here. */
 :root {
-  /* Surfaces */
-  --bg-app: #101012;
-  --bg-panel: #17171a;
-  --bg-panel-raised: #1d1d21;
-  --bg-canvas: #0b0b0d;
-  --canvas-dot: #4a4a55; /* clearly present on #0b0b0d, still behind the work */
-  --bg-input: #232328;
-  --bg-hover: #232328;
-  --bg-active: #2a2a30;
+  /* Surfaces — deep warm charcoal with a moss undertone */
+  --bg-app: #1a1b17;
+  --bg-panel: #21221d;
+  --bg-panel-raised: #272822;
+  --bg-canvas: #141511;
+  --canvas-dot: #4f5046; /* clearly present on the canvas, still behind the work */
+  --bg-input: #2b2c25;
+  --bg-hover: #2b2c25;
+  --bg-active: #33342c;
 
   /* Borders */
-  --border-subtle: #232326;
-  --border-default: #2e2e33;
-  --border-strong: #3d3d44;
+  --border-subtle: #2a2b24;
+  --border-default: #363730;
+  --border-strong: #46473d;
 
-  /* Text */
-  --text-primary: #ececef;
-  --text-secondary: #9d9da6;
-  --text-tertiary: #6b6b74;
-  --text-inverse: #101012;
+  /* Text — warm off-whites, not clinical gray */
+  --text-primary: #edebe0;
+  --text-secondary: #a3a195;
+  --text-tertiary: #716f64;
+  --text-inverse: #1a1b17;
 
-  /* Accent — Commons blue */
-  --accent: #5aa2ff;
-  --accent-hover: #78b4ff;
-  --accent-muted: rgba(90, 162, 255, 0.16);
+  /* Accent — muted teal, the brand's one cool note */
+  --accent: #45a898;
+  --accent-hover: #5cbcac;
+  --accent-muted: rgba(69, 168, 152, 0.16);
 
-  /* Semantic */
-  --success: #4ade80;
-  --warning: #facc15;
-  --danger: #f87171;
-  --comment: #fbbf24;
+  /* Semantic — status colors from the brand sheet; comment warmth is bronze */
+  --success: #58a86b;
+  --warning: #d9a03f;
+  --danger: #d0655c;
+  --comment: #c9944a;
 
-  /* Type */
+  /* Type — editorial serif for display moments, quiet sans for the tool */
+  --font-display: "Iowan Old Style", "Palatino", Georgia, serif;
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
   --text-xs: 11px;
@@ -42,46 +45,46 @@
   --text-xl: 20px;
 
   /* Shape */
-  --radius-sm: 5px;
+  --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
-  --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-panel: 0 8px 32px rgba(8, 8, 4, 0.55);
 }
 
-/* Light mode — same pro-tool chrome, inverted values. Applied via
-   data-theme on <html> (lib/theme.ts); dark remains the default. */
+/* Light mode — sand and paper. Applied via data-theme on <html>
+   (lib/theme.ts); dark remains the default. */
 :root[data-theme="light"] {
   /* Surfaces */
-  --bg-app: #f5f5f7;
-  --bg-panel: #ffffff;
-  --bg-panel-raised: #f7f7f9;
-  --bg-canvas: #ebebee;
-  --canvas-dot: #c3c3cc;
-  --bg-input: #f1f1f4;
-  --bg-hover: #ececef;
-  --bg-active: #e3e3e9;
+  --bg-app: #f3f0e8;
+  --bg-panel: #fbf9f4;
+  --bg-panel-raised: #f6f3ec;
+  --bg-canvas: #eae6dc;
+  --canvas-dot: #c6c1b1;
+  --bg-input: #ece8dd;
+  --bg-hover: #ece9df;
+  --bg-active: #e2ddcf;
 
   /* Borders */
-  --border-subtle: #e9e9ed;
-  --border-default: #dcdce2;
-  --border-strong: #c6c6d0;
+  --border-subtle: #e6e2d6;
+  --border-default: #d8d3c4;
+  --border-strong: #beb8a5;
 
   /* Text */
-  --text-primary: #1b1b20;
-  --text-secondary: #55555e;
-  --text-tertiary: #8b8b95;
-  --text-inverse: #ffffff;
+  --text-primary: #26251e;
+  --text-secondary: #5c5a4f;
+  --text-tertiary: #8f8d80;
+  --text-inverse: #fbf9f4;
 
-  /* Accent — deeper for contrast on light surfaces */
-  --accent: #3576e0;
-  --accent-hover: #2563c9;
-  --accent-muted: rgba(53, 118, 224, 0.13);
+  /* Accent — deeper teal for contrast on paper */
+  --accent: #1f7a6e;
+  --accent-hover: #16665c;
+  --accent-muted: rgba(31, 122, 110, 0.13);
 
   /* Semantic — darkened for light backgrounds */
-  --success: #15803d;
-  --warning: #b45309;
-  --danger: #dc2626;
-  --comment: #d97706;
+  --success: #2e7d4f;
+  --warning: #a8721f;
+  --danger: #bf4940;
+  --comment: #a8712c;
 
-  --shadow-panel: 0 8px 32px rgba(20, 20, 30, 0.16);
+  --shadow-panel: 0 8px 32px rgba(50, 45, 25, 0.15);
 }

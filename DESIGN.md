@@ -6,16 +6,23 @@ Agents: deviations from this file are design bugs even when the code works.*
 
 ## Identity
 
-Dark-first, dense, keyboard-driven professional tool — Figma/Linear-adjacent, macOS-native.
-Commons is chrome around the user's *product*; the product is the hero. The UI should
-recede: low-contrast surfaces, quiet borders, color reserved for meaning.
+Brand: **Unified Craft** (2026-07-26) — sand and paper warmth grounded by moss and
+bronze depth; one palette that flexes across both modes. Still a dense, keyboard-driven
+professional tool — Figma/Linear-adjacent, macOS-native. Commons is chrome around the
+user's *product*; the product is the hero. The UI should recede: low-contrast warm
+surfaces, quiet borders, color reserved for meaning.
 
-Light mode is a first-class token set (`data-theme="light"`), never a special case.
+Dark mode (default) is deep warm charcoal with a moss undertone; light mode is sand
+and paper. Light mode is a first-class token set (`data-theme="light"`), never a
+special case.
 
 ## Typography
 
 - **Stack:** `-apple-system, "system-ui", "SF Pro Text", Inter, sans-serif` — the native
-  stack is an intentional choice for a macOS tool, not a placeholder. No display font.
+  stack is an intentional choice for a macOS tool, not a placeholder.
+- **Display serif** (`--font-display`: Iowan Old Style/Palatino stack) for editorial
+  display moments only — page titles like the home "Projects" h1. The tool itself
+  stays sans; the serif never appears in controls, labels, or body copy.
 - **Scale:** body 13px (`--text-sm`), captions/hints 11-12px (`--text-xs`), section
   headers 14-16px (`--text-md`), page titles 20px/600. Pro-tool density; never below 11px.
 - **Weights:** 400 body, 500 emphasis, 600 headings/names. Two weights per surface max.
@@ -26,8 +33,9 @@ Light mode is a first-class token set (`data-theme="light"`), never a special ca
 - **Tokens only.** Every color is a `theme.css` variable; hardcoded hex in components is
   a bug. Translucency via `color-mix(in srgb, var(--x) N%, transparent)`.
 - **Budget:** ~12 rendered colors per surface (audit measured 11 — hold that line).
-- **Semantic:** `--accent` (interactive/brand), `--success`, `--danger` — used for meaning,
-  never decoration. Amber is reserved for open-thread/comment affordances.
+- **Semantic:** `--accent` (muted teal — interactive/brand, the palette's one cool note),
+  `--success`, `--danger` — used for meaning, never decoration. Bronze (`--comment`) is
+  reserved for open-thread/comment affordances.
 - Project card covers are the one expressive surface: brand-color gradients mined from
   the repo, name-hash fallback otherwise. Gradients appear nowhere else.
 
@@ -51,7 +59,7 @@ Light mode is a first-class token set (`data-theme="light"`), never a special ca
   via ✕ and their shortcut.
 - **Pills/chips** (update ready, heatmap active, catch-up): bottom- or top-centered,
   one line, one action, dismissible. For ambient state only — never primary workflow.
-- **Badges:** tiny rounded rects; amber = open threads, green = live, accent = active.
+- **Badges:** tiny rounded rects; bronze = open threads, green = live, accent = active.
 
 ## Copy voice
 
