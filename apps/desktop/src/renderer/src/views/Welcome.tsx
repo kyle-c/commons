@@ -15,24 +15,19 @@ export default function Welcome({ name }: { name: string }) {
     <div className="overlay-scrim">
       <div className="overlay-card welcome">
         <header>
-          <span>Welcome to Commons, {name.split(" ")[0]} 👋</span>
+          <span>Welcome, {name.split(" ")[0]} 👋</span>
         </header>
         <div className="welcome-body">
-          <p className="welcome-lead">
-            Everything on this canvas is the real, running product. Not screenshots. Not mockups.
-          </p>
+          <p className="welcome-lead">Everything here is the real product, running live.</p>
           <ul>
             <li>
-              <strong>Wander.</strong> Pan and pinch like a map. Click any screen to use the live app inside
-              it, <kbd>Esc</kbd> to step back out.
+              <strong>Wander.</strong> Pan like a map. Click a screen to try it, <kbd>Esc</kbd> steps out.
             </li>
             <li>
-              <strong>React.</strong> Press <kbd>C</kbd>, click a pixel, say the thing. <kbd>@</kbd> pulls a
-              teammate in.
+              <strong>React.</strong> Press <kbd>C</kbd>, click anywhere, say the thing.
             </li>
             <li>
-              <strong>Go deeper.</strong> The Prototype tab runs the app full-size, and the notes under each
-              screen explain why it's built that way.
+              <strong>Go deeper.</strong> The Prototype tab runs the app full-size.
             </li>
           </ul>
           <p className="hint">
