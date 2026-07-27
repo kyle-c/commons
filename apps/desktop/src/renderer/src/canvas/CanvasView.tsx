@@ -366,6 +366,7 @@ export default function CanvasView({
     const g = glowSpring.current;
     const canvas = glowCanvasRef.current;
     if (!canvas) return;
+    try {
     const dt = Math.min(0.032, g.t ? (now - g.t) / 1000 : 0.016);
     g.t = now;
     if (g.reduced) {
@@ -401,7 +402,13 @@ export default function CanvasView({
     const dpr = window.devicePixelRatio || 1;
     const bw = Math.round(canvas.clientWidth * dpr);
     const bh = Math.round(canvas.clientHeight * dpr);
-    if (canvas.width !== bw || canvas.height !== bh) {
+    if (bw < 100 || bh < 100) {
+      // Unmeasured layout — never draw into a bitmap that CSS would
+      // stretch into smears across the real canvas.
+      g.raf = requestAnimationFrame(glowStep);
+      return;
+    }
+    if (Math.abs(canvas.width - bw) > 2 || Math.abs(canvas.height - bh) > 2) {
       canvas.width = bw;
       canvas.height = bh;
     }
@@ -442,6 +449,13 @@ export default function CanvasView({
       return;
     }
     g.raf = requestAnimationFrame(glowStep);
+    } catch {
+      // Disable for the session and leave a clean transparent layer — the
+      // glow must never be able to take the canvas down with it.
+      g.raf = 0;
+      g.targetAlpha = -1;
+      canvas.width = canvas.width; // resets the bitmap to transparent
+    }
   };
   const glowStepRef = useRef(glowStep);
   glowStepRef.current = glowStep;
@@ -467,6 +481,7 @@ export default function CanvasView({
     const wrap = wrapRef.current;
     if (wrap && glowCanvasRef.current) {
       const g = glowSpring.current;
+      if (g.targetAlpha === -1 || localStorage.getItem("commons.dotGlow") === "off") return;
       const overEmpty = !(e.target as HTMLElement).closest(
         ".frame, .pin, .canvas-toolbar, .minimap, .frame-notes, .frame-farlabel"
       );
