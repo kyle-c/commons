@@ -24,6 +24,25 @@ fixPath();
 // About/Hide/Quit items; packaged builds get it from productName.
 app.setName("Commons");
 
+// Broken-canvas forensics: GPU/renderer process failures never reach the
+// in-app error reporter, so log them to userData for later inspection.
+app.on("child-process-gone", (_e, details) => {
+  const line = `${new Date().toISOString()} child-process-gone ${JSON.stringify(details)}\n`;
+  try {
+    fs.appendFileSync(path.join(app.getPath("userData"), "process-crashes.log"), line);
+  } catch {
+    /* best effort */
+  }
+});
+app.on("render-process-gone", (_e, _wc, details) => {
+  const line = `${new Date().toISOString()} render-process-gone ${JSON.stringify(details)}\n`;
+  try {
+    fs.appendFileSync(path.join(app.getPath("userData"), "process-crashes.log"), line);
+  } catch {
+    /* best effort */
+  }
+});
+
 // Packaged builds get the icon from build/icon.icns via electron-builder;
 // dev runs would otherwise wear the stock Electron dock icon.
 if (!app.isPackaged) {

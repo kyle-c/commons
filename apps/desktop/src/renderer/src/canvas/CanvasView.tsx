@@ -481,7 +481,7 @@ export default function CanvasView({
     const wrap = wrapRef.current;
     if (wrap && glowCanvasRef.current) {
       const g = glowSpring.current;
-      if (g.targetAlpha === -1 || localStorage.getItem("commons.dotGlow") === "off") return;
+      if (g.targetAlpha === -1 || localStorage.getItem("commons.dotGlow") !== "on") return;
       const overEmpty = !(e.target as HTMLElement).closest(
         ".frame, .pin, .canvas-toolbar, .minimap, .frame-notes, .frame-farlabel"
       );
@@ -983,7 +983,9 @@ export default function CanvasView({
         glowSpring.current.targetAlpha = 0;
       }}
     >
-      <canvas ref={glowCanvasRef} className="dot-glow-canvas" aria-hidden />
+      {localStorage.getItem("commons.dotGlow") === "on" && (
+        <canvas ref={glowCanvasRef} className="dot-glow-canvas" aria-hidden />
+      )}
       <div
         className={`canvas-stage ${layoutAnim ? "layout-anim" : ""}`}
         style={{ transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.scale})` }}
