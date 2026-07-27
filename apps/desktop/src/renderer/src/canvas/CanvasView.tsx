@@ -404,6 +404,23 @@ export default function CanvasView({
     window.addEventListener("mouseup", up);
   };
 
+  // Double-click on empty canvas: zoom in around the cursor (Figma/Miro
+  // convention); shift+double-click zooms back out. Comment mode keeps
+  // clicks for pinning.
+  const onBackgroundDoubleClick = (e: React.MouseEvent) => {
+    if (e.target !== e.currentTarget || commentMode) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    if (overviewFromRef.current) setOverviewFrom(null);
+    const rect = el.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    const v = vpRef.current;
+    const scale = Math.min(2, Math.max(0.05, v.scale * (e.shiftKey ? 1 / 1.6 : 1.6)));
+    const k = scale / v.scale;
+    animateVp({ scale, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k }, 180);
+  };
+
   const startFrameDrag = (frame: Doc<"frames">, e: React.MouseEvent) => {
     if (commentMode || e.button !== 0) return;
     e.preventDefault();
@@ -530,6 +547,7 @@ export default function CanvasView({
       ref={wrapRef}
       className={`canvas-wrap ${commentMode ? "commenting" : ""}`}
       onMouseDown={onBackgroundMouseDown}
+      onDoubleClick={onBackgroundDoubleClick}
       onMouseMove={onCursorMove}
     >
       <div
