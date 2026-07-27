@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Id } from "@commons/backend/convex/_generated/dataModel";
@@ -12,6 +12,8 @@ import CommandPalette from "./views/CommandPalette";
 import { clearStoredSession, getStoredSession, initials, type StoredSession } from "./lib/session";
 import { getRecents } from "./lib/recents";
 import { applyStoredPreviewAppearance } from "./lib/previewAppearance";
+import { loadTabs, saveTabs, type ProjectTab } from "./lib/tabs";
+import TabBar from "./components/TabBar";
 
 export type Nav =
   | { screen: "home" }
@@ -25,7 +27,7 @@ export type Nav =
 
 export default function App() {
   const [session, setSession] = useState<StoredSession | null>(getStoredSession());
-  const [nav, setNav] = useState<Nav>(() => {
+  const [nav, setNavState] = useState<Nav>(() => {
     // Browser links target app state via the hash (#p=<id>&view=…&thread=…);
     // the desktop app uses commons:// deep links instead.
     const params = new URLSearchParams(window.location.hash.slice(1));
@@ -39,8 +41,104 @@ export default function App() {
         frameId: (params.get("frame") as Id<"frames">) ?? undefined,
       };
     }
+    // No deep link: land on the last active tab from the previous session.
+    const stored = loadTabs();
+    if (stored.active !== "home") {
+      return { screen: "project", projectId: stored.active as Id<"projects">, view: "canvas" };
+    }
     return { screen: "home" };
   });
+
+  // Open-project tabs (Figma-style). Tabs are navigation state only: the
+  // active tab mounts, background tabs are just entries. Each tab remembers
+  // its own view/frame/thread so switching back lands where you left.
+  const [tabs, setTabs] = useState<ProjectTab[]>(() => loadTabs().tabs);
+  const navRef = useRef(nav);
+  navRef.current = nav;
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const navByTabRef = useRef<Record<string, Nav>>({});
+  const activeId = nav.screen === "project" ? (nav.projectId as string) : "home";
+
+  const setNav = (next: Nav | ((prev: Nav) => Nav)) => {
+    const prev = navRef.current;
+    const resolved = typeof next === "function" ? next(prev) : next;
+    if (prev.screen === "project") navByTabRef.current[prev.projectId] = prev;
+    if (resolved.screen === "project") {
+      const id = resolved.projectId as string;
+      setTabs((t) =>
+        t.some((tab) => tab.id === id)
+          ? t
+          : [...t, { id, name: getRecents().find((r) => r.id === id)?.name ?? "Project" }]
+      );
+    }
+    setNavState(resolved);
+  };
+
+  const selectTab = (id: string) => {
+    if (id === "home") setNav({ screen: "home" });
+    else setNav(navByTabRef.current[id] ?? { screen: "project", projectId: id as Id<"projects">, view: "canvas" });
+  };
+
+  const closeTab = (id: string) => {
+    const current = tabsRef.current;
+    const index = current.findIndex((t) => t.id === id);
+    setTabs(current.filter((t) => t.id !== id));
+    delete navByTabRef.current[id];
+    if (navRef.current.screen === "project" && navRef.current.projectId === id) {
+      const neighbor = current[index + 1] ?? current[index - 1];
+      if (neighbor) selectTab(neighbor.id);
+      else setNav({ screen: "home" });
+    }
+  };
+
+  const cycleTab = (dir: 1 | -1) => {
+    const order = ["home", ...tabsRef.current.map((t) => t.id)];
+    const from = navRef.current.screen === "project" ? (navRef.current.projectId as string) : "home";
+    const i = order.indexOf(from);
+    selectTab(order[(i + dir + order.length) % order.length]);
+  };
+
+  useEffect(() => saveTabs(tabs, activeId), [tabs, activeId]);
+
+  // A deep-linked or restored project gets its tab on first render.
+  useEffect(() => {
+    if (nav.screen === "project") {
+      const id = nav.projectId as string;
+      setTabs((t) =>
+        t.some((tab) => tab.id === id)
+          ? t
+          : [...t, { id, name: getRecents().find((r) => r.id === id)?.name ?? "Project" }]
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ⌃Tab / ⌃⇧Tab and ⌘⇧[ / ⌘⇧] cycle tabs (the browser/Figma idiom; ⌘1/⌘2
+  // stay with Canvas/Prototype).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && !e.metaKey && e.key === "Tab") {
+        e.preventDefault();
+        cycleTab(e.shiftKey ? -1 : 1);
+      } else if (e.metaKey && e.shiftKey && (e.key === "[" || e.key === "{" || e.key === "]" || e.key === "}")) {
+        e.preventDefault();
+        cycleTab(e.key === "[" || e.key === "{" ? -1 : 1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const tabStrip = (
+    <TabBar
+      tabs={tabs}
+      active={activeId}
+      onSelect={selectTab}
+      onClose={closeTab}
+    />
+  );
   const me = useQuery(api.auth.validate, session ? { sessionToken: session.token } : "skip");
   const touch = useMutation(api.auth.touch);
   const signOut = useMutation(api.auth.signOut);
@@ -75,6 +173,9 @@ export default function App() {
           break;
         case "set-view":
           setNav((prev) => (prev.screen === "project" ? { ...prev, view: action.view } : prev));
+          break;
+        case "cycle-tab":
+          cycleTab(action.dir);
           break;
         default:
           window.dispatchEvent(new CustomEvent("commons:menu", { detail: action }));
@@ -128,7 +229,14 @@ export default function App() {
     return (
       <>
         <ShortcutsHelp />
-        <ProjectView key={nav.projectId} me={me} nav={nav} setNav={setNav} />
+        <ProjectView
+          key={nav.projectId}
+          me={me}
+          nav={nav}
+          setNav={setNav}
+          tabStrip={tabStrip}
+          onProjectName={(id, name) => setTabs((t) => t.map((x) => (x.id === id ? { ...x, name } : x)))}
+        />
         <CommandPalette me={me} setNav={setNav} />
         <UpdateChip />
       </>
@@ -137,7 +245,7 @@ export default function App() {
 
   return (
     <>
-      <ProjectList me={me} setNav={setNav} onSignOut={doSignOut} />
+      <ProjectList me={me} setNav={setNav} onSignOut={doSignOut} tabStrip={tabStrip} />
       <ShortcutsHelp />
       <Welcome name={me.name} />
       <CommandPalette me={me} setNav={setNav} />

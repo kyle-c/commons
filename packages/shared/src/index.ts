@@ -216,6 +216,7 @@ export type MenuAction =
   | { type: "new-project" }
   | { type: "open-project"; projectId: string }
   | { type: "set-view"; view: "canvas" | "prototype" }
+  | { type: "cycle-tab"; dir: 1 | -1 }
   | { type: "zoom"; dir: "in" | "out" | "fit" }
   | { type: "shortcuts" }
   | { type: "settings" };

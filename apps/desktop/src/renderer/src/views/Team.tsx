@@ -5,6 +5,7 @@ import type { Doc } from "@commons/backend/convex/_generated/dataModel";
 import { initials, sessionToken } from "../lib/session";
 import { registerShortcut } from "../lib/shortcuts";
 import { useClickOutside } from "../lib/useClickOutside";
+import Icon from "../components/icons";
 import { PopSection, RevealField } from "../components/popover";
 
 const INVITE_ERRORS = {
@@ -39,8 +40,13 @@ export default function Team({ me }: { me: Doc<"users"> }) {
 
   return (
     <div style={{ position: "relative" }} ref={wrapRef}>
-      <button className={`btn ghost ${open ? "active" : ""}`} onClick={() => setOpen(!open)} title="Team (⌘T)">
-        Team
+      <button
+        className={`btn ghost icon-btn ${open ? "active" : ""}`}
+        onClick={() => setOpen(!open)}
+        aria-label="Team"
+        title="Team (⌘T)"
+      >
+        <Icon name="users" />
       </button>
       {open && (
         <div className="titlebar-popover">

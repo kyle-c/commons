@@ -64,10 +64,13 @@ export default function ProjectList({
   me,
   setNav,
   onSignOut,
+  tabStrip,
 }: {
   me: Doc<"users">;
   setNav: (nav: Nav) => void;
   onSignOut: () => void;
+  /** The open-project tab strip (App owns the tab state). */
+  tabStrip?: React.ReactNode;
 }) {
   const projects = useQuery(api.projects.listWithActivity, { userId: me._id, sessionToken: sessionToken() });
   const machineId = useMachineId();
@@ -133,6 +136,7 @@ export default function ProjectList({
   };
 
   const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // Grouped home: one section per workspace (playground first), so team apps
   // and personal apps never visually mix. Cards order by activity, not age.
@@ -179,16 +183,39 @@ export default function ProjectList({
 
   return (
     <div className="app">
-      {/* The home's titlebar: search centered like a macOS toolbar; creation
-          lives down in the grid where the project will actually land. */}
+      {/* The home's titlebar: tabs left, a quiet icon cluster right. Search
+          lives collapsed until asked for; creation lives down in the grid
+          where the project will actually land. */}
       <div className="titlebar">
+        {tabStrip}
         <span className="spacer" />
-        <input
-          className="titlebar-search centered"
-          placeholder="Search projects…  ⌘K"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+        {searchOpen ? (
+          <input
+            className="titlebar-search flyout"
+            placeholder="Search projects…"
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onBlur={() => {
+              if (!query.trim()) setSearchOpen(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setQuery("");
+                setSearchOpen(false);
+              }
+            }}
+          />
+        ) : (
+          <button
+            className="btn ghost icon-btn"
+            aria-label="Search projects"
+            title="Search projects (⌘K)"
+            onClick={() => setSearchOpen(true)}
+          >
+            <Icon name="search" />
+          </button>
+        )}
         <ServersMenu />
         <ThemeToggle />
         <WorkspacesMenu me={me} />

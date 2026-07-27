@@ -393,9 +393,13 @@ interface Props {
   me: Doc<"users">;
   nav: Extract<Nav, { screen: "project" }>;
   setNav: (nav: Nav) => void;
+  /** The open-project tab strip (App owns the tab state). */
+  tabStrip?: React.ReactNode;
+  /** Report the loaded project's name so its tab can carry it. */
+  onProjectName?: (projectId: string, name: string) => void;
 }
 
-export default function ProjectView({ me, nav, setNav }: Props) {
+export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName }: Props) {
   const project = useQuery(api.projects.get, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
   const framesQuery = useQuery(api.projects.frames, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
   const frames = framesQuery ?? [];
@@ -818,6 +822,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   useEffect(() => {
     if (!projectName) return;
     pushRecent(nav.projectId, projectName);
+    onProjectName?.(nav.projectId, projectName);
     window.commons?.setMenuRecents(getRecents());
     // Window title carries the project, so the Window menu and Mission
     // Control show which Commons window is which.
@@ -928,9 +933,7 @@ export default function ProjectView({ me, nav, setNav }: Props) {
   return (
     <div className="app">
       <div className="titlebar">
-        <button className="btn ghost" onClick={() => setNav({ screen: "home" })}>
-          ←
-        </button>
+        {tabStrip}
         <div className="seg-wrap" ref={switcherRef}>
           <button
             className="proj-switcher"

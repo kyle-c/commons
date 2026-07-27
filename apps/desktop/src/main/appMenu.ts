@@ -133,7 +133,28 @@ function template(): MenuItemConstructorOptions[] {
           : []),
       ],
     },
-    { role: "windowMenu" },
+    {
+      label: "Window",
+      submenu: [
+        { role: "minimize" },
+        { role: "zoom" },
+        { type: "separator" },
+        {
+          label: "Next Tab",
+          accelerator: "Ctrl+Tab",
+          registerAccelerator: false,
+          click: () => send({ type: "cycle-tab", dir: 1 }),
+        },
+        {
+          label: "Previous Tab",
+          accelerator: "Ctrl+Shift+Tab",
+          registerAccelerator: false,
+          click: () => send({ type: "cycle-tab", dir: -1 }),
+        },
+        { type: "separator" },
+        { role: "front" },
+      ],
+    },
     {
       role: "help",
       submenu: [

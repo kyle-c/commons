@@ -6,6 +6,32 @@
 
 const PATHS: Record<string, React.ReactNode> = {
   zap: <path d="M13 2 4.8 13.2H11L10 22l9.2-11.2H13L13 2Z" />,
+  home: (
+    <>
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.8-3.8" />
+    </>
+  ),
+  users: (
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M16 5.1a3.5 3.5 0 0 1 0 5.8M18.2 14.6a6.5 6.5 0 0 1 3.3 5.4" />
+    </>
+  ),
+  layers: (
+    <>
+      <path d="m12 3 9 4.5-9 4.5-9-4.5Z" />
+      <path d="m3 12 9 4.5 9-4.5" />
+      <path d="m3 16.5 9 4.5 9-4.5" />
+    </>
+  ),
   pin: (
     <>
       <path d="M12 15v6" />

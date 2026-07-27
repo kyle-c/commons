@@ -4,6 +4,7 @@ import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import { initials, sessionToken } from "../lib/session";
 import { useClickOutside } from "../lib/useClickOutside";
+import Icon from "../components/icons";
 import { InlineField } from "../components/popover";
 
 const CREATE_ERRORS: Record<string, string> = {
@@ -63,8 +64,13 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
 
   return (
     <div style={{ position: "relative" }} ref={wrapRef}>
-      <button className={`btn ghost ${open ? "active" : ""}`} onClick={() => setOpen(!open)} title="Workspaces">
-        Workspaces
+      <button
+        className={`btn ghost icon-btn ${open ? "active" : ""}`}
+        onClick={() => setOpen(!open)}
+        aria-label="Workspaces"
+        title="Workspaces"
+      >
+        <Icon name="layers" />
       </button>
       {open && (
         <div className="titlebar-popover workspaces-popover">

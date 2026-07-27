@@ -2841,6 +2841,75 @@ kbd {
   padding: 2px 8px;
 }
 
+/* ---------- Open-project tabs (Figma-style) ---------- */
+
+.tab-strip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  max-width: 170px;
+  min-width: 0;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.tab.active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+.tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tab-x {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+  flex: none;
+}
+.tab:hover .tab-x {
+  opacity: 1;
+}
+.tab-x:hover {
+  color: var(--text-primary);
+}
+.tab-home,
+.tab-add {
+  padding: 0 8px;
+  flex: none;
+}
+.tab-add {
+  font-size: var(--text-lg);
+  color: var(--text-tertiary);
+}
+
+/* Collapsed titlebar search: expands in from the icon, right-aligned. */
+.titlebar-search.flyout {
+  width: 240px;
+  animation: rise-in var(--dur-med) var(--ease-out);
+}
+
 /* Prototype toolbar address chip: screen name + path, like a frame header. */
 .proto-address {
   display: inline-flex;
