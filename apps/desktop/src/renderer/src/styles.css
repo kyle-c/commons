@@ -168,11 +168,11 @@ textarea:focus {
     display: none; /* "Projects /" goes first — the back arrow already says it */
   }
 }
-.titlebar .spacer,
-.subnav .spacer {
+.titlebar .spacer {
   flex: 1;
 }
-.subnav > :not(.spacer) {
+/* Subnav rows all flush left; no spacer push. */
+.subnav > * {
   flex-shrink: 0;
 }
 

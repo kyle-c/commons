@@ -1127,7 +1127,6 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             </div>
           )}
         </div>
-        <span className="spacer" />
         {repoPath && (
           <>
             {gitStatus && gitStatus.behind > 0 && (gitStatus.dirty || gitStatus.ahead > 0) && (
