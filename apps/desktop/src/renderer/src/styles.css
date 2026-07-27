@@ -320,7 +320,7 @@ textarea:focus {
   max-width: 300px;
 }
 .setup-pop .reveal-form {
-  min-width: 248px;
+  min-width: 264px;
 }
 
 .team-row {
@@ -2207,12 +2207,12 @@ kbd {
 }
 .reveal-form {
   padding: 4px 14px 10px;
-}
-.workspace-row .reveal-form {
-  padding: 4px 0 2px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.workspace-row .reveal-form {
+  padding: 4px 0 2px;
 }
 .reveal-form-row {
   display: flex;

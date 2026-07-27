@@ -133,7 +133,7 @@ function SetupPopover({
             submitLabel="Save"
             allowEmpty
             initialValue={project.previewUrl ?? ""}
-            hint="Teammates without the code see screens from this link, and user tests run against it."
+            hint="Paste your app's deployed URL. Screens and user tests fall back to it."
             onSubmit={async (url) => {
               if (url && !/^https?:\/\/.+/.test(url)) throw new Error("Needs a full https:// link.");
               await setPreviewUrl({
@@ -151,7 +151,7 @@ function SetupPopover({
             allowEmpty
             initialValue={project.branchPreviewPattern ?? ""}
             hint={
-              "Write {branch} where the branch name goes in your per-branch deploy link. Everyone sees agent drafts live, and A/B tests unlock."
+              "Your host's per-branch deploy link, with {branch} in place of the name."
             }
             onSubmit={async (patternValue) => {
               if (patternValue && (!/^https?:\/\/.+/.test(patternValue) || !patternValue.includes("{branch}")))
