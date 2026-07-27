@@ -372,8 +372,8 @@ export default function CanvasView({
     } else {
       // Under-damped spring: chases with lag, settles with a whisper of
       // overshoot — the inertia is the point.
-      const K = 170;
-      const C = 21;
+      const K = 340;
+      const C = 27;
       g.vx += ((g.tx - g.px) * K - g.vx * C) * dt;
       g.vy += ((g.ty - g.py) * K - g.vy * C) * dt;
       g.px += g.vx * dt;
@@ -386,7 +386,7 @@ export default function CanvasView({
     const dpr = window.devicePixelRatio || 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-    const R = 190;
+    const R = 105;
     if (g.alpha > 0.01) {
       ctx.fillStyle = g.color;
       // The CSS grid tiles at 24px with each dot centered in its tile.
@@ -399,14 +399,15 @@ export default function CanvasView({
           const dy = y - g.py;
           const dist = Math.hypot(dx, dy);
           if (dist > R) continue;
-          const f = Math.exp(-((dist / R) * (dist / R)) * 3.2);
-          // Lean toward the spring point, never past ~a third of the way.
-          const pull = g.reduced ? 0 : Math.min(4.5 * f, dist * 0.35);
+          const f = Math.exp(-((dist / R) * (dist / R)) * 3.6);
+          // Swarm: dots near the point gather hard toward it (up to half
+          // their distance), then relax back to the grid as it moves on.
+          const pull = g.reduced ? 0 : Math.min(8 * f, dist * 0.5);
           const ox = dist > 0 ? (-dx / dist) * pull : 0;
           const oy = dist > 0 ? (-dy / dist) * pull : 0;
-          ctx.globalAlpha = g.alpha * (0.2 + 0.8 * f);
+          ctx.globalAlpha = g.alpha * (0.12 + 0.88 * f);
           ctx.beginPath();
-          ctx.arc(x + ox, y + oy, 1.2 + 1.0 * f, 0, Math.PI * 2);
+          ctx.arc(x + ox, y + oy, 1.2 + 1.2 * f, 0, Math.PI * 2);
           ctx.fill();
         }
       }
