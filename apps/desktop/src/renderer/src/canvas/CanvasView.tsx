@@ -337,189 +337,50 @@ export default function CanvasView({
   const lastCursorSend = useRef(0);
   const cursorTrailing = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
-   * Dot-grid glow with spring physics: a damped point chases the cursor;
-   * dots near it brighten, swell, and lean toward it with distance falloff.
-   * Fast strokes stretch the lit patch behind the hand, then it settles
-   * with a small overshoot. Canvas 2D, ~250 dots max, no React churn; the
-   * static CSS dots beneath read as the shadows under the lifted patch.
+   * Dot-grid trail, CSS-only: a masked bright-dot layer whose spotlight
+   * center is two CSS custom properties. JS writes a target just behind
+   * the direction of travel; registered-@property transitions supply the
+   * trailing motion and the glide onto a stopped cursor. No canvas, no
+   * bitmaps, no rAF — nothing here can touch the compositor's health.
    */
-  const glowCanvasRef = useRef<HTMLCanvasElement>(null);
-  const glowSpring = useRef({
-    raf: 0,
-    t: 0,
-    px: 0,
-    py: 0,
-    vx: 0,
-    vy: 0,
-    tx: 0,
-    ty: 0,
-    tvx: 0,
-    tvy: 0,
-    ptx: 0,
-    pty: 0,
-    alpha: 0,
-    targetAlpha: 0,
-    color: "",
-    reduced: false,
-  });
-  const glowStep = (now: number) => {
-    const g = glowSpring.current;
-    const canvas = glowCanvasRef.current;
-    if (!canvas) return;
-    try {
-    const dt = Math.min(0.032, g.t ? (now - g.t) / 1000 : 0.016);
-    g.t = now;
-    if (g.reduced) {
-      g.px = g.tx;
-      g.py = g.ty;
-      g.vx = 0;
-      g.vy = 0;
-    } else {
-      // Trail model: the light rides a point just BEHIND the direction of
-      // travel — moving right lights dots slightly left of the cursor,
-      // moving down lights them slightly above, and stopping lets the
-      // light glide onto the cursor. Exponential smoothing, no spring,
-      // so it can never oscillate or wander.
-      const cap = 3000;
-      const fvx = Math.max(-cap, Math.min(cap, (g.tx - g.ptx) / dt));
-      const fvy = Math.max(-cap, Math.min(cap, (g.ty - g.pty) / dt));
-      g.ptx = g.tx;
-      g.pty = g.ty;
-      g.tvx = g.tvx * 0.5 + fvx * 0.5;
-      g.tvy = g.tvy * 0.5 + fvy * 0.5;
-      const speed = Math.hypot(g.tvx, g.tvy);
-      const trail = Math.min(26, speed * 0.02);
-      const ux = speed > 1 ? g.tvx / speed : 0;
-      const uy = speed > 1 ? g.tvy / speed : 0;
-      const k = Math.min(1, dt * 16);
-      g.px += (g.tx - ux * trail - g.px) * k;
-      g.py += (g.ty - uy * trail - g.py) * k;
-    }
-    g.alpha += (g.targetAlpha - g.alpha) * Math.min(1, dt * 9);
+  const glowRef = useRef<HTMLDivElement>(null);
+  const glowMeta = useRef({ x: 0, y: 0, dirX: 0, dirY: 0, mag: 0, settle: 0 as ReturnType<typeof setTimeout> | 0 });
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    const bw = Math.round(canvas.clientWidth * dpr);
-    const bh = Math.round(canvas.clientHeight * dpr);
-    if (bw < 100 || bh < 100) {
-      // Unmeasured layout — never draw into a bitmap that CSS would
-      // stretch into smears across the real canvas.
-      g.raf = requestAnimationFrame(glowStep);
-      return;
-    }
-    if (Math.abs(canvas.width - bw) > 2 || Math.abs(canvas.height - bh) > 2) {
-      canvas.width = bw;
-      canvas.height = bh;
-    }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-    const R = 80;
-    if (g.alpha > 0.01) {
-      ctx.fillStyle = g.color;
-      // The CSS grid tiles at 24px with each dot centered in its tile.
-      const GRID = 24;
-      const x0 = Math.floor((g.px - R - 12) / GRID) * GRID + 12;
-      const y0 = Math.floor((g.py - R - 12) / GRID) * GRID + 12;
-      for (let x = x0; x <= g.px + R; x += GRID) {
-        for (let y = y0; y <= g.py + R; y += GRID) {
-          const dx = x - g.px;
-          const dy = y - g.py;
-          const dist = Math.hypot(dx, dy);
-          if (dist > R) continue;
-          const f = Math.exp(-((dist / R) * (dist / R)) * 3.6);
-          // Swarm: dots near the point gather hard toward it (up to half
-          // their distance), then relax back to the grid as it moves on.
-          const pull = g.reduced ? 0 : Math.min(5 * f, dist * 0.4);
-          const ox = dist > 0 ? (-dx / dist) * pull : 0;
-          const oy = dist > 0 ? (-dy / dist) * pull : 0;
-          ctx.globalAlpha = g.alpha * f * 0.8;
-          ctx.beginPath();
-          ctx.arc(x + ox, y + oy, 1.2 + 0.8 * f, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    }
-    const settled =
-      g.targetAlpha === 0 && g.alpha < 0.02 && Math.abs(g.vx) + Math.abs(g.vy) < 1;
-    if (settled) {
-      g.alpha = 0;
-      g.raf = 0;
-      ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-      return;
-    }
-    g.raf = requestAnimationFrame(glowStep);
-    } catch {
-      // Disable for the session and leave a clean transparent layer — the
-      // glow must never be able to take the canvas down with it.
-      g.raf = 0;
-      g.targetAlpha = -1;
-      canvas.width = canvas.width; // resets the bitmap to transparent
-    }
-  };
-  const glowStepRef = useRef(glowStep);
-  glowStepRef.current = glowStep;
-  useEffect(() => {
-    const canvas = glowCanvasRef.current;
-    const wrap = wrapRef.current;
-    if (!canvas || !wrap) return;
-    const size = () => {
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = wrap.clientWidth * dpr;
-      canvas.height = wrap.clientHeight * dpr;
-    };
-    size();
-    const observer = new ResizeObserver(size);
-    observer.observe(wrap);
-    return () => {
-      observer.disconnect();
-      if (glowSpring.current.raf) cancelAnimationFrame(glowSpring.current.raf);
-    };
-  }, []);
   const onCursorMove = (e: React.MouseEvent) => {
-    // Dot-grid glow: ref writes only — this runs per mousemove.
+    // Dot-grid trail: two CSS-var writes per mousemove, nothing else.
     const wrap = wrapRef.current;
-    if (wrap && glowCanvasRef.current) {
-      const g = glowSpring.current;
-      if (g.targetAlpha === -1 || localStorage.getItem("commons.dotGlow") !== "on") return;
+    const glow = glowRef.current;
+    if (wrap && glow && localStorage.getItem("commons.dotGlow") !== "off") {
+      const m = glowMeta.current;
+      const rect = wrap.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const dx = x - m.x;
+      const dy = y - m.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.5) {
+        // Blend direction and recent movement so the trail length breathes
+        // with hand speed but never jitters on tiny moves.
+        m.dirX = m.dirX * 0.55 + (dx / dist) * 0.45;
+        m.dirY = m.dirY * 0.55 + (dy / dist) * 0.45;
+        m.mag = Math.min(22, m.mag * 0.6 + dist * 0.8);
+      }
+      m.x = x;
+      m.y = y;
+      const norm = Math.hypot(m.dirX, m.dirY) || 1;
+      glow.style.setProperty("--glow-x", `${x - (m.dirX / norm) * m.mag}px`);
+      glow.style.setProperty("--glow-y", `${y - (m.dirY / norm) * m.mag}px`);
       const overEmpty = !(e.target as HTMLElement).closest(
         ".frame, .pin, .canvas-toolbar, .minimap, .frame-notes, .frame-farlabel"
       );
-      const rect = wrap.getBoundingClientRect();
-      g.tx = e.clientX - rect.left;
-      g.ty = e.clientY - rect.top;
-      if (!g.raf || g.alpha === 0) {
-        // Size lazily at wake-up — mount-time effects can miss the wrap's
-        // first layout (the browser app's stylesheet can land late).
-        const canvas = glowCanvasRef.current;
-        const dpr = window.devicePixelRatio || 1;
-        const W = Math.round(wrap.clientWidth * dpr);
-        const H = Math.round(wrap.clientHeight * dpr);
-        if (canvas.width !== W || canvas.height !== H) {
-          canvas.width = W;
-          canvas.height = H;
-        }
-        // Waking up: appear under the cursor, not flying in from the past.
-        g.px = g.tx;
-        g.py = g.ty;
-        g.vx = 0;
-        g.vy = 0;
-        g.tvx = 0;
-        g.tvy = 0;
-        g.ptx = g.tx;
-        g.pty = g.ty;
-        const probe = document.createElement("span");
-        probe.style.color = "color-mix(in srgb, var(--canvas-dot) 45%, var(--text-primary))";
-        wrap.appendChild(probe);
-        g.color = getComputedStyle(probe).color;
-        probe.remove();
-        g.reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      }
-      g.targetAlpha = overEmpty ? 1 : 0;
-      if (!g.raf) {
-        g.t = 0;
-        g.raf = requestAnimationFrame(glowStepRef.current);
-      }
+      glow.classList.toggle("on", overEmpty);
+      // The hand stopped: glide the light onto the cursor.
+      if (m.settle) clearTimeout(m.settle);
+      m.settle = setTimeout(() => {
+        m.mag = 0;
+        glow.style.setProperty("--glow-x", `${m.x}px`);
+        glow.style.setProperty("--glow-y", `${m.y}px`);
+      }, 130);
     }
     const send = (clientX: number, clientY: number) => {
       lastCursorSend.current = Date.now();
@@ -979,13 +840,9 @@ export default function CanvasView({
       onMouseDown={onBackgroundMouseDown}
       onDoubleClick={onBackgroundDoubleClick}
       onMouseMove={onCursorMove}
-      onMouseLeave={() => {
-        glowSpring.current.targetAlpha = 0;
-      }}
+      onMouseLeave={() => glowRef.current?.classList.remove("on")}
     >
-      {localStorage.getItem("commons.dotGlow") === "on" && (
-        <canvas ref={glowCanvasRef} className="dot-glow-canvas" aria-hidden />
-      )}
+      <div ref={glowRef} className="dot-glow" aria-hidden />
       <div
         className={`canvas-stage ${layoutAnim ? "layout-anim" : ""}`}
         style={{ transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.scale})` }}

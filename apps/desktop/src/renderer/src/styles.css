@@ -517,14 +517,56 @@ textarea:focus {
 .canvas-wrap.commenting {
   cursor: crosshair;
 }
-/* Cursor glow: a canvas layer draws the dots near the pointer — brighter,
-   slightly swollen, and displaced toward a spring-damped point that chases
-   the cursor. The dim CSS dots beneath stay put and read as the shadows
-   under a lifted patch of grid. */
-.dot-glow-canvas {
+/* Cursor trail, CSS-only: a second, brighter dot layer masked to a small
+   spotlight whose center rides two registered custom properties. The
+   transitions on those properties ARE the trail — the light eases toward
+   a point just behind the direction of travel and glides onto the cursor
+   when the hand stops. Plain masked painting; the compositor stays safe. */
+@property --glow-x {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: -400px;
+}
+@property --glow-y {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: -400px;
+}
+.dot-glow {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--canvas-dot) 45%, var(--text-primary)) 1.9px,
+    transparent 1.9px
+  );
+  background-size: 24px 24px;
+  -webkit-mask-image: radial-gradient(
+    circle 80px at var(--glow-x) var(--glow-y),
+    rgba(0, 0, 0, 0.75),
+    rgba(0, 0, 0, 0.28) 55%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    circle 80px at var(--glow-x) var(--glow-y),
+    rgba(0, 0, 0, 0.75),
+    rgba(0, 0, 0, 0.28) 55%,
+    transparent 100%
+  );
+  opacity: 0;
+  transition:
+    opacity 260ms var(--ease-out),
+    --glow-x 150ms ease-out,
+    --glow-y 150ms ease-out;
+}
+.dot-glow.on {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dot-glow {
+    transition: opacity 260ms var(--ease-out);
+  }
 }
 .canvas-stage {
   position: absolute;
