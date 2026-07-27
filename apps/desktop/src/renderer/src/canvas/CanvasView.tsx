@@ -336,19 +336,149 @@ export default function CanvasView({
   const moveCursor = useMutation(api.presence.moveCursor);
   const lastCursorSend = useRef(0);
   const cursorTrailing = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const glowRef = useRef<HTMLDivElement>(null);
-  const onCursorMove = (e: React.MouseEvent) => {
-    // Dot-grid glow: direct DOM writes (no state) — this runs per mousemove.
-    const glow = glowRef.current;
+  /**
+   * Dot-grid glow with spring physics: a damped point chases the cursor;
+   * dots near it brighten, swell, and lean toward it with distance falloff.
+   * Fast strokes stretch the lit patch behind the hand, then it settles
+   * with a small overshoot. Canvas 2D, ~250 dots max, no React churn; the
+   * static CSS dots beneath read as the shadows under the lifted patch.
+   */
+  const glowCanvasRef = useRef<HTMLCanvasElement>(null);
+  const glowSpring = useRef({
+    raf: 0,
+    t: 0,
+    px: 0,
+    py: 0,
+    vx: 0,
+    vy: 0,
+    tx: 0,
+    ty: 0,
+    alpha: 0,
+    targetAlpha: 0,
+    color: "",
+    reduced: false,
+  });
+  const glowStep = (now: number) => {
+    const g = glowSpring.current;
+    const canvas = glowCanvasRef.current;
+    if (!canvas) return;
+    const dt = Math.min(0.032, g.t ? (now - g.t) / 1000 : 0.016);
+    g.t = now;
+    if (g.reduced) {
+      g.px = g.tx;
+      g.py = g.ty;
+      g.vx = 0;
+      g.vy = 0;
+    } else {
+      // Under-damped spring: chases with lag, settles with a whisper of
+      // overshoot — the inertia is the point.
+      const K = 170;
+      const C = 21;
+      g.vx += ((g.tx - g.px) * K - g.vx * C) * dt;
+      g.vy += ((g.ty - g.py) * K - g.vy * C) * dt;
+      g.px += g.vx * dt;
+      g.py += g.vy * dt;
+    }
+    g.alpha += (g.targetAlpha - g.alpha) * Math.min(1, dt * 9);
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+    const R = 190;
+    if (g.alpha > 0.01) {
+      ctx.fillStyle = g.color;
+      // The CSS grid tiles at 24px with each dot centered in its tile.
+      const GRID = 24;
+      const x0 = Math.floor((g.px - R - 12) / GRID) * GRID + 12;
+      const y0 = Math.floor((g.py - R - 12) / GRID) * GRID + 12;
+      for (let x = x0; x <= g.px + R; x += GRID) {
+        for (let y = y0; y <= g.py + R; y += GRID) {
+          const dx = x - g.px;
+          const dy = y - g.py;
+          const dist = Math.hypot(dx, dy);
+          if (dist > R) continue;
+          const f = Math.exp(-((dist / R) * (dist / R)) * 3.2);
+          // Lean toward the spring point, never past ~a third of the way.
+          const pull = g.reduced ? 0 : Math.min(4.5 * f, dist * 0.35);
+          const ox = dist > 0 ? (-dx / dist) * pull : 0;
+          const oy = dist > 0 ? (-dy / dist) * pull : 0;
+          ctx.globalAlpha = g.alpha * (0.2 + 0.8 * f);
+          ctx.beginPath();
+          ctx.arc(x + ox, y + oy, 1.2 + 1.0 * f, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    const settled =
+      g.targetAlpha === 0 && g.alpha < 0.02 && Math.abs(g.vx) + Math.abs(g.vy) < 1;
+    if (settled) {
+      g.alpha = 0;
+      g.raf = 0;
+      ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+      return;
+    }
+    g.raf = requestAnimationFrame(glowStep);
+  };
+  const glowStepRef = useRef(glowStep);
+  glowStepRef.current = glowStep;
+  useEffect(() => {
+    const canvas = glowCanvasRef.current;
     const wrap = wrapRef.current;
-    if (glow && wrap) {
+    if (!canvas || !wrap) return;
+    const size = () => {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = wrap.clientWidth * dpr;
+      canvas.height = wrap.clientHeight * dpr;
+    };
+    size();
+    const observer = new ResizeObserver(size);
+    observer.observe(wrap);
+    return () => {
+      observer.disconnect();
+      if (glowSpring.current.raf) cancelAnimationFrame(glowSpring.current.raf);
+    };
+  }, []);
+  const onCursorMove = (e: React.MouseEvent) => {
+    // Dot-grid glow: ref writes only — this runs per mousemove.
+    const wrap = wrapRef.current;
+    if (wrap && glowCanvasRef.current) {
+      const g = glowSpring.current;
       const overEmpty = !(e.target as HTMLElement).closest(
         ".frame, .pin, .canvas-toolbar, .minimap, .frame-notes, .frame-farlabel"
       );
       const rect = wrap.getBoundingClientRect();
-      glow.style.setProperty("--glow-x", `${e.clientX - rect.left}px`);
-      glow.style.setProperty("--glow-y", `${e.clientY - rect.top}px`);
-      glow.classList.toggle("on", overEmpty);
+      g.tx = e.clientX - rect.left;
+      g.ty = e.clientY - rect.top;
+      if (!g.raf || g.alpha === 0) {
+        // Size lazily at wake-up — mount-time effects can miss the wrap's
+        // first layout (the browser app's stylesheet can land late).
+        const canvas = glowCanvasRef.current;
+        const dpr = window.devicePixelRatio || 1;
+        const W = Math.round(wrap.clientWidth * dpr);
+        const H = Math.round(wrap.clientHeight * dpr);
+        if (canvas.width !== W || canvas.height !== H) {
+          canvas.width = W;
+          canvas.height = H;
+        }
+        // Waking up: appear under the cursor, not flying in from the past.
+        g.px = g.tx;
+        g.py = g.ty;
+        g.vx = 0;
+        g.vy = 0;
+        const probe = document.createElement("span");
+        probe.style.color = "color-mix(in srgb, var(--canvas-dot) 45%, var(--text-primary))";
+        wrap.appendChild(probe);
+        g.color = getComputedStyle(probe).color;
+        probe.remove();
+        g.reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      }
+      g.targetAlpha = overEmpty ? 1 : 0;
+      if (!g.raf) {
+        g.t = 0;
+        g.raf = requestAnimationFrame(glowStepRef.current);
+      }
     }
     const send = (clientX: number, clientY: number) => {
       lastCursorSend.current = Date.now();
@@ -808,9 +938,11 @@ export default function CanvasView({
       onMouseDown={onBackgroundMouseDown}
       onDoubleClick={onBackgroundDoubleClick}
       onMouseMove={onCursorMove}
-      onMouseLeave={() => glowRef.current?.classList.remove("on")}
+      onMouseLeave={() => {
+        glowSpring.current.targetAlpha = 0;
+      }}
     >
-      <div ref={glowRef} className="dot-glow" aria-hidden />
+      <canvas ref={glowCanvasRef} className="dot-glow-canvas" aria-hidden />
       <div
         className={`canvas-stage ${layoutAnim ? "layout-anim" : ""}`}
         style={{ transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.scale})` }}
