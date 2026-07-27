@@ -1198,6 +1198,30 @@ textarea:focus {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+/* Workspace headings double as fold toggles: chevron rotates, a count
+   stands in for the hidden grid. */
+button.workspace-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+button.workspace-toggle:hover {
+  color: var(--text-primary);
+}
+.workspace-toggle svg {
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.workspace-toggle.folded svg {
+  transform: rotate(-90deg); /* closed: chevron points at the name */
+}
+.workspace-toggle .ws-count {
+  font-weight: 400;
+  color: var(--text-tertiary);
+  text-transform: none;
+  letter-spacing: normal;
+}
 .workspaces-popover {
   min-width: 320px;
 }

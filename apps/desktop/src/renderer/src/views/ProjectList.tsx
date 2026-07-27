@@ -83,6 +83,22 @@ export default function ProjectList({
   const setStatus = useMutation(api.projects.setStatus);
   const [statusMenuFor, setStatusMenuFor] = useState<Id<"projects"> | null>(null);
   const [archivedOpen, setArchivedOpen] = useState<Record<string, boolean>>({});
+  // Collapsed workspace sections — per machine, survives restarts. A live
+  // search overrides collapse so matches can never hide.
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("commons.collapsedWorkspaces") ?? "{}");
+    } catch {
+      return {};
+    }
+  });
+  const toggleSection = (key: string) => {
+    setCollapsedSections((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      localStorage.setItem("commons.collapsedWorkspaces", JSON.stringify(next));
+      return next;
+    });
+  };
   const generateUploadUrl = useMutation(api.comments.generateUploadUrl);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverTarget, setCoverTarget] = useState<Id<"projects"> | null>(null);
@@ -294,9 +310,28 @@ export default function ProjectList({
         </div>
       )}
 
-      {sections.map((section) => (
+      {sections.map((section) => {
+        const folded = sections.length > 1 && !query.trim() && !!collapsedSections[section.key];
+        return (
         <div key={section.key} className="workspace-section">
-          {sections.length > 1 && <h2 className="workspace-heading">{section.name}</h2>}
+          {sections.length > 1 && (
+            <button
+              className={`workspace-heading workspace-toggle ${folded ? "folded" : ""}`}
+              aria-expanded={!folded}
+              onClick={() => toggleSection(section.key)}
+            >
+              <Icon name="chevron" size={12} />
+              {section.name}
+              {folded && (
+                <span className="ws-count">
+                  {section.projects.length}
+                  {section.archived.length > 0 ? ` · ${section.archived.length} archived` : ""}
+                </span>
+              )}
+            </button>
+          )}
+          {!folded && (
+          <>
           <div className="project-grid">
             {section.projects.map((project) => (
           <div
@@ -540,8 +575,11 @@ export default function ProjectList({
               )}
             </>
           )}
+          </>
+          )}
         </div>
-      ))}
+        );
+      })}
       </div>
     </div>
   );
