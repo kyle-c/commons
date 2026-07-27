@@ -171,8 +171,11 @@ textarea:focus {
 .titlebar .spacer {
   flex: 1;
 }
-/* Subnav rows all flush left; no spacer push. */
-.subnav > * {
+/* Subnav: view switcher and server state left, tools and Share right. */
+.subnav .spacer {
+  flex: 1;
+}
+.subnav > :not(.spacer) {
   flex-shrink: 0;
 }
 
@@ -2644,6 +2647,22 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Tidy toggle: while the switch is in flight, everything positioned on
+   the stage glides between layouts; the class drops right after so drags
+   and live updates stay 1:1. */
+.layout-anim .frame,
+.layout-anim .frame-notes,
+.layout-anim .pin,
+.layout-anim .frame-farlabel,
+.layout-anim .section-region,
+.layout-anim .section-label {
+  transition:
+    left 380ms var(--ease-out),
+    top 380ms var(--ease-out),
+    width 380ms var(--ease-out),
+    height 380ms var(--ease-out);
+}
+
 /* Full-bleed cover: flush left/top/right; body content keeps its inset. */
 .project-cover {
   position: relative;

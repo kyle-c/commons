@@ -257,11 +257,12 @@ function SharePopover({
   return (
     <div style={{ position: "relative" }} ref={wrapRef}>
       <button
-        className={`btn ${open ? "active" : ""}`}
+        className={`btn ghost icon-btn ${open ? "active" : ""}`}
+        aria-label="Share"
         title={isPrivate ? "Private — only you and added members" : "Share this project"}
         onClick={() => setOpen(!open)}
       >
-        <Icon name="share" /> Share
+        <Icon name="share" />
       </button>
       {open && (
         <div className="titlebar-popover">
@@ -907,20 +908,6 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoPath, framesQuery]);
 
-  // Re-derive the section layout from the repo and move all frames into it.
-  const tidyCanvas = async () => {
-    if (!repoPath || !window.commons) return;
-    if (!window.confirm("Re-lay out all frames by section? This moves frames for everyone on the team.")) return;
-    const inspection = await window.commons.inspectRepo(repoPath);
-    await rediscover({
-      projectId: nav.projectId,
-      framework: inspection.framework,
-      brandColors: inspection.brandColors,
-      frames: layoutFrames(inspection),
-      relayout: true,
-    });
-  };
-
   if (!project) return <div className="center-screen hint">Loading project…</div>;
 
   // On private projects only members can be @mentioned (the backend enforces
@@ -1129,6 +1116,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             </div>
           )}
         </div>
+        <span className="spacer" />
         {repoPath && (
           <>
             {gitStatus && gitStatus.behind > 0 && (gitStatus.dirty || gitStatus.ahead > 0) && (
@@ -1256,7 +1244,6 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           initialFrameId={nav.frameId}
           frameReloadTokens={frameReloadTokens}
           onSendToAgent={window.commons && (repoPath || project.gitRemote) ? sendThreadToAgent : undefined}
-          onTidy={repoPath ? tidyCanvas : undefined}
           webLinkBase={
             project.shareToken
               ? `${(getConvexUrl() ?? "").replace(".convex.cloud", ".convex.site")}/p/${project.shareToken}`

@@ -84,7 +84,7 @@ export default function PrototypeView({
           <span className="pa-path">{routePath}</span>
         </span>
         <span className="spacer" style={{ flex: 1 }} />
-        <PreviewAppearanceButton />
+        {url && <PreviewAppearanceButton />}
         <button
           className={`btn ghost ${testsOpen ? "active" : ""}`}
           title="Task-based usability tests, shareable by link (U)"

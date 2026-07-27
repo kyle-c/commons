@@ -9,9 +9,9 @@ import ThreadPanel from "../comments/ThreadPanel";
 import Minimap from "./Minimap";
 import { initials } from "../lib/session";
 import { resolveFrameUrl } from "../lib/frameUrl";
+import { tidyPositions } from "../lib/frameLayout";
 import { registerShortcut } from "../lib/shortcuts";
 import Icon from "../components/icons";
-import PreviewAppearanceButton from "../components/PreviewAppearanceButton";
 
 interface Viewport {
   x: number;
@@ -51,8 +51,6 @@ interface Props {
   /** Bumped per frame when an agent finishes editing — remounts that frame's iframe. */
   frameReloadTokens?: Record<string, number>;
   onSendToAgent?: (thread: ThreadWithMessages) => void;
-  /** Re-derive the section layout from the repo and move frames into it. */
-  onTidy?: () => void;
   /** The project's /p/<token> page when shared — thread panels offer web links. */
   webLinkBase?: string;
   /** Test-click overlay: dots drawn on frames whose route matches. Coordinates
@@ -275,7 +273,6 @@ export default function CanvasView({
   initialFrameId,
   frameReloadTokens,
   onSendToAgent,
-  onTidy,
   heatmap,
   webLinkBase,
   annotations,
@@ -301,6 +298,31 @@ export default function CanvasView({
   const [draft, setDraft] = useState<Draft | null>(null);
   // Optimistic frame positions while dragging (and until the mutation round-trips).
   const [localPos, setLocalPos] = useState<Record<string, { x: number; y: number }>>({});
+
+  // Tidy view: the Overview toggle now switches between your arranged
+  // layout (the shared x/y in Convex) and an organized grid computed
+  // client-side. Nothing moves for teammates until you drag from tidy.
+  const [tidyOn, setTidyOn] = useState(() => localStorage.getItem(`commons.tidyView.${projectId}`) === "1");
+  const tidyRef = useRef(tidyOn);
+  tidyRef.current = tidyOn;
+  const tidyPos = useMemo(() => tidyPositions(frames), [frames]);
+  const tidyPosRef = useRef(tidyPos);
+  tidyPosRef.current = tidyPos;
+  useEffect(() => {
+    localStorage.setItem(`commons.tidyView.${projectId}`, tidyOn ? "1" : "0");
+  }, [tidyOn, projectId]);
+  // Both directions of the switch glide: frames transition left/top while
+  // the class is on, then it drops so drags stay 1:1.
+  const [layoutAnim, setLayoutAnim] = useState(false);
+  const layoutAnimTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pulseLayoutAnim = () => {
+    setLayoutAnim(true);
+    if (layoutAnimTimer.current) clearTimeout(layoutAnimTimer.current);
+    layoutAnimTimer.current = setTimeout(() => setLayoutAnim(false), 440);
+  };
+  useEffect(() => () => {
+    if (layoutAnimTimer.current) clearTimeout(layoutAnimTimer.current);
+  }, []);
 
   const createThread = useMutation(api.comments.createThread);
   const moveFrame = useMutation(api.projects.moveFrame);
@@ -334,7 +356,8 @@ export default function CanvasView({
     if (cursorTrailing.current) clearTimeout(cursorTrailing.current);
   }, []);
 
-  const framePos = (frame: Doc<"frames">) => localPos[frame._id] ?? { x: frame.x, y: frame.y };
+  const framePos = (frame: Doc<"frames">) =>
+    (tidyOn ? tidyPos[frame._id] : localPos[frame._id]) ?? { x: frame.x, y: frame.y };
 
   /**
    * Commanded viewport moves (⌘±, Fit) glide instead of snapping — a short
@@ -402,13 +425,19 @@ export default function CanvasView({
     vpAnimation.current = requestAnimationFrame(step);
   };
 
-  const fitTo = (target: Doc<"frames">[], maxScale = 1, animate = true) => {
+  const fitTo = (
+    target: Doc<"frames">[],
+    maxScale = 1,
+    animate = true,
+    at?: Record<string, { x: number; y: number }>
+  ) => {
     const el = wrapRef.current;
     if (!el || target.length === 0) return;
-    const minX = Math.min(...target.map((f) => f.x));
-    const minY = Math.min(...target.map((f) => f.y));
-    const maxX = Math.max(...target.map((f) => f.x + f.width));
-    const maxY = Math.max(...target.map((f) => f.y + f.height));
+    const p = (f: Doc<"frames">) => at?.[f._id] ?? framePos(f);
+    const minX = Math.min(...target.map((f) => p(f).x));
+    const minY = Math.min(...target.map((f) => p(f).y));
+    const maxX = Math.max(...target.map((f) => p(f).x + f.width));
+    const maxY = Math.max(...target.map((f) => p(f).y + f.height));
     const pad = 80;
     const scale = Math.max(
       0.05,
@@ -431,14 +460,18 @@ export default function CanvasView({
   const [overviewFrom, setOverviewFrom] = useState<Viewport | null>(null);
   const overviewFromRef = useRef<Viewport | null>(null);
   overviewFromRef.current = overviewFrom;
-  const toggleOverview = () => {
-    const back = overviewFromRef.current;
-    if (back) {
+  const toggleTidy = () => {
+    pulseLayoutAnim();
+    if (tidyRef.current) {
+      // Back to your arrangement — and, when it survived, your viewport.
+      setTidyOn(false);
+      const back = overviewFromRef.current;
       setOverviewFrom(null);
-      animateVp(back);
+      if (back) animateVp(back);
     } else {
       setOverviewFrom({ ...vpRef.current });
-      fitToContent();
+      setTidyOn(true);
+      fitTo(frames, 1, true, tidyPosRef.current);
     }
   };
 
@@ -450,8 +483,8 @@ export default function CanvasView({
     const scale = Math.min(2, Math.max(0.05, vpRef.current.scale * factor));
     animateZoom(el.clientWidth / 2, el.clientHeight / 2, scale);
   };
-  const fitRef = useRef(toggleOverview);
-  fitRef.current = toggleOverview;
+  const fitRef = useRef(toggleTidy);
+  fitRef.current = toggleTidy;
   useEffect(() => {
     const unregister = [
       registerShortcut("=", () => zoomBy(1.25), { meta: true, description: "Zoom in" }),
@@ -487,8 +520,8 @@ export default function CanvasView({
       target = frames.filter((f) => f.section === first.section);
     } else {
       // Sectionless canvas: roughly the first two rows.
-      const minY = Math.min(...frames.map((f) => f.y));
-      target = frames.filter((f) => f.y <= minY + first.height * 2.2);
+      const minY = Math.min(...frames.map((f) => framePos(f).y));
+      target = frames.filter((f) => framePos(f).y <= minY + first.height * 2.2);
     }
     fitTo(target, 0.6, false); // first paint lands framed, no glide
   };
@@ -508,8 +541,8 @@ export default function CanvasView({
       const scale = 0.5;
       setVp({
         scale,
-        x: el.clientWidth / 2 - (target.x + target.width / 2) * scale,
-        y: el.clientHeight / 2 - (target.y + target.height / 2) * scale,
+        x: el.clientWidth / 2 - (framePos(target).x + target.width / 2) * scale,
+        y: el.clientHeight / 2 - (framePos(target).y + target.height / 2) * scale,
       });
     } else {
       initialFit();
@@ -608,6 +641,18 @@ export default function CanvasView({
     if (commentMode || e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    if (tidyRef.current) {
+      // Rearranging from the tidy view adopts it: the organized spots
+      // become the shared arrangement, then this drag proceeds from there.
+      const commit = tidyPosRef.current;
+      setLocalPos((prev) => ({ ...prev, ...commit }));
+      for (const other of frames) {
+        const c = commit[other._id];
+        if (c && (c.x !== other.x || c.y !== other.y)) void moveFrame({ frameId: other._id, x: c.x, y: c.y });
+      }
+      setTidyOn(false);
+      setOverviewFrom(null);
+    }
     const origin = framePos(frame);
     const start = { x: e.clientX, y: e.clientY };
     let latest = origin;
@@ -752,7 +797,7 @@ export default function CanvasView({
       onMouseMove={onCursorMove}
     >
       <div
-        className="canvas-stage"
+        className={`canvas-stage ${layoutAnim ? "layout-anim" : ""}`}
         style={{ transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.scale})` }}
       >
         {[...sectionBounds.entries()].map(([section, b]) => (
@@ -782,7 +827,7 @@ export default function CanvasView({
 
         <FrameLayer
           frames={frames}
-          localPos={localPos}
+          localPos={tidyOn ? tidyPos : localPos}
           focusedFrame={focusedFrame}
           openCounts={openCounts}
           devStatus={devStatus}
@@ -974,11 +1019,12 @@ export default function CanvasView({
 
       <div className="canvas-toolbar" onMouseDown={(e) => e.stopPropagation()}>
         <button
-          className={`btn ghost ${commentMode ? "active" : ""}`}
+          className={`btn ghost icon-btn ${commentMode ? "active" : ""}`}
+          aria-label="Comment"
           title="Comment mode (C)"
           onClick={() => setCommentMode((m) => !m)}
         >
-          <Icon name="message" /> Comment
+          <Icon name="message" />
         </button>
         {(annotations?.length ?? 0) > 0 && (
           <button
@@ -990,18 +1036,17 @@ export default function CanvasView({
           </button>
         )}
         <button
-          className={`btn ghost ${overviewFrom ? "active" : ""}`}
-          onClick={toggleOverview}
-          title={overviewFrom ? "Back to where you were (⌘0)" : "See everything, press again to come back (⌘0)"}
+          className={`btn ghost icon-btn ${tidyOn ? "active" : ""}`}
+          aria-label="Tidy view"
+          onClick={toggleTidy}
+          title={
+            tidyOn
+              ? "Back to your arrangement (⌘0)"
+              : "Tidy: every screen organized by section — press again to go back (⌘0)"
+          }
         >
-          Overview
+          <Icon name="maximize" />
         </button>
-        <PreviewAppearanceButton />
-        {onTidy && (
-          <button className="btn ghost" onClick={onTidy} title="Re-lay out frames by section (moves frames for everyone)">
-            Tidy
-          </button>
-        )}
         <button className="btn ghost zoom-step" title="Zoom out (⌘−)" onClick={() => zoomBy(0.8)}>
           −
         </button>

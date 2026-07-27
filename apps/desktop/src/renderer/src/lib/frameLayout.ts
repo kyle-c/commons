@@ -1,5 +1,51 @@
 import type { DiscoveredRoute, RepoInspection } from "@commons/shared";
 
+/**
+ * Tidy view: an organized layout computed from existing frames — same
+ * section-band grid as discovery-time layout, but client-side and ephemeral.
+ * The arranged (dragged) positions in Convex stay untouched; this is just
+ * how the canvas *displays* while the Tidy toggle is on.
+ */
+export function tidyPositions(
+  frames: {
+    _id: string;
+    routePath?: string;
+    section?: string;
+    width: number;
+    height: number;
+  }[]
+): Record<string, { x: number; y: number }> {
+  const bySection = new Map<string, typeof frames>();
+  for (const frame of frames) {
+    const key = frame.section ?? "";
+    if (!bySection.has(key)) bySection.set(key, []);
+    bySection.get(key)!.push(frame);
+  }
+  const sections = [...bySection.entries()].sort((a, b) => (a[0] === "" ? 1 : b[0] === "" ? -1 : 0));
+
+  const out: Record<string, { x: number; y: number }> = {};
+  let yOffset = 0;
+  for (const [, sectionFrames] of sections) {
+    // Route order, "/" first — stable and predictable, not creation order.
+    sectionFrames.sort((a, b) => (a.routePath ?? "").localeCompare(b.routePath ?? ""));
+    const width = Math.max(...sectionFrames.map((f) => f.width));
+    const height = Math.max(...sectionFrames.map((f) => f.height));
+    const mobile = width < 500;
+    const gapX = mobile ? 80 : 120;
+    const gapY = mobile ? 120 : 160;
+    const cols = mobile ? 6 : 3;
+    sectionFrames.forEach((frame, i) => {
+      out[frame._id] = {
+        x: (i % cols) * (width + gapX),
+        y: yOffset + Math.floor(i / cols) * (height + gapY),
+      };
+    });
+    const rows = Math.ceil(sectionFrames.length / cols);
+    yOffset += rows * (height + gapY) + Math.round(height * 0.45);
+  }
+  return out;
+}
+
 export interface FrameSpec {
   kind: "route";
   title: string;
