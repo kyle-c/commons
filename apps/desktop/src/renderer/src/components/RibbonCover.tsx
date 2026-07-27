@@ -52,7 +52,9 @@ export default function RibbonCover({ seed }: { seed: string }) {
         `M 0 ${y0} C ${W / 3} ${c0}, ${(2 * W) / 3} ${c1}, ${W} ${y1} ` +
         `L ${W} ${y1 + t} C ${(2 * W) / 3} ${c1 + t * 0.9}, ${W / 3} ${c0 + t * 1.1}, 0 ${y0 + t} Z`,
       fill: palette[i % palette.length],
-      opacity: i === 0 ? 1 : 0.88,
+      // Semi-transparent bands sit back into the card surface instead of
+      // competing with the name; overlaps read as glazed layers.
+      opacity: i === 0 ? 0.52 : 0.4,
     });
   }
 
@@ -85,15 +87,15 @@ export default function RibbonCover({ seed }: { seed: string }) {
       <path
         d={routeD}
         fill="none"
-        stroke="rgba(250, 248, 240, 0.75)"
+        stroke="rgba(250, 248, 240, 0.55)"
         strokeWidth="1.5"
         strokeDasharray="5 6"
       />
       {nodes.map((node, i) =>
         node.open ? (
-          <circle key={i} cx={node.x} cy={node.y} r="5" fill="none" stroke="rgba(250,248,240,0.9)" strokeWidth="1.5" />
+          <circle key={i} cx={node.x} cy={node.y} r="5" fill="none" stroke="rgba(250,248,240,0.7)" strokeWidth="1.5" />
         ) : (
-          <circle key={i} cx={node.x} cy={node.y} r="3.5" fill="rgba(250,248,240,0.9)" />
+          <circle key={i} cx={node.x} cy={node.y} r="3.5" fill="rgba(250,248,240,0.7)" />
         )
       )}
     </svg>

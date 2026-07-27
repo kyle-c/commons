@@ -4,6 +4,8 @@ import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc } from "@commons/backend/convex/_generated/dataModel";
 import { initials, sessionToken } from "../lib/session";
 import { useClickOutside } from "../lib/useClickOutside";
+import { effectiveTheme, onSystemThemeChange, setThemePreference } from "../lib/theme";
+import { registerShortcut } from "../lib/shortcuts";
 
 /**
  * Titlebar avatar menu: change photo (uploaded to Convex storage), reset to
@@ -25,6 +27,20 @@ export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSig
     window.addEventListener("commons:menu", onMenu);
     return () => window.removeEventListener("commons:menu", onMenu);
   }, []);
+
+  // Theme lives here now (set-and-forget preference), ⌘L still flips it.
+  const [theme, setTheme] = useState<"dark" | "light">(effectiveTheme());
+  const flipTheme = () => {
+    const next = effectiveTheme() === "dark" ? "light" : "dark";
+    setThemePreference(next);
+    setTheme(next);
+  };
+  useEffect(() => onSystemThemeChange(() => setTheme(effectiveTheme())), []);
+  useEffect(
+    () => registerShortcut("l", flipTheme, { meta: true, description: "Toggle light/dark theme" }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   const generateUploadUrl = useMutation(api.users.generateAvatarUploadUrl);
   const setAvatarImage = useMutation(api.users.setAvatarImage);
@@ -131,6 +147,9 @@ export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSig
               Reset to Google photo
             </button>
           )}
+          <button title="⌘L flips it from anywhere" onClick={flipTheme}>
+            {theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          </button>
           <button onClick={onSignOut}>Sign out</button>
           <input
             ref={fileRef}

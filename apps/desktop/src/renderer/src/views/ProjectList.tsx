@@ -7,7 +7,6 @@ import { initials, timeAgo, sessionToken } from "../lib/session";
 import { layoutFrames } from "../lib/frameLayout";
 import GitSetupBanner from "./GitSetupBanner";
 import { useMachineId } from "../lib/machine";
-import ThemeToggle from "./ThemeToggle";
 import ServersMenu from "./ServersMenu";
 import WorkspacesMenu from "./WorkspacesMenu";
 import Team from "./Team";
@@ -217,7 +216,6 @@ export default function ProjectList({
           </button>
         )}
         <ServersMenu />
-        <ThemeToggle />
         <WorkspacesMenu me={me} />
         <Team me={me} />
         <Inbox me={me} setNav={setNav} />

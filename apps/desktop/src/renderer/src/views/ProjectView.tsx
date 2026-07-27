@@ -11,7 +11,6 @@ import PrototypeView, { DEVICES, type ProtoDevice } from "./PrototypeView";
 import Inbox from "./Inbox";
 import AgentPanel, { type PanelSession } from "../agents/AgentPanel";
 import NarrationPanel from "./NarrationPanel";
-import ThemeToggle from "./ThemeToggle";
 import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessions";
 import { getConvexUrl, initials, sessionToken } from "../lib/session";
 import { resolveFrameUrl } from "../lib/frameUrl";
@@ -935,13 +934,15 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName }
       <div className="titlebar">
         {tabStrip}
         <div className="seg-wrap" ref={switcherRef}>
+          {/* The active tab owns the project's name; this trigger is just the
+              dev-server status and its menu. */}
           <button
-            className="proj-switcher"
-            title={devStatus.state === "ready" ? `Dev server on :${devStatus.port}` : "Switch project"}
+            className="proj-switcher compact"
+            aria-label={`${project.name}: server & project menu`}
+            title={devStatus.state === "ready" ? `Dev server on :${devStatus.port}` : "Server & projects"}
             onClick={() => setSwitcherOpen((o) => !o)}
           >
-            {repoPath && <span className={`status-dot ${devStatus.state}`} />}
-            <strong>{project.name}</strong>
+            <span className={`status-dot ${repoPath ? devStatus.state : ""}`} />
             <Icon name="chevron" size={13} />
           </button>
           {switcherOpen && (
@@ -1041,21 +1042,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName }
                   </>
                 );
               })()}
-              {getRecents().filter((r) => r.id !== nav.projectId).length > 0 && <PopSection label="Recent" />}
-              {getRecents()
-                .filter((r) => r.id !== nav.projectId)
-                .map((r) => (
-                  <button
-                    key={r.id}
-                    className="switcher-row"
-                    onClick={() => {
-                      setSwitcherOpen(false);
-                      setNav({ screen: "project", projectId: r.id as Id<"projects">, view: "canvas" });
-                    }}
-                  >
-                    {r.name}
-                  </button>
-                ))}
+              {/* Recents left this menu when tabs arrived — tabs are the
+                  switching surface now; this menu is servers + the way home. */}
               <button className="switcher-row all" onClick={() => setNav({ screen: "home" })}>
                 All projects
               </button>
@@ -1169,7 +1157,6 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName }
           onOpenChange={(o) => setSidePanel(o ? "inbox" : null)}
         />
         <span className="tb-divider" />
-        <ThemeToggle />
         <div className="avatar-stack">
           {activeUsers.map(
             (user) =>
