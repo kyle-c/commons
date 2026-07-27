@@ -9,6 +9,7 @@ import type { ThreadWithMessages } from "../comments/types";
 import CanvasView from "../canvas/CanvasView";
 import PrototypeView, { DEVICES, type ProtoDevice } from "./PrototypeView";
 import Inbox from "./Inbox";
+import AccountMenu from "./AccountMenu";
 import AgentPanel, { type PanelSession } from "../agents/AgentPanel";
 import NarrationPanel from "./NarrationPanel";
 import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessions";
@@ -396,9 +397,10 @@ interface Props {
   tabStrip?: React.ReactNode;
   /** Report the loaded project's name so its tab can carry it. */
   onProjectName?: (projectId: string, name: string) => void;
+  onSignOut: () => void;
 }
 
-export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName }: Props) {
+export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, onSignOut }: Props) {
   const project = useQuery(api.projects.get, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
   const framesQuery = useQuery(api.projects.frames, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
   const frames = framesQuery ?? [];
@@ -933,6 +935,53 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName }
     <div className="app">
       <div className="titlebar">
         {tabStrip}
+        <div className="seg-wrap" ref={deviceMenuRef}>
+          <div className="seg">
+            <button
+              className={nav.view === "canvas" ? "on" : ""}
+              aria-label="Canvas"
+              title="Canvas: every screen, comments, notes"
+              onClick={() => {
+                setDeviceMenuOpen(false);
+                setNav({ ...nav, view: "canvas" });
+              }}
+            >
+              <Icon name="frames" />
+            </button>
+            <button
+              className={`${nav.view === "prototype" ? "on" : ""} ${deviceMenuOpen ? "menu-open" : ""}`}
+              aria-label="Prototype"
+              title={
+                nav.view === "prototype"
+                  ? `Prototype · ${protoDevice.label}. Click to pick a device`
+                  : "Prototype: the running app, full size"
+              }
+              onClick={() => {
+                if (nav.view === "prototype") setDeviceMenuOpen((o) => !o);
+                else setNav({ ...nav, view: "prototype" });
+              }}
+            >
+              <Icon name={nav.view === "prototype" ? protoDevice.icon : "play"} />
+            </button>
+          </div>
+          {deviceMenuOpen && (
+            <div className="device-menu">
+              {DEVICES.filter((d) => d.label !== protoDevice.label).map((d) => (
+                <button
+                  key={d.label}
+                  aria-label={d.label}
+                  title={d.label}
+                  onClick={() => {
+                    setChosenDevice(d);
+                    setDeviceMenuOpen(false);
+                  }}
+                >
+                  <Icon name={d.icon} />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="seg-wrap" ref={switcherRef}>
           {/* The active tab owns the project's name; this trigger is just the
               dev-server status and its menu. */}
@@ -1050,53 +1099,6 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName }
             </div>
           )}
         </div>
-        <div className="seg-wrap" ref={deviceMenuRef}>
-          <div className="seg">
-            <button
-              className={nav.view === "canvas" ? "on" : ""}
-              aria-label="Canvas"
-              title="Canvas: every screen, comments, notes"
-              onClick={() => {
-                setDeviceMenuOpen(false);
-                setNav({ ...nav, view: "canvas" });
-              }}
-            >
-              <Icon name="frames" />
-            </button>
-            <button
-              className={`${nav.view === "prototype" ? "on" : ""} ${deviceMenuOpen ? "menu-open" : ""}`}
-              aria-label="Prototype"
-              title={
-                nav.view === "prototype"
-                  ? `Prototype · ${protoDevice.label}. Click to pick a device`
-                  : "Prototype: the running app, full size"
-              }
-              onClick={() => {
-                if (nav.view === "prototype") setDeviceMenuOpen((o) => !o);
-                else setNav({ ...nav, view: "prototype" });
-              }}
-            >
-              <Icon name={nav.view === "prototype" ? protoDevice.icon : "play"} />
-            </button>
-          </div>
-          {deviceMenuOpen && (
-            <div className="device-menu">
-              {DEVICES.filter((d) => d.label !== protoDevice.label).map((d) => (
-                <button
-                  key={d.label}
-                  aria-label={d.label}
-                  title={d.label}
-                  onClick={() => {
-                    setChosenDevice(d);
-                    setDeviceMenuOpen(false);
-                  }}
-                >
-                  <Icon name={d.icon} />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
         <span className="spacer" />
         {repoPath && (
           <>
@@ -1157,17 +1159,20 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName }
           onOpenChange={(o) => setSidePanel(o ? "inbox" : null)}
         />
         <span className="tb-divider" />
+        {/* Presence = teammates only; your own face is the account menu. */}
         <div className="avatar-stack">
           {activeUsers.map(
             (user) =>
-              user && (
-                <span key={user._id} className="avatar" style={{ background: user.avatarColor }} title={user.name}>
+              user &&
+              user._id !== me._id && (
+                <span key={user._id} className="avatar" style={{ background: user.avatarColor }} title={`${user.name} is here now`}>
                   {user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : initials(user.name)}
                 </span>
               )
           )}
         </div>
         <SharePopover project={project} me={me} users={users} nav={nav} />
+        <AccountMenu me={me} onSignOut={onSignOut} />
       </div>
 
       {catchUp && !catchUpDismissed && (

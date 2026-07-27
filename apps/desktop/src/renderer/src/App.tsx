@@ -236,6 +236,7 @@ export default function App() {
           setNav={setNav}
           tabStrip={tabStrip}
           onProjectName={(id, name) => setTabs((t) => t.map((x) => (x.id === id ? { ...x, name } : x)))}
+          onSignOut={doSignOut}
         />
         <CommandPalette me={me} setNav={setNav} />
         <UpdateChip />

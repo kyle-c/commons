@@ -58,19 +58,6 @@ export default function TabBar({
           </span>
         </button>
       ))}
-      {tabs.length > 0 && active !== "home" && (
-        <button
-          className="tab tab-add"
-          aria-label="New tab"
-          title="Open another project"
-          onClick={(e) => {
-            e.currentTarget.blur();
-            onSelect("home");
-          }}
-        >
-          +
-        </button>
-      )}
     </div>
   );
 }

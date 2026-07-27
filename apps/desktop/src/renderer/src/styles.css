@@ -1725,12 +1725,29 @@ kbd {
   font-size: var(--text-xl);
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: rgba(255, 255, 255, 0.94);
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.35);
+  /* Theme-aware ink with an opposite-tone halo: cream-on-charcoal in dark,
+     ink-on-sand in light — readable over any ribbon composition. */
+  color: rgba(250, 248, 240, 0.95);
+  text-shadow:
+    0 1px 2px rgba(15, 15, 10, 0.5),
+    0 1px 14px rgba(15, 15, 10, 0.45);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+:root[data-theme="light"] .project-cover span {
+  color: rgba(38, 37, 30, 0.92);
+  text-shadow:
+    0 1px 2px rgba(250, 248, 240, 0.9),
+    0 0 14px rgba(250, 248, 240, 0.75);
+}
+/* Uploaded cover images are usually photographic — keep cream-on-scrim. */
+:root[data-theme="light"] .project-cover .cover-img + span {
+  color: rgba(250, 248, 240, 0.95);
+  text-shadow:
+    0 1px 2px rgba(15, 15, 10, 0.5),
+    0 1px 14px rgba(15, 15, 10, 0.45);
 }
 
 /* Popover menus (add-project, account) + sharing member rows */
