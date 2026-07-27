@@ -1,4 +1,5 @@
 import path from "path";
+import { claudeExecutablePath } from "./sdkPath";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentAdapter, AgentTurnHandle, AgentTurnOutcome, AgentTurnRequest } from "./adapter";
 
@@ -55,6 +56,7 @@ export const claudeAdapter: AgentAdapter = {
         allowedTools: ["Bash"],
         settingSources: ["user", "project"],
         maxTurns: 60,
+        pathToClaudeCodeExecutable: claudeExecutablePath(),
       },
     });
 

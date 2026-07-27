@@ -22,7 +22,7 @@ extraResources:
 # inside app.asar, so keep the package unpacked on disk.
 asar: true
 asarUnpack:
-  - "**/node_modules/@anthropic-ai/claude-agent-sdk/**"
+  - "**/node_modules/@anthropic-ai/claude-agent-sdk*/**"
 
 # Registers commons:// in the packaged app (CFBundleURLTypes); dev builds
 # register it at runtime in main/index.ts instead.

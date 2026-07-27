@@ -2,6 +2,7 @@ import { execFile } from "child_process";
 import fs from "fs";
 import path from "path";
 import { query } from "@anthropic-ai/claude-agent-sdk";
+import { claudeExecutablePath } from "./agents/sdkPath";
 import type {
   AnnotationCitation,
   AnnotationDraft,
@@ -197,6 +198,7 @@ export async function generate(request: AnnotationGenerateRequest): Promise<Anno
         allowedTools: ["Bash"],
         settingSources: ["user", "project"],
         maxTurns: 40,
+        pathToClaudeCodeExecutable: claudeExecutablePath(),
       },
     });
     let finalText = "";
