@@ -355,7 +355,8 @@ export default function CanvasView({
     ty: 0,
     tvx: 0,
     tvy: 0,
-    lastMove: 0,
+    ptx: 0,
+    pty: 0,
     alpha: 0,
     targetAlpha: 0,
     color: "",
@@ -377,10 +378,16 @@ export default function CanvasView({
       // toward zero. While the hand moves, the swarm rides centered on it;
       // when a fling stops, the matched momentum carries the swarm past
       // the cursor and the position spring reels it back — regroup.
-      const K = 90;
-      const C = 11;
-      g.tvx *= Math.exp(-dt * 6); // no events = the hand has stopped
-      g.tvy *= Math.exp(-dt * 6);
+      const K = 140;
+      const C = 16;
+      // Frame-sampled cursor velocity: steady dt, so no event-burst spikes.
+      const cap = 2500;
+      const fvx = Math.max(-cap, Math.min(cap, (g.tx - g.ptx) / dt));
+      const fvy = Math.max(-cap, Math.min(cap, (g.ty - g.pty) / dt));
+      g.ptx = g.tx;
+      g.pty = g.ty;
+      g.tvx = g.tvx * 0.5 + fvx * 0.5;
+      g.tvy = g.tvy * 0.5 + fvy * 0.5;
       g.vx += ((g.tx - g.px) * K + (g.tvx - g.vx) * C) * dt;
       g.vy += ((g.ty - g.py) * K + (g.tvy - g.vy) * C) * dt;
       g.px += g.vx * dt;
@@ -457,19 +464,8 @@ export default function CanvasView({
         ".frame, .pin, .canvas-toolbar, .minimap, .frame-notes, .frame-farlabel"
       );
       const rect = wrap.getBoundingClientRect();
-      const nx = e.clientX - rect.left;
-      const ny = e.clientY - rect.top;
-      const now = performance.now();
-      const dtv = g.lastMove ? Math.max(0.004, (now - g.lastMove) / 1000) : 0;
-      if (dtv > 0 && dtv < 0.1) {
-        // Blend instantaneous velocity; cap so a warp (tab-in) can't launch it.
-        const cap = 4000;
-        g.tvx = g.tvx * 0.55 + Math.max(-cap, Math.min(cap, (nx - g.tx) / dtv)) * 0.45;
-        g.tvy = g.tvy * 0.55 + Math.max(-cap, Math.min(cap, (ny - g.ty) / dtv)) * 0.45;
-      }
-      g.lastMove = now;
-      g.tx = nx;
-      g.ty = ny;
+      g.tx = e.clientX - rect.left;
+      g.ty = e.clientY - rect.top;
       if (!g.raf || g.alpha === 0) {
         // Size lazily at wake-up — mount-time effects can miss the wrap's
         // first layout (the browser app's stylesheet can land late).
@@ -488,6 +484,8 @@ export default function CanvasView({
         g.vy = 0;
         g.tvx = 0;
         g.tvy = 0;
+        g.ptx = g.tx;
+        g.pty = g.ty;
         const probe = document.createElement("span");
         probe.style.color = "color-mix(in srgb, var(--canvas-dot) 45%, var(--text-primary))";
         wrap.appendChild(probe);
