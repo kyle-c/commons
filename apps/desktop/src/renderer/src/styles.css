@@ -1949,9 +1949,10 @@ kbd {
 .narration-panel header .btn {
   margin-left: 8px;
 }
-.narration-panel header .hint {
-  margin-left: 8px;
-  font-weight: 400;
+/* One-line purpose under a panel's title row. */
+.panel-sub {
+  padding: 0 16px 10px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 .narration-body {
   flex: 1;

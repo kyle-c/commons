@@ -171,7 +171,6 @@ export default function NarrationPanel({ me, project, frames, threads, repoPath,
     <div className="agent-panel narration-panel" tabIndex={0} onKeyDown={onKeyDown}>
       <header>
         <strong>Narrate</strong>
-        <span className="hint">design rationale, with receipts</span>
         <span style={{ flex: 1 }} />
         {repoPath && window.commons && (
           <button className="btn" disabled={generating} onClick={generate} title="Runs on your machine and your Anthropic credentials. Mines this repo's git history, docs, and the project's threads and tests">
@@ -182,6 +181,9 @@ export default function NarrationPanel({ me, project, frames, threads, repoPath,
           ✕
         </button>
       </header>
+      <div className="panel-sub hint">
+        Explains the thinking behind each screen — sourced from your comments, tests, and code changes.
+      </div>
 
       <div className="narration-body" ref={listRef}>
         {generating && (

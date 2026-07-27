@@ -179,6 +179,24 @@ function parseDrafts(finalText: string): { drafts: AnnotationDraft[]; confidence
   }
 }
 
+/** Progress lines read like a person narrating, not a tool log. */
+function humanizeToolUse(name: string, input: Record<string, unknown>): string {
+  if (name === "Bash") {
+    const cmd = String(input.command ?? "");
+    if (/git (log|show|shortlog|cat-file|blame)/.test(cmd)) return "Reading the project's change history\u2026";
+    if (/^\s*(ls|find|tree|cat)\b/.test(cmd)) return "Looking around the project\u2026";
+    return "Studying the project\u2026";
+  }
+  const file = String(input.file_path ?? input.path ?? "");
+  const base = file.split("/").pop() || "";
+  if (name === "Read") {
+    if (/readme|plan|design|docs?|\.md$/i.test(file)) return `Reading the docs${base ? ` (${base})` : ""}\u2026`;
+    return base ? `Reading the code behind ${base}\u2026` : "Reading the code\u2026";
+  }
+  if (name === "Glob" || name === "Grep") return "Searching the project\u2026";
+  return "Studying the project\u2026";
+}
+
 const running = new Set<string>();
 
 export async function generate(request: AnnotationGenerateRequest): Promise<AnnotationGenerateResult> {
@@ -187,7 +205,7 @@ export async function generate(request: AnnotationGenerateRequest): Promise<Anno
   }
   running.add(request.repoPath);
   try {
-    emitProgress(request.repoPath, "Reading the project record…");
+    emitProgress(request.repoPath, "Reading this project's comments, tests, and history…");
     const turn = query({
       prompt: buildPrompt(request),
       options: {
@@ -208,11 +226,7 @@ export async function generate(request: AnnotationGenerateRequest): Promise<Anno
         for (const block of message.message.content) {
           if (block.type === "tool_use") {
             const input = (block.input ?? {}) as Record<string, unknown>;
-            const summary =
-              block.name === "Bash"
-                ? `$ ${String(input.command ?? "").slice(0, 90)}`
-                : `${block.name} ${String(input.file_path ?? input.pattern ?? "").slice(0, 90)}`;
-            emitProgress(request.repoPath, summary);
+            emitProgress(request.repoPath, humanizeToolUse(block.name, input));
           }
         }
       }
@@ -229,7 +243,7 @@ export async function generate(request: AnnotationGenerateRequest): Promise<Anno
     if (!parsed || parsed.drafts.length === 0) {
       return { ok: false, drafts: [], costUsd, error: "The annotator produced no parseable annotations." };
     }
-    emitProgress(request.repoPath, "Verifying citations against the repo…");
+    emitProgress(request.repoPath, "Double-checking every citation against the repo…");
     await verifyCitations(request.repoPath, parsed.drafts, request.evidence);
     return { ok: true, drafts: parsed.drafts, confidenceNotes: parsed.confidenceNotes, costUsd };
   } catch (error) {
