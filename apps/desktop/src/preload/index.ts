@@ -40,6 +40,7 @@ const api: CommonsApi = {
   },
   setMenuRecents: (recents) => ipcRenderer.send("menu-recents", recents),
   setPreviewAppearance: (mode) => ipcRenderer.invoke("set-preview-appearance", mode),
+  setDockAppearance: (mode) => ipcRenderer.invoke("set-dock-appearance", mode),
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
   wrapPreviewUrl: (url, opts) => ipcRenderer.invoke("wrap-preview-url", url, opts),
   getGitStatus: (repoPath) => ipcRenderer.invoke("git-status", repoPath),

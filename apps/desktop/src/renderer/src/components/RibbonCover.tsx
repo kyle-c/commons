@@ -52,9 +52,9 @@ export default function RibbonCover({ seed }: { seed: string }) {
         `M 0 ${y0} C ${W / 3} ${c0}, ${(2 * W) / 3} ${c1}, ${W} ${y1} ` +
         `L ${W} ${y1 + t} C ${(2 * W) / 3} ${c1 + t * 0.9}, ${W / 3} ${c0 + t * 1.1}, 0 ${y0 + t} Z`,
       fill: palette[i % palette.length],
-      // Semi-transparent bands sit back into the card surface instead of
-      // competing with the name; overlaps read as glazed layers.
-      opacity: i === 0 ? 0.52 : 0.4,
+      // Band opacity lives in CSS (.ribbon-cover .band) so each theme can
+      // tune how far the glaze sits back; the lead band reads strongest.
+      opacity: i === 0 ? 1 : 0.8,
     });
   }
 
@@ -82,7 +82,9 @@ export default function RibbonCover({ seed }: { seed: string }) {
     >
       <rect width={W} height={H} fill="var(--bg-input)" />
       {ribbons.map((ribbon, i) => (
-        <path key={i} d={ribbon.d} fill={ribbon.fill} opacity={ribbon.opacity} />
+        <g key={i} className="band">
+          <path d={ribbon.d} fill={ribbon.fill} opacity={ribbon.opacity} />
+        </g>
       ))}
       <path
         d={routeD}

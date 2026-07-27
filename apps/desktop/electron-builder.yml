@@ -10,6 +10,14 @@ files:
   - out/**
   - package.json
 
+# Theme-following Dock icons: swapped at runtime via app.dock.setIcon when
+# the user flips the app's light/dark theme.
+extraResources:
+  - from: build/dock-light.png
+    to: dock-light.png
+  - from: build/dock-dark.png
+    to: dock-dark.png
+
 # The Agent SDK spawns its bundled CLI as a subprocess — that can't run from
 # inside app.asar, so keep the package unpacked on disk.
 asar: true

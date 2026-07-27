@@ -18,7 +18,10 @@ function resolve(pref: ThemePreference): "dark" | "light" {
 }
 
 function apply(pref: ThemePreference): void {
-  document.documentElement.dataset.theme = resolve(pref);
+  const mode = resolve(pref);
+  document.documentElement.dataset.theme = mode;
+  // The Dock icon follows the app theme (desktop only, running app only).
+  void window.commons?.setDockAppearance(mode);
 }
 
 export function setThemePreference(pref: ThemePreference): void {

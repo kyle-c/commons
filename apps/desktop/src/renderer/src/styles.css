@@ -2351,9 +2351,12 @@ kbd {
   right: 26px;
   z-index: 2;
   opacity: 0;
-  color: var(--text-inverse);
-  background: rgba(0, 0, 0, 0.28);
-  border-color: transparent;
+  /* Ribbon covers vary from sand to charcoal — panel-toned chips stay
+     readable over any of them in both themes. */
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
+  border-color: var(--border-subtle);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   transition: opacity var(--dur-fast) var(--ease-out);
 }
 .project-card:hover .card-edit,
@@ -2361,8 +2364,8 @@ kbd {
   opacity: 1;
 }
 .card-edit:hover {
-  background: rgba(0, 0, 0, 0.45);
-  color: var(--text-inverse);
+  background: var(--bg-panel);
+  color: var(--text-primary);
 }
 .cover-rename {
   width: 80%;
@@ -2619,12 +2622,19 @@ kbd {
   height: 100%;
   object-fit: cover;
 }
-/* Generated ribbon covers fill the same slot as uploaded images. */
+/* Generated ribbon covers fill the same slot as uploaded images. Band glaze
+   is theme-tuned: darker surfaces want quieter bands, sand wants more ink. */
 .ribbon-cover {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+}
+.ribbon-cover .band {
+  opacity: 0.46;
+}
+:root[data-theme="light"] .ribbon-cover .band {
+  opacity: 0.68;
 }
 .project-cover span {
   position: relative;
@@ -2880,6 +2890,7 @@ kbd {
 .tab.active {
   background: var(--bg-active);
   color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--border-default);
 }
 .tab-name {
   overflow: hidden;

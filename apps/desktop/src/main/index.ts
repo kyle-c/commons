@@ -216,6 +216,18 @@ app.whenReady().then(() => {
     if (mode === "light" || mode === "dark" || mode === "system") nativeTheme.themeSource = mode;
   });
 
+  // Dock icon follows the app theme. Runtime-only: Finder and the DMG keep
+  // the bundled icns; a truly adaptive icon awaits Icon Composer support.
+  ipcMain.handle("set-dock-appearance", (_e, mode: "light" | "dark") => {
+    if (mode !== "light" && mode !== "dark") return;
+    const dir = app.isPackaged ? process.resourcesPath : path.join(__dirname, "../../build");
+    try {
+      app.dock?.setIcon(path.join(dir, `dock-${mode}.png`));
+    } catch {
+      // Missing asset — the bundled icon stands.
+    }
+  });
+
   runner.onStatusChange((repoPath, status) => {
     mainWindow?.webContents.send("dev-server-status", repoPath, status);
   });

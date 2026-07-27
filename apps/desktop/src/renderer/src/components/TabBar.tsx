@@ -23,7 +23,10 @@ export default function TabBar({
         className={`tab tab-home ${active === "home" ? "active" : ""}`}
         aria-label="Home"
         title="Home"
-        onClick={() => onSelect("home")}
+        onClick={(e) => {
+          e.currentTarget.blur(); // focus styling must not linger across screens
+          onSelect("home");
+        }}
       >
         <Icon name="home" size={15} />
       </button>
@@ -32,7 +35,10 @@ export default function TabBar({
           key={tab.id}
           className={`tab ${active === tab.id ? "active" : ""}`}
           title={tab.name}
-          onClick={() => onSelect(tab.id)}
+          onClick={(e) => {
+            e.currentTarget.blur();
+            onSelect(tab.id);
+          }}
           onAuxClick={(e) => {
             if (e.button === 1) onClose(tab.id);
           }}
@@ -53,7 +59,15 @@ export default function TabBar({
         </button>
       ))}
       {tabs.length > 0 && active !== "home" && (
-        <button className="tab tab-add" aria-label="New tab" title="Open another project" onClick={() => onSelect("home")}>
+        <button
+          className="tab tab-add"
+          aria-label="New tab"
+          title="Open another project"
+          onClick={(e) => {
+            e.currentTarget.blur();
+            onSelect("home");
+          }}
+        >
           +
         </button>
       )}

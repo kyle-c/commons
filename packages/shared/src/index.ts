@@ -247,6 +247,8 @@ export interface CommonsApi {
    * driven and unaffected.
    */
   setPreviewAppearance(mode: "light" | "dark" | "system"): Promise<void>;
+  /** Dock icon follows the app theme (running app only; Finder keeps the bundled icns). */
+  setDockAppearance(mode: "light" | "dark"): Promise<void>;
   /** Feed the File > Open Recent submenu (renderer owns the recents list). */
   setMenuRecents(recents: { id: string; name: string }[]): void;
   openExternal(url: string): Promise<void>;
