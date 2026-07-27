@@ -239,6 +239,13 @@ export interface CommonsApi {
   onAuthCallback(cb: (auth: AuthCallback) => void): () => void;
   /** Native menu bar commands (File > New Project, View > Canvas, …). */
   onMenuAction(cb: (action: MenuAction) => void): () => void;
+  /**
+   * The appearance embedded previews render with (canvas frames + Prototype
+   * view). Drives Chromium's prefers-color-scheme via nativeTheme, so
+   * useColorScheme()-style app code sees it; Commons's own chrome is token-
+   * driven and unaffected.
+   */
+  setPreviewAppearance(mode: "light" | "dark" | "system"): Promise<void>;
   /** Feed the File > Open Recent submenu (renderer owns the recents list). */
   setMenuRecents(recents: { id: string; name: string }[]): void;
   openExternal(url: string): Promise<void>;

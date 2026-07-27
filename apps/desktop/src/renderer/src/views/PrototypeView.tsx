@@ -5,6 +5,7 @@ import { resolveFrameUrl } from "../lib/frameUrl";
 import { registerShortcut } from "../lib/shortcuts";
 import UserTests from "./UserTests";
 import Icon, { type IconName } from "../components/icons";
+import PreviewAppearanceButton from "../components/PreviewAppearanceButton";
 
 // height > 0 marks a framed device — "Open in browser" wraps those in the
 // device-sized preview harness so the browser keeps the form factor.
@@ -80,6 +81,7 @@ export default function PrototypeView({
           <span className="pa-path">{routePath}</span>
         </span>
         <span className="spacer" style={{ flex: 1 }} />
+        <PreviewAppearanceButton />
         <button
           className={`btn ghost ${testsOpen ? "active" : ""}`}
           title="Task-based usability tests, shareable by link (U)"

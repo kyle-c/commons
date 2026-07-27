@@ -11,6 +11,7 @@ import UpdateChip from "./views/UpdateChip";
 import CommandPalette from "./views/CommandPalette";
 import { clearStoredSession, getStoredSession, initials, type StoredSession } from "./lib/session";
 import { getRecents } from "./lib/recents";
+import { applyStoredPreviewAppearance } from "./lib/previewAppearance";
 
 export type Nav =
   | { screen: "home" }
@@ -62,6 +63,7 @@ export default function App() {
   // overlays) re-broadcast as window events for whichever surface is mounted.
   useEffect(() => {
     if (!window.commons) return;
+    applyStoredPreviewAppearance();
     window.commons.setMenuRecents(getRecents());
     return window.commons.onMenuAction((action) => {
       switch (action.type) {

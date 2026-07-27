@@ -11,6 +11,7 @@ import { initials } from "../lib/session";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { registerShortcut } from "../lib/shortcuts";
 import Icon from "../components/icons";
+import PreviewAppearanceButton from "../components/PreviewAppearanceButton";
 
 interface Viewport {
   x: number;
@@ -873,6 +874,7 @@ export default function CanvasView({
         >
           Overview
         </button>
+        <PreviewAppearanceButton />
         {onTidy && (
           <button className="btn ghost" onClick={onTidy} title="Re-lay out frames by section (moves frames for everyone)">
             Tidy

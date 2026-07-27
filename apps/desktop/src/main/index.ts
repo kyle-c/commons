@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from "electron";
+import { app, shell, BrowserWindow, ipcMain, dialog, nativeTheme } from "electron";
 import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
@@ -207,6 +207,14 @@ app.whenReady().then(() => {
   ipcMain.handle("detect-external-servers", (_e, repoPaths: string[]) =>
     detectExternal(repoPaths, runner.ownedPorts())
   );
+
+  // Preview appearance: what useColorScheme() reports inside embedded frames.
+  // The renderer applies the stored preference on launch (default light — the
+  // apps being previewed usually design light-first, and Commons's dark
+  // chrome shouldn't leak into them).
+  ipcMain.handle("set-preview-appearance", (_e, mode: "light" | "dark" | "system") => {
+    if (mode === "light" || mode === "dark" || mode === "system") nativeTheme.themeSource = mode;
+  });
 
   runner.onStatusChange((repoPath, status) => {
     mainWindow?.webContents.send("dev-server-status", repoPath, status);
