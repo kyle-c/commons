@@ -129,14 +129,15 @@ textarea:focus {
 }
 /* Project context bar: the row under the titlebar holding everything scoped
    to the open project (view switcher, server state, setup, tools, share).
-   Left edge aligns with the tab strip above. */
+   Left edge aligns under the traffic lights — this row sits below them, so
+   it takes the window's own inset rather than the tab strip's. */
 .subnav {
   height: 40px;
   flex: none;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 16px 0 84px;
+  padding: 0 16px;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border-subtle);
 }
