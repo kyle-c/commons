@@ -336,7 +336,20 @@ export default function CanvasView({
   const moveCursor = useMutation(api.presence.moveCursor);
   const lastCursorSend = useRef(0);
   const cursorTrailing = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const glowRef = useRef<HTMLDivElement>(null);
   const onCursorMove = (e: React.MouseEvent) => {
+    // Dot-grid glow: direct DOM writes (no state) — this runs per mousemove.
+    const glow = glowRef.current;
+    const wrap = wrapRef.current;
+    if (glow && wrap) {
+      const overEmpty = !(e.target as HTMLElement).closest(
+        ".frame, .pin, .canvas-toolbar, .minimap, .frame-notes, .frame-farlabel"
+      );
+      const rect = wrap.getBoundingClientRect();
+      glow.style.setProperty("--glow-x", `${e.clientX - rect.left}px`);
+      glow.style.setProperty("--glow-y", `${e.clientY - rect.top}px`);
+      glow.classList.toggle("on", overEmpty);
+    }
     const send = (clientX: number, clientY: number) => {
       lastCursorSend.current = Date.now();
       const p = screenToCanvas(clientX, clientY);
@@ -795,7 +808,9 @@ export default function CanvasView({
       onMouseDown={onBackgroundMouseDown}
       onDoubleClick={onBackgroundDoubleClick}
       onMouseMove={onCursorMove}
+      onMouseLeave={() => glowRef.current?.classList.remove("on")}
     >
+      <div ref={glowRef} className="dot-glow" aria-hidden />
       <div
         className={`canvas-stage ${layoutAnim ? "layout-anim" : ""}`}
         style={{ transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.scale})` }}

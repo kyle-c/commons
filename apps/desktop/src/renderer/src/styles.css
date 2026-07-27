@@ -517,6 +517,56 @@ textarea:focus {
 .canvas-wrap.commenting {
   cursor: crosshair;
 }
+/* Cursor glow: over empty canvas, the dots near the pointer brighten and
+   swell a touch — the grid lifts to meet the hand. The registered
+   properties let the spotlight's center ease, so the light trails the
+   cursor like a soft wave instead of snapping. */
+@property --glow-x {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: -600px;
+}
+@property --glow-y {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: -600px;
+}
+.dot-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--canvas-dot) 45%, var(--text-primary)) 1.8px,
+    transparent 1.8px
+  );
+  background-size: 24px 24px;
+  -webkit-mask-image: radial-gradient(
+    circle 170px at var(--glow-x) var(--glow-y),
+    rgba(0, 0, 0, 0.85),
+    rgba(0, 0, 0, 0.3) 55%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    circle 170px at var(--glow-x) var(--glow-y),
+    rgba(0, 0, 0, 0.85),
+    rgba(0, 0, 0, 0.3) 55%,
+    transparent 100%
+  );
+  opacity: 0;
+  transition:
+    opacity 300ms var(--ease-out),
+    --glow-x 140ms ease-out,
+    --glow-y 140ms ease-out;
+}
+.dot-glow.on {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dot-glow {
+    transition: opacity 300ms var(--ease-out);
+  }
+}
 .canvas-stage {
   position: absolute;
   top: 0;
