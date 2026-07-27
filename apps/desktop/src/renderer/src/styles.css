@@ -555,6 +555,18 @@ textarea:focus {
 /* Perceived speed: the last snapshot shows instantly under the booting
    iframe, which fades in over it once loaded — a frame never flashes blank
    white while a dev server or deploy preview wakes up. */
+/* Preview appearance: the iframe element's color-scheme propagates into the
+   child document as its prefers-color-scheme (CSS Color Adjust), so this is
+   what makes embedded apps render light or dark on command. "system" sets
+   no rule and the environment decides. */
+:root[data-preview-appearance="light"] .frame-body iframe,
+:root[data-preview-appearance="light"] .proto-stage iframe {
+  color-scheme: light;
+}
+:root[data-preview-appearance="dark"] .frame-body iframe,
+:root[data-preview-appearance="dark"] .proto-stage iframe {
+  color-scheme: dark;
+}
 .frame-body iframe {
   position: relative;
   z-index: 1;

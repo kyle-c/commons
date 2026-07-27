@@ -17,10 +17,21 @@ export function getPreviewAppearance(): PreviewAppearance {
 
 export function setPreviewAppearance(mode: PreviewAppearance): void {
   localStorage.setItem(KEY, mode);
-  void window.commons?.setPreviewAppearance(mode);
+  apply(mode);
 }
 
 /** Called once at launch so the stored preference takes effect. */
 export function applyStoredPreviewAppearance(): void {
-  void window.commons?.setPreviewAppearance(getPreviewAppearance());
+  apply(getPreviewAppearance());
+}
+
+function apply(mode: PreviewAppearance): void {
+  // Primary mechanism: CSS color-scheme on the preview iframes propagates
+  // into each child document as its prefers-color-scheme (CSS Color Adjust).
+  // Works per-frame, applies instantly, and works in the browser app too —
+  // styles.css maps this attribute onto the iframes.
+  document.documentElement.dataset.previewAppearance = mode;
+  // Desktop reinforcement: also steer Chromium's own scheme so anything
+  // outside the CSS rule (popups, the preview harness) agrees.
+  void window.commons?.setPreviewAppearance(mode);
 }

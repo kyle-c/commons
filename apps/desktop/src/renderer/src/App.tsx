@@ -62,8 +62,8 @@ export default function App() {
   // Native menu bar: navigation actions land here; view-local ones (zoom,
   // overlays) re-broadcast as window events for whichever surface is mounted.
   useEffect(() => {
-    if (!window.commons) return;
     applyStoredPreviewAppearance();
+    if (!window.commons) return;
     window.commons.setMenuRecents(getRecents());
     return window.commons.onMenuAction((action) => {
       switch (action.type) {

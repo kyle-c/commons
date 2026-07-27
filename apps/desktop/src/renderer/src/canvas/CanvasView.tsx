@@ -212,6 +212,37 @@ export default function CanvasView({
     vpAnimation.current = requestAnimationFrame(step);
   };
 
+  /**
+   * Anchor-pinned zoom tween: scale moves exponentially (zoom perception is
+   * logarithmic — linear scale interpolation reads as a lurch) and x/y are
+   * derived each step so the anchor point never drifts.
+   */
+  const animateZoom = (cx: number, cy: number, targetScale: number, duration = 240) => {
+    const from = vpRef.current;
+    const ratio = targetScale / from.scale;
+    if (Math.abs(ratio - 1) < 1e-6) return;
+    const finalVp = {
+      scale: targetScale,
+      x: cx - (cx - from.x) * ratio,
+      y: cy - (cy - from.y) * ratio,
+    };
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.visibilityState === "hidden") {
+      setVp(finalVp);
+      return;
+    }
+    cancelVpAnimation();
+    const start = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const k = 1 - Math.pow(1 - t, 3);
+      const s = from.scale * Math.pow(ratio, k);
+      const m = s / from.scale;
+      setVp({ scale: s, x: cx - (cx - from.x) * m, y: cy - (cy - from.y) * m });
+      vpAnimation.current = t < 1 ? requestAnimationFrame(step) : null;
+    };
+    vpAnimation.current = requestAnimationFrame(step);
+  };
+
   const fitTo = (target: Doc<"frames">[], maxScale = 1, animate = true) => {
     const el = wrapRef.current;
     if (!el || target.length === 0) return;
@@ -257,12 +288,8 @@ export default function CanvasView({
   const zoomBy = (factor: number) => {
     const el = wrapRef.current;
     if (!el) return;
-    const v = vpRef.current;
-    const cx = el.clientWidth / 2;
-    const cy = el.clientHeight / 2;
-    const scale = Math.min(2, Math.max(0.05, v.scale * factor));
-    const k = scale / v.scale;
-    animateVp({ scale, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k }, 160);
+    const scale = Math.min(2, Math.max(0.05, vpRef.current.scale * factor));
+    animateZoom(el.clientWidth / 2, el.clientHeight / 2, scale);
   };
   const fitRef = useRef(toggleOverview);
   fitRef.current = toggleOverview;
@@ -414,12 +441,8 @@ export default function CanvasView({
     if (!el) return;
     if (overviewFromRef.current) setOverviewFrom(null);
     const rect = el.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    const v = vpRef.current;
-    const scale = Math.min(2, Math.max(0.05, v.scale * (e.shiftKey ? 1 / 1.6 : 1.6)));
-    const k = scale / v.scale;
-    animateVp({ scale, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k }, 180);
+    const scale = Math.min(2, Math.max(0.05, vpRef.current.scale * (e.shiftKey ? 1 / 1.6 : 1.6)));
+    animateZoom(e.clientX - rect.left, e.clientY - rect.top, scale);
   };
 
   const startFrameDrag = (frame: Doc<"frames">, e: React.MouseEvent) => {

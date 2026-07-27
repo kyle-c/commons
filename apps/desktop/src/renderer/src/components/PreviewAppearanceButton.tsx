@@ -17,7 +17,6 @@ const LABELS = { light: "light", dark: "dark", system: "this Mac's" };
  */
 export default function PreviewAppearanceButton() {
   const [mode, setMode] = useState<PreviewAppearance>(getPreviewAppearance());
-  if (!window.commons) return null;
   const next = ORDER[(ORDER.indexOf(mode) + 1) % ORDER.length];
   return (
     <button
