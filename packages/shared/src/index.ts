@@ -259,7 +259,10 @@ export interface CommonsApi {
   /** Fast-forward-only pull; refuses dirty trees. */
   pullRepo(repoPath: string): Promise<{ ok: boolean; message: string }>;
   /** Clone gitRemote into a user-chosen folder; null if the picker is cancelled. */
-  cloneRepo(gitRemote: string, suggestedName: string): Promise<{ repoPath: string } | { error: string } | null>;
+  cloneRepo(
+    gitRemote: string,
+    suggestedName: string
+  ): Promise<{ repoPath: string; linkedExisting?: boolean } | { error: string } | null>;
   /** Preflight the git integration (install, identity, remote credentials). */
   checkGitSetup(probeRemote?: string): Promise<GitSetupStatus>;
   /** Write global git user.name/user.email (the one-click identity fix). */

@@ -207,10 +207,12 @@ export const claim = mutation({
 export const validate = query({
   args: { sessionToken: v.string() },
   handler: async (ctx, { sessionToken }) => {
+    // first(), not unique(): a duplicated token row (bad import, race)
+    // should never brick sign-in — both rows point at the same user.
     const session = await ctx.db
       .query("sessions")
       .withIndex("by_token", (q) => q.eq("token", sessionToken))
-      .unique();
+      .first();
     if (!session) return null;
     return await ctx.db.get(session.userId);
   },
@@ -222,7 +224,7 @@ export const touch = mutation({
     const session = await ctx.db
       .query("sessions")
       .withIndex("by_token", (q) => q.eq("token", sessionToken))
-      .unique();
+      .first();
     if (session) await ctx.db.patch(session.userId, { lastSeenAt: Date.now() });
   },
 });
@@ -256,11 +258,12 @@ export const unlinkEmail = mutation({
 export const signOut = mutation({
   args: { sessionToken: v.string() },
   handler: async (ctx, { sessionToken }) => {
-    const session = await ctx.db
+    // Signing out clears every row carrying this token (duplicates included).
+    const sessions = await ctx.db
       .query("sessions")
       .withIndex("by_token", (q) => q.eq("token", sessionToken))
-      .unique();
-    if (session) await ctx.db.delete(session._id);
+      .collect();
+    for (const session of sessions) await ctx.db.delete(session._id);
   },
 });
 

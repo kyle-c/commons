@@ -83,6 +83,18 @@ export async function pullFastForward(repoPath: string): Promise<{ ok: boolean; 
     : { ok: false, message: pull.stderr || "Pull failed." };
 }
 
+/** The origin remote of the repo containing dir, if any (nested dirs count). */
+export async function originOf(dir: string): Promise<string | null> {
+  const result = await git(dir, ["config", "--get", "remote.origin.url"]);
+  return result.ok && result.stdout ? result.stdout : null;
+}
+
+/** Whether dir sits anywhere inside a git working tree. */
+export async function insideRepo(dir: string): Promise<boolean> {
+  const result = await git(dir, ["rev-parse", "--is-inside-work-tree"]);
+  return result.ok && result.stdout === "true";
+}
+
 export async function clone(gitRemote: string, targetDir: string): Promise<{ ok: boolean; message: string }> {
   const parent = path.dirname(targetDir);
   const result = await new Promise<{ ok: boolean; stderr: string }>((resolve) => {

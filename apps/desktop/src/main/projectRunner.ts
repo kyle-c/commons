@@ -1,4 +1,6 @@
-import { spawn, type ChildProcess } from "child_process";
+import { execFile, spawn, type ChildProcess } from "child_process";
+import { promises as fs } from "fs";
+import path from "path";
 import net from "net";
 import http from "http";
 import type { DevServerStatus } from "@commons/shared";
@@ -79,6 +81,30 @@ export async function start(repoPath: string, name?: string): Promise<DevServerS
     };
     setStatus(repoPath, status);
     return status;
+  }
+
+  // A fresh clone has no dependencies — install before the first start, or
+  // the server either dies or (worse) half-runs on hoisted parent modules.
+  const hasModules = await fs
+    .access(path.join(inspection.repoPath, "node_modules"))
+    .then(() => true)
+    .catch(() => false);
+  if (!hasModules) {
+    setStatus(repoPath, { state: "starting", port: 0 }); // port unknown until install finishes
+    const pm = inspection.packageManager;
+    const installed = await new Promise<boolean>((resolve) => {
+      execFile(pm, ["install"], { cwd: inspection.repoPath, timeout: 600_000, env: process.env }, (error) =>
+        resolve(!error)
+      );
+    });
+    if (!installed) {
+      const status: DevServerStatus = {
+        state: "error",
+        message: `Dependencies aren't installed — run \`${pm} install\` in ${inspection.repoPath} and try again`,
+      };
+      setStatus(repoPath, status);
+      return status;
+    }
   }
 
   const port = config?.port ?? (await findFreePort(4310));

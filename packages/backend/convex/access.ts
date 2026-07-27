@@ -17,10 +17,11 @@ export async function resolveViewer(
   args: { sessionToken?: string; userId?: Id<"users"> }
 ): Promise<Id<"users"> | undefined> {
   if (args.sessionToken) {
+    // first(), not unique(): a duplicated token row must never brick access.
     const session = await ctx.db
       .query("sessions")
       .withIndex("by_token", (q) => q.eq("token", args.sessionToken!))
-      .unique();
+      .first();
     return session?.userId; // an invalid token never falls back to the claimed id
   }
   return args.userId;

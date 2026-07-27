@@ -160,7 +160,23 @@ app.whenReady().then(() => {
       properties: ["openDirectory", "createDirectory"],
     });
     if (picked.canceled || picked.filePaths.length === 0) return null;
-    const target = path.join(picked.filePaths[0], suggestedName);
+    const pickedDir = picked.filePaths[0];
+    // Pointing at a folder that already IS this repo means "link it", not
+    // "clone into it" — the natural misread that used to nest a fresh,
+    // dependency-less clone inside an existing working copy.
+    const norm = (r: string) => r.replace(/\.git$/, "").replace(/\/+$/, "").toLowerCase();
+    const existingRemote = await gitOps.originOf(pickedDir);
+    if (existingRemote && norm(existingRemote) === norm(gitRemote)) {
+      return { repoPath: pickedDir, linkedExisting: true };
+    }
+    if (await gitOps.insideRepo(pickedDir)) {
+      return {
+        error: "That folder is inside another git repo — pick a clean spot (like ~/Code) and Commons will clone into it.",
+      };
+    }
+    // Folder-safe name: "Felix Mobile App" clones as felix-mobile-app.
+    const dirName = suggestedName.trim().replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-_.]/g, "").toLowerCase() || "repo";
+    const target = path.join(pickedDir, dirName);
     const result = await gitOps.clone(gitRemote, target);
     return result.ok ? { repoPath: result.message } : { error: result.message };
   });
