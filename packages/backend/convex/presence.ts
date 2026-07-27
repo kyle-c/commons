@@ -65,6 +65,36 @@ export const cursorsInProject = query({
   },
 });
 
+/**
+ * Active teammates across every project the viewer can see, in one query —
+ * the home grid's avatar stacks subscribe here so heartbeat churn re-runs
+ * this small read instead of the whole listWithActivity card query.
+ */
+export const activeByProject = query({
+  args: { userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, viewer) => {
+    const viewerId = await resolveViewer(ctx, viewer);
+    if (!viewerId) return {};
+    const cutoff = Date.now() - 60_000;
+    // presence is bounded by (team members × projects) — small by design.
+    const rows = (await ctx.db.query("presence").collect()).filter((r) => r.lastSeenAt > cutoff);
+    const result: Record<string, { _id: string; name: string; avatarColor: string; avatarUrl?: string }[]> = {};
+    for (const row of rows) {
+      // Access-check per project so presence never leaks across workspaces.
+      if (!(await accessibleProject(ctx, row.projectId, viewerId))) continue;
+      const user = await ctx.db.get(row.userId);
+      if (!user) continue;
+      (result[row.projectId] ??= []).push({
+        _id: user._id,
+        name: user.name,
+        avatarColor: user.avatarColor,
+        avatarUrl: user.avatarUrl,
+      });
+    }
+    return result;
+  },
+});
+
 export const activeInProject = query({
   args: { projectId: v.id("projects"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
   handler: async (ctx, { projectId, ...viewer }) => {

@@ -76,17 +76,11 @@ export const listWithActivity = query({
           .collect()
       : [];
     const pinned = new Set(pins.map((p) => p.projectId as string));
-    const cutoff = Date.now() - 60_000;
     return await Promise.all(
       active.map(async (project) => {
         const creator = await ctx.db.get(project.createdBy);
-        const present = await ctx.db
-          .query("presence")
-          .withIndex("by_project", (q) => q.eq("projectId", project._id))
-          .collect();
-        const activeUsers = await Promise.all(
-          present.filter((p) => p.lastSeenAt > cutoff).map((p) => ctx.db.get(p.userId))
-        );
+        // Live avatars come from presence.activeByProject — a separate
+        // subscription, so heartbeat churn never re-runs this query.
         // Bounded reads: the home needs counts and recency, not full
         // histories. (A dead `thumbnail` payload used to force full thread +
         // frame collects here on every invalidation — removed.)
@@ -130,7 +124,6 @@ export const listWithActivity = query({
           workspaceName: project.workspaceId ? workspaceNames.get(project.workspaceId) : undefined,
           lastActivityAt,
           creator,
-          activeUsers: activeUsers.filter(Boolean),
           frameCount: frames.length,
           openThreadCount: threads.filter((t) => !t.resolvedAt).length,
           pinned: pinned.has(project._id),

@@ -14,6 +14,7 @@ import Team from "./Team";
 import Inbox from "./Inbox";
 import AccountMenu from "./AccountMenu";
 import Icon from "../components/icons";
+import RibbonCover from "../components/RibbonCover";
 
 /** Shared lifecycle labels: what kind of feedback a project wants right now. */
 const STATUSES = [
@@ -33,28 +34,23 @@ function fallbackColors(name: string): [string, string] {
   return [`hsl(${h}, 45%, 38%)`, `hsl(${(h + 45) % 360}, 50%, 26%)`];
 }
 
-/** Card cover: project name over a gradient of the repo's brand colors.
+/** Card cover: ribbon-routes art seeded by the project (uploaded covers win).
  *  Children (the inline rename input) replace the name while editing. */
 function ProjectCover({
   name,
-  colors,
+  seed,
   coverUrl,
   children,
 }: {
   name: string;
-  colors?: string[];
+  /** Stable per-project seed for the generated cover (the project id). */
+  seed: string;
   coverUrl?: string | null;
   children?: React.ReactNode;
 }) {
-  const [c1, c2] =
-    colors && colors.length >= 2
-      ? [colors[0], colors[1]]
-      : colors?.length === 1
-        ? [colors[0], `color-mix(in srgb, ${colors[0]} 55%, #1a1b17)`]
-        : fallbackColors(name);
   return (
-    <div className="project-cover" style={coverUrl ? undefined : { background: `linear-gradient(160deg, ${c1}, ${c2})` }}>
-      {coverUrl && <img className="cover-img" src={coverUrl} alt="" />}
+    <div className="project-cover">
+      {coverUrl ? <img className="cover-img" src={coverUrl} alt="" /> : <RibbonCover seed={seed} />}
       {children ?? <span>{name}</span>}
     </div>
   );
@@ -73,6 +69,10 @@ export default function ProjectList({
   tabStrip?: React.ReactNode;
 }) {
   const projects = useQuery(api.projects.listWithActivity, { userId: me._id, sessionToken: sessionToken() });
+  // Live avatars subscribe separately so heartbeat churn re-renders only the
+  // stacks, never the card grid (same isolation pattern as canvas cursors).
+  const activeByProject =
+    useQuery(api.presence.activeByProject, { userId: me._id, sessionToken: sessionToken() }) ?? {};
   const machineId = useMachineId();
   const workspaces = useQuery(api.workspaces.mine, { userId: me._id, sessionToken: sessionToken() }) ?? [];
   const create = useMutation(api.projects.create);
@@ -314,7 +314,7 @@ export default function ProjectList({
               }
             }}
           >
-            <ProjectCover name={project.name} colors={project.brandColors} coverUrl={project.coverUrl}>
+            <ProjectCover name={project.name} seed={project._id} coverUrl={project.coverUrl}>
               {renaming?.id === project._id ? (
                 <input
                   className="cover-rename"
@@ -468,7 +468,7 @@ export default function ProjectList({
                 })()}
               </div>
               <div className="avatar-stack">
-                {project.activeUsers.map(
+                {(activeByProject[project._id] ?? []).map(
                   (user) =>
                     user && (
                       <span
@@ -518,7 +518,7 @@ export default function ProjectList({
                       aria-label={`Open ${project.name} (archived)`}
                       onClick={() => setNav({ screen: "project", projectId: project._id, view: "canvas" })}
                     >
-                      <ProjectCover name={project.name} colors={project.brandColors} coverUrl={project.coverUrl} />
+                      <ProjectCover name={project.name} seed={project._id} coverUrl={project.coverUrl} />
                       <div className="meta">
                         <span>archived {timeAgo(project.archivedAt ?? 0)} ago</span>
                         <button

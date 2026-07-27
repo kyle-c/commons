@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
@@ -99,6 +99,12 @@ function CursorLayer({ me, projectId, scale }: { me: Doc<"users">; projectId: Id
   );
 }
 
+/**
+ * Reopening a project (tab switch, back-and-forth) restores the canvas
+ * exactly where it was instead of re-fitting — per-machine, per-session.
+ */
+const savedViewports = new Map<string, Viewport>();
+
 /** "/pay/[id]" (or "/pay/:id") matches "/pay/123" — same rule as the tester harness. */
 function routeMatches(pattern: string, path: string): boolean {
   const norm = (s: string) => ("/" + s).replace(/\/+/g, "/").replace(/\/$/, "") || "/";
@@ -107,6 +113,145 @@ function routeMatches(pattern: string, path: string): boolean {
   if (p.length !== a.length) return false;
   return p.every((seg, i) => (seg.startsWith("[") || seg.startsWith(":") ? a[i].length > 0 : seg === a[i]));
 }
+
+type CanvasFrame = Props["frames"][number];
+
+/**
+ * The frames themselves, memoized: nothing in here reads the viewport, so
+ * pan/zoom re-renders (60/s during a gesture) skip this whole subtree — the
+ * stage transform moves, the frames don't reconcile. Handlers arrive as
+ * stable wrappers so the memo actually holds.
+ */
+const FrameLayer = memo(function FrameLayer({
+  frames,
+  localPos,
+  focusedFrame,
+  openCounts,
+  devStatus,
+  previewUrl,
+  frameReloadTokens,
+  loadedFrames,
+  heatmap,
+  commentMode,
+  viewerHasRepo,
+  repoHolderNames,
+  onFrameDrag,
+  onShieldDown,
+  onLoaded,
+}: {
+  frames: CanvasFrame[];
+  localPos: Record<string, { x: number; y: number }>;
+  focusedFrame: Id<"frames"> | null;
+  openCounts: Record<string, number>;
+  devStatus: DevServerStatus;
+  previewUrl?: string | null;
+  frameReloadTokens?: Record<string, number>;
+  loadedFrames: Record<string, boolean>;
+  heatmap?: Props["heatmap"];
+  commentMode: boolean;
+  viewerHasRepo?: boolean;
+  repoHolderNames?: string[];
+  onFrameDrag: (frame: Doc<"frames">, e: React.MouseEvent) => void;
+  onShieldDown: (frame: Doc<"frames">, e: React.MouseEvent) => void;
+  onLoaded: (loadKey: string) => void;
+}) {
+  return (
+    <>
+      {frames.map((frame) => {
+        const pos = localPos[frame._id] ?? { x: frame.x, y: frame.y };
+        const focused = focusedFrame === frame._id;
+        const openCount = openCounts[frame._id] ?? 0;
+        const source = frame.kind === "route" ? resolveFrameUrl(frame.routePath, devStatus, previewUrl) : null;
+        const url = source?.url ?? null;
+        return (
+          <div
+            key={frame._id}
+            className={`frame ${focused ? "focused" : ""}`}
+            style={{ left: pos.x, top: pos.y, width: frame.width, height: frame.height + 30 }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="frame-header" onMouseDown={(e) => onFrameDrag(frame, e)}>
+              <span>{frame.title}</span>
+              <span className="route">{frame.routePath}</span>
+              {source && !source.live && (
+                <span className="badge" title="Rendered from the deployed preview — locate the repo for a live dev server">
+                  preview
+                </span>
+              )}
+              <span style={{ flex: 1 }} />
+              {openCount > 0 && <span className="badge comments">{openCount}</span>}
+            </div>
+            <div className="frame-body">
+              {url ? (
+                (() => {
+                  const loadKey = `${frame._id}:${frameReloadTokens?.[frame._id] ?? 0}`;
+                  const loaded = loadedFrames[loadKey] === true;
+                  return (
+                    <>
+                      {!loaded &&
+                        (frame.snapshotUrl ? (
+                          <img className="frame-underlay" src={frame.snapshotUrl} alt="" />
+                        ) : (
+                          <div className="frame-booting" />
+                        ))}
+                      <iframe
+                        key={loadKey}
+                        className={loaded ? "loaded" : ""}
+                        src={url}
+                        title={frame.title}
+                        onLoad={() => onLoaded(loadKey)}
+                      />
+                    </>
+                  );
+                })()
+              ) : frame.snapshotUrl ? (
+                // SNAP-3 fallback: last captured state beats an empty box.
+                <img className="frame-snapshot" src={frame.snapshotUrl} alt={frame.title} title="Snapshot — no live preview right now" />
+              ) : (
+                <div className="frame-placeholder">
+                  {frame.kind === "figma"
+                    ? "Figma frames coming soon"
+                    : devStatus.state === "starting"
+                      ? "Dev server starting…"
+                      : devStatus.state === "error"
+                        ? devStatus.message
+                        : viewerHasRepo
+                          ? "Dev server stopped — set a preview URL as a fallback"
+                          : repoHolderNames && repoHolderNames.length > 0
+                            ? `Waiting for a preview — ask ${repoHolderNames[0]} to publish one`
+                            : "Waiting for a preview — ask a teammate with the repo to publish one"}
+                </div>
+              )}
+              {heatmap && frame.routePath && (
+                <div className="heatmap-layer">
+                  {Object.entries(heatmap.clicksByRoute)
+                    .filter(([route]) => routeMatches(frame.routePath!, route))
+                    .flatMap(([route, clicks]) =>
+                      clicks.map((click, i) => (
+                        <span
+                          key={`${route}-${i}`}
+                          className={`heatmap-dot ${click.interactive ? "" : "miss"}`}
+                          style={{ left: click.fx * frame.width, top: click.fy * frame.width }}
+                        />
+                      ))
+                    )}
+                </div>
+              )}
+              {!focused && url && (
+                <div
+                  className="frame-shield"
+                  title="Click to interact with this screen"
+                  onMouseDown={(e) => onShieldDown(frame, e)}
+                />
+              )}
+              {commentMode && <div className="frame-shield" onMouseDown={(e) => onShieldDown(frame, e)} />}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+});
 
 export default function CanvasView({
   me,
@@ -129,9 +274,14 @@ export default function CanvasView({
   annotations,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [vp, setVp] = useState<Viewport>({ x: 80, y: 80, scale: 0.3 });
+  const [vp, setVp] = useState<Viewport>(() => savedViewports.get(projectId) ?? { x: 80, y: 80, scale: 0.3 });
   const vpRef = useRef(vp);
   vpRef.current = vp;
+  useEffect(() => {
+    return () => {
+      savedViewports.set(projectId, vpRef.current);
+    };
+  }, [projectId]);
 
   const [commentMode, setCommentMode] = useState(false);
   // Notes layer: on by default — the annotations are curated, that's the point.
@@ -147,7 +297,9 @@ export default function CanvasView({
 
   const createThread = useMutation(api.comments.createThread);
   const moveFrame = useMutation(api.projects.moveFrame);
-  const didFit = useRef(false);
+  // A restored viewport skips the initial fit — unless a deep link targets
+  // a specific frame, which still deserves the centered landing.
+  const didFit = useRef(savedViewports.has(projectId) && !initialFrameId);
   const [fitRetry, forceRender] = useState(0);
 
   // Multiplayer cursors: broadcast mine (throttled); teammates render in
@@ -533,6 +685,24 @@ export default function CanvasView({
   const threadCountForFrame = (frameId: Id<"frames">) =>
     threads.filter((t) => t.frameId === frameId && !t.resolvedAt).length;
 
+  // Stable inputs for the memoized FrameLayer: counts recompute only when
+  // threads change; handlers are identity-stable wrappers over refs.
+  const openCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const t of threads) {
+      if (t.frameId && !t.resolvedAt) counts[t.frameId] = (counts[t.frameId] ?? 0) + 1;
+    }
+    return counts;
+  }, [threads]);
+  const frameHandlersRef = useRef({ drag: startFrameDrag, shield: onFrameShieldMouseDown });
+  frameHandlersRef.current = { drag: startFrameDrag, shield: onFrameShieldMouseDown };
+  const [stableFrameHandlers] = useState(() => ({
+    onFrameDrag: (frame: Doc<"frames">, e: React.MouseEvent) => frameHandlersRef.current.drag(frame, e),
+    onShieldDown: (frame: Doc<"frames">, e: React.MouseEvent) => frameHandlersRef.current.shield(frame, e),
+    onLoaded: (loadKey: string) =>
+      setLoadedFrames((prev) => (prev[loadKey] ? prev : { ...prev, [loadKey]: true })),
+  }));
+
   const selected = threads.find((t) => t._id === selectedThread) ?? null;
 
   // Section regions: bounding box of each named section's frames (follows drags).
@@ -603,100 +773,21 @@ export default function CanvasView({
           </div>
         ))}
 
-        {frames.map((frame) => {
-          const pos = framePos(frame);
-          const focused = focusedFrame === frame._id;
-          const openCount = threadCountForFrame(frame._id);
-          const source = frame.kind === "route" ? resolveFrameUrl(frame.routePath, devStatus, previewUrl) : null;
-          const url = source?.url ?? null;
-          return (
-            <div
-              key={frame._id}
-              className={`frame ${focused ? "focused" : ""}`}
-              style={{ left: pos.x, top: pos.y, width: frame.width, height: frame.height + 30 }}
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <div className="frame-header" onMouseDown={(e) => startFrameDrag(frame, e)}>
-                <span>{frame.title}</span>
-                <span className="route">{frame.routePath}</span>
-                {source && !source.live && (
-                  <span className="badge" title="Rendered from the deployed preview — locate the repo for a live dev server">
-                    preview
-                  </span>
-                )}
-                <span style={{ flex: 1 }} />
-                {openCount > 0 && <span className="badge comments">{openCount}</span>}
-              </div>
-              <div className="frame-body">
-                {url ? (
-                  (() => {
-                    const loadKey = `${frame._id}:${frameReloadTokens?.[frame._id] ?? 0}`;
-                    const loaded = loadedFrames[loadKey] === true;
-                    return (
-                      <>
-                        {!loaded &&
-                          (frame.snapshotUrl ? (
-                            <img className="frame-underlay" src={frame.snapshotUrl} alt="" />
-                          ) : (
-                            <div className="frame-booting" />
-                          ))}
-                        <iframe
-                          key={loadKey}
-                          className={loaded ? "loaded" : ""}
-                          src={url}
-                          title={frame.title}
-                          onLoad={() => setLoadedFrames((prev) => ({ ...prev, [loadKey]: true }))}
-                        />
-                      </>
-                    );
-                  })()
-                ) : frame.snapshotUrl ? (
-                  // SNAP-3 fallback: last captured state beats an empty box.
-                  <img className="frame-snapshot" src={frame.snapshotUrl} alt={frame.title} title="Snapshot — no live preview right now" />
-                ) : (
-                  <div className="frame-placeholder">
-                    {frame.kind === "figma"
-                      ? "Figma frames coming soon"
-                      : devStatus.state === "starting"
-                        ? "Dev server starting…"
-                        : devStatus.state === "error"
-                          ? devStatus.message
-                          : viewerHasRepo
-                            ? "Dev server stopped — set a preview URL as a fallback"
-                            : repoHolderNames && repoHolderNames.length > 0
-                              ? `Waiting for a preview — ask ${repoHolderNames[0]} to publish one`
-                              : "Waiting for a preview — ask a teammate with the repo to publish one"}
-                  </div>
-                )}
-                {heatmap && frame.routePath && (
-                  <div className="heatmap-layer">
-                    {Object.entries(heatmap.clicksByRoute)
-                      .filter(([route]) => routeMatches(frame.routePath!, route))
-                      .flatMap(([route, clicks]) =>
-                        clicks.map((click, i) => (
-                          <span
-                            key={`${route}-${i}`}
-                            className={`heatmap-dot ${click.interactive ? "" : "miss"}`}
-                            style={{ left: click.fx * frame.width, top: click.fy * frame.width }}
-                          />
-                        ))
-                      )}
-                  </div>
-                )}
-                {!focused && url && (
-                  <div
-                    className="frame-shield"
-                    title="Click to interact with this screen"
-                    onMouseDown={(e) => onFrameShieldMouseDown(frame, e)}
-                  />
-                )}
-                {commentMode && (
-                  <div className="frame-shield" onMouseDown={(e) => onFrameShieldMouseDown(frame, e)} />
-                )}
-              </div>
-            </div>
-          );
-        })}
+        <FrameLayer
+          frames={frames}
+          localPos={localPos}
+          focusedFrame={focusedFrame}
+          openCounts={openCounts}
+          devStatus={devStatus}
+          previewUrl={previewUrl}
+          frameReloadTokens={frameReloadTokens}
+          loadedFrames={loadedFrames}
+          heatmap={heatmap}
+          commentMode={commentMode}
+          viewerHasRepo={viewerHasRepo}
+          repoHolderNames={repoHolderNames}
+          {...stableFrameHandlers}
+        />
 
         {notesOn &&
           frames.map((frame) => {
