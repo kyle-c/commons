@@ -353,6 +353,9 @@ export default function CanvasView({
     vy: 0,
     tx: 0,
     ty: 0,
+    tvx: 0,
+    tvy: 0,
+    lastMove: 0,
     alpha: 0,
     targetAlpha: 0,
     color: "",
@@ -370,12 +373,16 @@ export default function CanvasView({
       g.vx = 0;
       g.vy = 0;
     } else {
-      // Under-damped spring: chases with lag, settles with a whisper of
-      // overshoot — the inertia is the point.
-      const K = 340;
-      const C = 27;
-      g.vx += ((g.tx - g.px) * K - g.vx * C) * dt;
-      g.vy += ((g.ty - g.py) * K - g.vy * C) * dt;
+      // Velocity-matched spring: damp toward the cursor's velocity, not
+      // toward zero. While the hand moves, the swarm rides centered on it;
+      // when a fling stops, the matched momentum carries the swarm past
+      // the cursor and the position spring reels it back — regroup.
+      const K = 90;
+      const C = 11;
+      g.tvx *= Math.exp(-dt * 6); // no events = the hand has stopped
+      g.tvy *= Math.exp(-dt * 6);
+      g.vx += ((g.tx - g.px) * K + (g.tvx - g.vx) * C) * dt;
+      g.vy += ((g.ty - g.py) * K + (g.tvy - g.vy) * C) * dt;
       g.px += g.vx * dt;
       g.py += g.vy * dt;
     }
@@ -405,7 +412,7 @@ export default function CanvasView({
           const pull = g.reduced ? 0 : Math.min(8 * f, dist * 0.5);
           const ox = dist > 0 ? (-dx / dist) * pull : 0;
           const oy = dist > 0 ? (-dy / dist) * pull : 0;
-          ctx.globalAlpha = g.alpha * (0.12 + 0.88 * f);
+          ctx.globalAlpha = g.alpha * f;
           ctx.beginPath();
           ctx.arc(x + ox, y + oy, 1.2 + 1.2 * f, 0, Math.PI * 2);
           ctx.fill();
@@ -450,8 +457,19 @@ export default function CanvasView({
         ".frame, .pin, .canvas-toolbar, .minimap, .frame-notes, .frame-farlabel"
       );
       const rect = wrap.getBoundingClientRect();
-      g.tx = e.clientX - rect.left;
-      g.ty = e.clientY - rect.top;
+      const nx = e.clientX - rect.left;
+      const ny = e.clientY - rect.top;
+      const now = performance.now();
+      const dtv = g.lastMove ? Math.max(0.004, (now - g.lastMove) / 1000) : 0;
+      if (dtv > 0 && dtv < 0.1) {
+        // Blend instantaneous velocity; cap so a warp (tab-in) can't launch it.
+        const cap = 4000;
+        g.tvx = g.tvx * 0.55 + Math.max(-cap, Math.min(cap, (nx - g.tx) / dtv)) * 0.45;
+        g.tvy = g.tvy * 0.55 + Math.max(-cap, Math.min(cap, (ny - g.ty) / dtv)) * 0.45;
+      }
+      g.lastMove = now;
+      g.tx = nx;
+      g.ty = ny;
       if (!g.raf || g.alpha === 0) {
         // Size lazily at wake-up — mount-time effects can miss the wrap's
         // first layout (the browser app's stylesheet can land late).
@@ -468,6 +486,8 @@ export default function CanvasView({
         g.py = g.ty;
         g.vx = 0;
         g.vy = 0;
+        g.tvx = 0;
+        g.tvy = 0;
         const probe = document.createElement("span");
         probe.style.color = "color-mix(in srgb, var(--canvas-dot) 45%, var(--text-primary))";
         wrap.appendChild(probe);
