@@ -90,6 +90,9 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="M7 10l5 5 5-5M12 15V3" />
     </>
   ),
+  folder: (
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+  ),
   link: (
     <>
       <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />

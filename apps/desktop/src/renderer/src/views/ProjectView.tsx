@@ -23,7 +23,7 @@ import { layoutFrames } from "../lib/frameLayout";
 import { useClickOutside } from "../lib/useClickOutside";
 import { useMachineId } from "../lib/machine";
 import { getRecents, pushRecent } from "../lib/recents";
-import Icon from "../components/icons";
+import Icon, { type IconName } from "../components/icons";
 import { PopSection, RevealField } from "../components/popover";
 
 /** "Fix savings header" → "fix-savings-header" (draft branch slugs). */
@@ -61,110 +61,145 @@ function buildThreadPrompt(thread: ThreadWithMessages, frame: Doc<"frames"> | un
  * the deployed preview URLs. An attention dot on the icon replaces the old
  * always-visible "Get this project / Locate / Preview URL ⚠" button row.
  */
-function SetupPopover({
-  project,
-  repoPath,
-  cloning,
-  onClone,
-  onLocate,
+type SettingKey = "repo" | "preview" | "drafts";
+
+/** One toolbar icon, one concern: a small anchored popover per setting. */
+function SettingPopover({
+  icon,
+  label,
+  attention,
   open,
   onOpenChange,
+  children,
 }: {
-  project: Doc<"projects">;
-  repoPath?: string;
-  cloning: boolean;
-  onClone: () => void;
-  onLocate: () => void;
+  icon: IconName;
+  label: string;
+  attention?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
 }) {
-  const setOpen = onOpenChange;
-  const setPreviewUrl = useMutation(api.projects.setPreviewUrl);
   const wrapRef = useRef<HTMLDivElement>(null);
-  useClickOutside(wrapRef, () => setOpen(false), open);
-  // Only when this machine can render nothing: no code here AND no preview.
-  const needsAttention = !!window.commons && !repoPath && !project.previewUrl;
-
+  useClickOutside(wrapRef, () => onOpenChange(false), open);
   return (
     <div style={{ position: "relative" }} ref={wrapRef}>
       <button
         className={`btn ghost icon-btn ${open ? "active" : ""}`}
-        aria-label="Project setup"
-        title="Project setup"
-        onClick={() => setOpen(!open)}
+        aria-label={label}
+        title={label}
+        onClick={() => onOpenChange(!open)}
       >
-        <Icon name="sliders" />
-        {needsAttention && <span className="attention-dot" />}
+        <Icon name={icon} />
+        {attention && <span className="attention-dot" />}
       </button>
-      {open && (
-        <div className="titlebar-popover setup-pop">
-          {window.commons && (
-            <>
-              <PopSection label="On this Mac" />
-              {repoPath ? (
-                <div className="hint" style={{ padding: "0 14px 8px" }}>
-                  ✓ Linked · running locally
-                </div>
-              ) : (
-                <>
-                  <div className="hint" style={{ padding: "0 14px 6px" }}>
-                    With the code on this Mac, screens render live and you can run the agent.
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 14px 10px" }}>
-                    {project.gitRemote && (
-                      <button className="btn" disabled={cloning} onClick={onClone} title={project.gitRemote}>
-                        <Icon name="download" /> {cloning ? "Cloning…" : "Get the code"}
-                      </button>
-                    )}
-                    <button className="btn ghost" onClick={onLocate}>
-                      {project.gitRemote ? "I already have it…" : "Choose the folder…"}
-                    </button>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-          <PopSection label="For everyone else" />
-          <RevealField
-            actionLabel="Preview link"
-            icon="link"
-            connected={!!project.previewUrl}
-            placeholder="https://myapp.vercel.app"
-            submitLabel="Save"
-            allowEmpty
-            initialValue={project.previewUrl ?? ""}
-            hint="Paste your app's deployed URL. Screens and user tests fall back to it."
-            onSubmit={async (url) => {
-              if (url && !/^https?:\/\/.+/.test(url)) throw new Error("Needs a full https:// link.");
-              await setPreviewUrl({
-                projectId: project._id,
-                previewUrl: url ? url.replace(/\/+$/, "") : undefined,
-              });
-            }}
-          />
-          <RevealField
-            actionLabel="Draft previews"
-            icon="branch"
-            connected={!!project.branchPreviewPattern}
-            placeholder={"https://myapp-git-{branch}-team.vercel.app"}
-            submitLabel="Save"
-            allowEmpty
-            initialValue={project.branchPreviewPattern ?? ""}
-            hint={
-              "Your host's per-branch deploy link, with {branch} in place of the name."
-            }
-            onSubmit={async (patternValue) => {
-              if (patternValue && (!/^https?:\/\/.+/.test(patternValue) || !patternValue.includes("{branch}")))
-                throw new Error("Needs https:// and a {branch} placeholder.");
-              await setPreviewUrl({
-                projectId: project._id,
-                previewUrl: project.previewUrl, // preserve — this field only sets the pattern
-                branchPreviewPattern: patternValue ? patternValue.replace(/\/+$/, "") : undefined,
-                hasBranchPattern: true,
-              });
-            }}
-          />
-        </div>
+      {open && <div className="titlebar-popover setup-pop">{children}</div>}
+    </div>
+  );
+}
+
+/**
+ * A URL-valued setting: first open shows the explainer and the field;
+ * once set, shows the current value with Change/Remove.
+ */
+function UrlSettingBody({
+  label,
+  hint,
+  placeholder,
+  value,
+  validate,
+  onSave,
+}: {
+  label: string;
+  hint: string;
+  placeholder: string;
+  value?: string | null;
+  validate: (v: string) => string | null;
+  onSave: (v: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const showField = editing || !value;
+
+  const save = async (next: string) => {
+    const problem = next ? validate(next) : null;
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setBusy(true);
+    try {
+      await onSave(next);
+      setEditing(false);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="reveal-form">
+      <span className="reveal-label">{label}</span>
+      {showField ? (
+        <>
+          <span className="hint">{hint}</span>
+          {error && <span className="form-error">{error}</span>}
+          <div className="reveal-form-row">
+            <input
+              autoFocus
+              value={draft}
+              placeholder={placeholder}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void save(draft.trim());
+                if (e.key === "Escape" && value) {
+                  setEditing(false);
+                  setDraft(value);
+                }
+              }}
+            />
+            <button className="btn primary" disabled={busy || !draft.trim()} onClick={() => void save(draft.trim())}>
+              Save
+            </button>
+            {value && (
+              <button
+                className="btn ghost"
+                onClick={() => {
+                  setEditing(false);
+                  setDraft(value);
+                  setError(null);
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <span className="setting-value" title={value ?? undefined}>
+            {value}
+          </span>
+          {error && <span className="form-error">{error}</span>}
+          <div className="reveal-form-row">
+            <button
+              className="btn ghost"
+              onClick={() => {
+                setDraft(value ?? "");
+                setError(null);
+                setEditing(true);
+              }}
+            >
+              Change…
+            </button>
+            <button className="btn ghost quiet-action" disabled={busy} onClick={() => void save("")}>
+              Remove
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
@@ -415,6 +450,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const linkRepo = useMutation(api.repoLinks.link);
   const setGitRemote = useMutation(api.projects.setGitRemote);
   const rediscover = useMutation(api.projects.rediscover);
+  const setPreviewUrl = useMutation(api.projects.setPreviewUrl);
 
   // This user's working copy on this machine (paths differ per teammate).
   const machineId = useMachineId();
@@ -453,7 +489,13 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const selfHasRepoElsewhere = repoHolders.some((h) => h.userId === me._id);
 
   const [devStatus, setDevStatus] = useState<DevServerStatus>({ state: "stopped" });
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const [openSetting, setOpenSetting] = useState<SettingKey | null>(null);
+  // The Tests panel points here instead of embedding its own editor.
+  useEffect(() => {
+    const onOpen = () => setOpenSetting("preview");
+    window.addEventListener("commons:open-preview-setting", onOpen);
+    return () => window.removeEventListener("commons:open-preview-setting", onOpen);
+  }, []);
   // Prototype device, owned here because the titlebar's split view switcher
   // selects it: the Prototype segment shows the current device's icon and,
   // when already active, opens a small menu of the presets.
@@ -1137,15 +1179,89 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             )}
           </>
         )}
-        <SetupPopover
-          project={project}
-          repoPath={repoPath}
-          cloning={cloning}
-          onClone={() => void cloneProject()}
-          onLocate={() => void locateRepo()}
-          open={previewOpen}
-          onOpenChange={setPreviewOpen}
-        />
+        {window.commons && (
+          <SettingPopover
+            icon="folder"
+            label={repoPath ? "Code on this Mac" : "Get the code on this Mac"}
+            attention={!repoPath && !project.previewUrl}
+            open={openSetting === "repo"}
+            onOpenChange={(o) => setOpenSetting(o ? "repo" : null)}
+          >
+            <div className="reveal-form">
+              <span className="reveal-label">Code on this Mac</span>
+              {repoPath ? (
+                <>
+                  <span className="setting-value" title={repoPath}>
+                    {repoPath}
+                  </span>
+                  <div className="reveal-form-row">
+                    <button className="btn ghost" onClick={() => void locateRepo()}>
+                      Change folder…
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className="hint">Screens render live and the agent runs when the code is here.</span>
+                  <div className="reveal-form-row">
+                    {project.gitRemote && (
+                      <button className="btn" disabled={cloning} onClick={() => void cloneProject()} title={project.gitRemote}>
+                        <Icon name="download" /> {cloning ? "Cloning…" : "Get the code"}
+                      </button>
+                    )}
+                    <button className="btn ghost" onClick={() => void locateRepo()}>
+                      {project.gitRemote ? "I already have it…" : "Choose the folder…"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </SettingPopover>
+        )}
+        <SettingPopover
+          icon="link"
+          label="Preview link"
+          open={openSetting === "preview"}
+          onOpenChange={(o) => setOpenSetting(o ? "preview" : null)}
+        >
+          <UrlSettingBody
+            label="Preview link"
+            hint="Paste your app's deployed URL. Screens and user tests fall back to it."
+            placeholder="https://myapp.vercel.app"
+            value={project.previewUrl}
+            validate={(url) => (/^https?:\/\/.+/.test(url) ? null : "Needs a full https:// link.")}
+            onSave={async (url) => {
+              await setPreviewUrl({
+                projectId: project._id,
+                previewUrl: url ? url.replace(/\/+$/, "") : undefined,
+              });
+            }}
+          />
+        </SettingPopover>
+        <SettingPopover
+          icon="branch"
+          label="Draft previews"
+          open={openSetting === "drafts"}
+          onOpenChange={(o) => setOpenSetting(o ? "drafts" : null)}
+        >
+          <UrlSettingBody
+            label="Draft previews"
+            hint={"Your host's per-branch deploy link, with {branch} in place of the name."}
+            placeholder={"https://myapp-git-{branch}-team.vercel.app"}
+            value={project.branchPreviewPattern}
+            validate={(v) =>
+              /^https?:\/\/.+/.test(v) && v.includes("{branch}") ? null : "Needs https:// and a {branch} placeholder."
+            }
+            onSave={async (patternValue) => {
+              await setPreviewUrl({
+                projectId: project._id,
+                previewUrl: project.previewUrl,
+                branchPreviewPattern: patternValue ? patternValue.replace(/\/+$/, "") : undefined,
+                hasBranchPattern: true,
+              });
+            }}
+          />
+        </SettingPopover>
         <span className="tb-divider" />
         {(repoPath || project.gitRemote || convexSessions.length > 0) && (
           <button
@@ -1211,7 +1327,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           <span>
             Teammates without the repo see empty frames — publish a deploy preview so everyone can follow along.
           </span>
-          <button className="btn" onClick={() => setPreviewOpen(true)}>
+          <button className="btn" onClick={() => setOpenSetting("preview")}>
             Set preview URL
           </button>
           <button

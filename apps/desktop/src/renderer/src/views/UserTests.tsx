@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import { getConvexUrl, timeAgo, sessionToken } from "../lib/session";
-import { InlineField } from "../components/popover";
+import Icon from "../components/icons";
 
 /**
  * Maze-style usability testing, built on what Commons already has: tests run
@@ -468,7 +468,6 @@ export default function UserTests({
 }) {
   const tests = useQuery(api.userTests.forProject, { projectId: project._id, userId: me._id, sessionToken: sessionToken() });
   const setStatus = useMutation(api.userTests.setStatus);
-  const setPreviewUrl = useMutation(api.projects.setPreviewUrl);
   const [creating, setCreating] = useState(false);
   const [resultsFor, setResultsFor] = useState<Id<"tests"> | null>(null);
   const site = siteUrl();
@@ -486,7 +485,7 @@ export default function UserTests({
           onClick={() => setCreating(true)}
           disabled={!project.previewUrl}
           title={
-            project.previewUrl ? undefined : "Needs a live preview link first — add it in Project setup"
+            project.previewUrl ? undefined : "Needs a preview link first — the link icon in the toolbar"
           }
         >
           + New test
@@ -499,16 +498,13 @@ export default function UserTests({
       {!project.previewUrl && (
         <div className="ut-empty">
           <strong>Tests run on your live app</strong>
-          <span className="hint">Paste its link to start. Testers just open a link, no account.</span>
-          <InlineField
-            placeholder="https://myapp.vercel.app"
-            submitLabel="Save"
-            onClose={() => {}}
-            onSubmit={async (url) => {
-              if (!/^https?:\/\/.+/.test(url)) throw new Error("Needs a full https:// link.");
-              await setPreviewUrl({ projectId: project._id, previewUrl: url.replace(/\/+$/, "") });
-            }}
-          />
+          <span className="hint">Add the project's preview link — testers just open a link, no account.</span>
+          <button
+            className="btn"
+            onClick={() => window.dispatchEvent(new Event("commons:open-preview-setting"))}
+          >
+            <Icon name="link" /> Set the preview link
+          </button>
         </div>
       )}
       {project.previewUrl && (tests ?? []).length === 0 && !creating && (
