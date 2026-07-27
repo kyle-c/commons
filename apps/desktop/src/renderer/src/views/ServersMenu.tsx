@@ -53,7 +53,7 @@ export default function ServersMenu() {
           <PopSection label={`Running prototypes · ${online}`} />
           {servers.length === 0 && (
             <div className="hint" style={{ padding: "0 14px 10px" }}>
-              Nothing running. Open a project with its code on this Mac and its server starts here.
+              Nothing running — opening a project starts its server.
             </div>
           )}
           {servers.map((server) => (

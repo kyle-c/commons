@@ -1354,7 +1354,7 @@ textarea:focus {
 .agent-panel {
   animation: panel-in-right var(--dur-med) var(--ease-out);
   position: fixed;
-  top: 56px; /* titlebar (44px) + gutter */
+  top: 96px; /* titlebar (44px) + subnav (40px) + gutter — panels live in the canvas, never over the chrome */
   right: 12px;
   bottom: 12px;
   width: 380px;
