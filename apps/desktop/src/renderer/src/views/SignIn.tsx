@@ -4,7 +4,6 @@ import { api } from "@commons/backend/convex/_generated/api";
 import { setStoredSession, type StoredSession } from "../lib/session";
 
 const FAIL_MESSAGES: Record<string, string> = {
-  not_invited: "That Google account isn't on the team yet. Ask a teammate to invite you (Team menu), then try again.",
   expired: "The sign-in took too long — try again.",
   unverified_email: "That Google account has no verified email address.",
 };
@@ -79,11 +78,7 @@ export default function SignIn({ onSignedIn }: { onSignedIn: (session: StoredSes
     try {
       const result = await startEmail({ email: email.trim() });
       if (!result.ok) {
-        setError(
-          result.reason === "not_invited"
-            ? "That email hasn't been invited yet — ask a teammate to invite you first."
-            : "That doesn't look like an email address."
-        );
+        setError("That doesn't look like an email address.");
         return;
       }
       setEmailSent(true);
@@ -139,7 +134,7 @@ export default function SignIn({ onSignedIn }: { onSignedIn: (session: StoredSes
           </>
         )}
         {error && <p style={{ color: "var(--danger)" }}>{error}</p>}
-        <p className="hint">Commons is invite-only — ask a teammate to invite your email if it's your first time.</p>
+        <p className="hint">First time here? Signing in creates your account.</p>
       </div>
     </div>
   );

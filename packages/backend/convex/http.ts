@@ -63,12 +63,6 @@ http.route({
       avatarUrl: claims.picture,
     });
     if (!result.ok) {
-      if (result.reason === "not_invited") {
-        return page(
-          "You need an invite",
-          `Commons is invite-only. Ask a teammate to invite ${claims.email} (Team menu in the app), then sign in again.`
-        );
-      }
       if (result.reason === "email_in_use") {
         return page("Email already in use", `${claims.email} already belongs to another Commons account.`);
       }
@@ -430,11 +424,11 @@ function page(title: string, body: string, deepLink?: string): Response {
 ${deepLink ? `<meta http-equiv="refresh" content="0;url=${deepLink}" />` : ""}
 <style>
   body { margin: 0; height: 100vh; display: flex; align-items: center; justify-content: center;
-         background: #101012; color: #e7e7ea; font: 15px/1.6 -apple-system, system-ui, sans-serif; }
-  .card { max-width: 420px; padding: 32px; background: #18181b; border: 1px solid #2a2a2f; border-radius: 12px; }
-  h1 { font-size: 18px; margin: 0 0 8px; }
-  p { margin: 0; color: #a1a1a8; }
-  a { color: #7c9cf5; }
+         background: #1a1b17; color: #edebe0; font: 15px/1.6 -apple-system, system-ui, sans-serif; }
+  .card { max-width: 420px; padding: 32px; background: #21221d; border: 1px solid #2a2b24; border-radius: 12px; }
+  h1 { font-size: 20px; margin: 0 0 8px; font-family: Georgia, 'Times New Roman', serif; font-weight: 600; }
+  p { margin: 0; color: #a3a195; }
+  a { color: #45a898; }
 </style>
 </head>
 <body>
@@ -493,36 +487,36 @@ function testerHarnessHtml(test: TestDoc, previewUrl: string): string {
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   body { margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;
-         background: #101012; color: #e7e7ea; font: 14px/1.5 -apple-system, system-ui, sans-serif; }
+         background: #1a1b17; color: #edebe0; font: 14px/1.5 -apple-system, system-ui, sans-serif; }
   .stage { flex: 1; display: flex; align-items: flex-start; justify-content: center; overflow: auto; padding: 16px; }
   .device { background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 40px rgba(0,0,0,.5);
             transform-origin: top center; }
   .device iframe { border: 0; width: 100%; height: 100%; display: block; }
-  .bar { flex: none; border-top: 1px solid #2a2a2f; background: #18181b; padding: 14px 20px;
+  .bar { flex: none; border-top: 1px solid #2a2b24; background: #21221d; padding: 14px 20px;
          display: flex; align-items: center; gap: 16px; }
-  .bar .step { color: #a1a1a8; font-size: 12px; white-space: nowrap; }
+  .bar .step { color: #a3a195; font-size: 12px; white-space: nowrap; }
   .bar .task { flex: 1; font-size: 15px; }
-  .btn { border: 1px solid #3a3a41; background: #232328; color: #e7e7ea; border-radius: 8px;
+  .btn { border: 1px solid #46473d; background: #2b2c25; color: #edebe0; border-radius: 8px;
          padding: 8px 14px; font: inherit; cursor: pointer; }
-  .btn.primary { background: #4a6fdc; border-color: #4a6fdc; color: #fff; }
-  .btn.ghost { background: transparent; color: #a1a1a8; }
-  .overlay { position: fixed; inset: 0; background: #101012; display: flex; align-items: center;
+  .btn.primary { background: #45a898; border-color: #45a898; color: #fff; }
+  .btn.ghost { background: transparent; color: #a3a195; }
+  .overlay { position: fixed; inset: 0; background: #1a1b17; display: flex; align-items: center;
              justify-content: center; padding: 24px; overflow: auto; z-index: 5; }
   .stage.pre { visibility: hidden; }
-  .card { max-width: 480px; width: 100%; background: #18181b; border: 1px solid #2a2a2f;
+  .card { max-width: 480px; width: 100%; background: #21221d; border: 1px solid #2a2b24;
           border-radius: 12px; padding: 32px; }
-  .card h1 { font-size: 20px; margin: 0 0 10px; }
-  .card p { color: #a1a1a8; margin: 0 0 12px; }
-  .card .consent { font-size: 12px; color: #8a8a92; border-top: 1px solid #2a2a2f; padding-top: 12px; margin-top: 16px; }
+  .card h1 { font-size: 22px; margin: 0 0 10px; font-family: Georgia, 'Times New Roman', serif; font-weight: 600; }
+  .card p { color: #a3a195; margin: 0 0 12px; }
+  .card .consent { font-size: 12px; color: #716f64; border-top: 1px solid #2a2b24; padding-top: 12px; margin-top: 16px; }
   .q { margin: 18px 0; }
   .q label { display: block; margin-bottom: 8px; }
-  .q textarea { width: 100%; min-height: 70px; background: #101012; color: #e7e7ea; border: 1px solid #2a2a2f;
+  .q textarea { width: 100%; min-height: 70px; background: #1a1b17; color: #edebe0; border: 1px solid #2a2b24;
                 border-radius: 8px; padding: 8px; font: inherit; }
   .scale { display: flex; gap: 8px; }
-  .scale button { flex: 1; padding: 10px 0; border-radius: 8px; border: 1px solid #3a3a41;
-                  background: #232328; color: #e7e7ea; font: inherit; cursor: pointer; }
-  .scale button.on { background: #4a6fdc; border-color: #4a6fdc; color: #fff; }
-  .flash { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); background: #1f7a43;
+  .scale button { flex: 1; padding: 10px 0; border-radius: 8px; border: 1px solid #46473d;
+                  background: #2b2c25; color: #edebe0; font: inherit; cursor: pointer; }
+  .scale button.on { background: #45a898; border-color: #45a898; color: #fff; }
+  .flash { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); background: #45a898;
            color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px; display: none; z-index: 10; }
   .hidden { display: none !important; }
 </style>
@@ -791,48 +785,48 @@ function sharePageHtml(data: {
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #101012; color: #e7e7ea; font: 14px/1.5 -apple-system, system-ui, sans-serif; }
-  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #2a2a2f;
-           position: sticky; top: 0; background: #101012; z-index: 5; }
+  body { margin: 0; background: #1a1b17; color: #edebe0; font: 14px/1.5 -apple-system, system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #2a2b24;
+           position: sticky; top: 0; background: #1a1b17; z-index: 5; }
   header h1 { font-size: 16px; margin: 0; }
-  header .hint { color: #7a7a82; font-size: 12px; }
-  header a { margin-left: auto; color: #7c9cf5; text-decoration: none; font-size: 13px; }
+  header .hint { color: #716f64; font-size: 12px; }
+  header a { margin-left: auto; color: #45a898; text-decoration: none; font-size: 13px; }
   #stage-wrap { overflow: auto; padding: 32px; }
   #stage { position: relative; transform-origin: 0 0; }
-  .frame { position: absolute; background: #18181b; border: 1px solid #2a2a2f; border-radius: 8px; overflow: hidden; }
+  .frame { position: absolute; background: #21221d; border: 1px solid #2a2b24; border-radius: 8px; overflow: hidden; }
   .frame img { display: block; width: 100%; height: calc(100% - 26px); object-fit: cover; object-position: top; background: #fff; }
   .frame .ph { display: flex; align-items: center; justify-content: center; height: calc(100% - 26px);
                color: #55555c; font-size: 12px; }
   .frame .cap { height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 11px;
-                color: #a1a1a8; border-bottom: 1px solid #2a2a2f; }
-  .pin { position: absolute; width: 24px; height: 24px; border-radius: 12px 12px 12px 2px; border: 2px solid #101012;
-         color: #101012; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+                color: #a3a195; border-bottom: 1px solid #2a2b24; }
+  .pin { position: absolute; width: 24px; height: 24px; border-radius: 12px 12px 12px 2px; border: 2px solid #1a1b17;
+         color: #1a1b17; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center;
          cursor: pointer; z-index: 3; }
-  .pin.resolved { background: #3a3a41 !important; color: #9d9da6; }
-  #panel { position: fixed; top: 60px; right: 16px; bottom: 16px; width: 340px; background: #18181b;
-           border: 1px solid #2a2a2f; border-radius: 12px; padding: 14px; overflow-y: auto; display: none; z-index: 10; }
+  .pin.resolved { background: #46473d !important; color: #9d9da6; }
+  #panel { position: fixed; top: 60px; right: 16px; bottom: 16px; width: 340px; background: #21221d;
+           border: 1px solid #2a2b24; border-radius: 12px; padding: 14px; overflow-y: auto; display: none; z-index: 10; }
   #panel.open { display: block; }
   #panel .msg { margin-bottom: 12px; }
   #panel .who { font-weight: 600; font-size: 12px; }
-  #panel .who small { color: #7a7a82; font-weight: 400; margin-left: 6px; }
-  #panel .close { float: right; background: none; border: none; color: #a1a1a8; cursor: pointer; font-size: 14px; }
+  #panel .who small { color: #716f64; font-weight: 400; margin-left: 6px; }
+  #panel .close { float: right; background: none; border: none; color: #a3a195; cursor: pointer; font-size: 14px; }
   footer { padding: 10px 20px 24px; color: #55555c; font-size: 12px; }
-  .cbtn { background: #232328; border: 1px solid #3a3a41; color: #e7e7ea; border-radius: 8px;
+  .cbtn { background: #2b2c25; border: 1px solid #46473d; color: #edebe0; border-radius: 8px;
           padding: 6px 12px; font: inherit; cursor: pointer; margin-left: 16px; }
-  .cbtn.on { background: #4a6fdc; border-color: #4a6fdc; color: #fff; }
+  .cbtn.on { background: #45a898; border-color: #45a898; color: #fff; }
   body.commenting .frame { cursor: crosshair; }
-  #panel input, #panel textarea { width: 100%; background: #101012; color: #e7e7ea; border: 1px solid #2a2a2f;
+  #panel input, #panel textarea { width: 100%; background: #1a1b17; color: #edebe0; border: 1px solid #2a2b24;
           border-radius: 8px; padding: 8px; font: inherit; margin-bottom: 8px; box-sizing: border-box; }
   #panel textarea { min-height: 64px; }
-  #panel .send { background: #4a6fdc; border: none; color: #fff; border-radius: 8px; padding: 8px 14px;
+  #panel .send { background: #45a898; border: none; color: #fff; border-radius: 8px; padding: 8px 14px;
           font: inherit; cursor: pointer; }
-  .note { position: absolute; background: #18181b; border: 1px solid #2a2a2f; border-left: 3px solid #4a6fdc;
-          border-radius: 8px; padding: 10px 12px; color: #a1a1a8; font-size: 13px; line-height: 1.45; z-index: 2; }
+  .note { position: absolute; background: #21221d; border: 1px solid #2a2b24; border-left: 3px solid #45a898;
+          border-radius: 8px; padding: 10px 12px; color: #a3a195; font-size: 13px; line-height: 1.45; z-index: 2; }
   .note .inf { display: inline-block; margin-left: 8px; padding: 0 8px; border: 1px dashed #8a6d2f; border-radius: 999px;
           color: #d9a03f; font-size: 10px; }
-  #flow-notes { max-width: 860px; margin: 8px 20px 0; padding: 14px 16px; background: #18181b;
-          border: 1px solid #2a2a2f; border-radius: 12px; }
-  #flow-notes h2 { font-size: 13px; margin: 0 0 8px; color: #a1a1a8; }
+  #flow-notes { max-width: 860px; margin: 8px 20px 0; padding: 14px 16px; background: #21221d;
+          border: 1px solid #2a2b24; border-radius: 12px; }
+  #flow-notes h2 { font-size: 13px; margin: 0 0 8px; color: #a3a195; }
   #flow-notes .fn { margin: 0 0 8px; color: #c9c9cf; font-size: 13px; line-height: 1.5; }
 </style>
 </head>
@@ -958,7 +952,7 @@ function showThread(t) {
     html += '<div class="msg"><div class="who" style="color:' + m.avatarColor + '">' + esc(m.authorName) +
             "<small>" + when + '</small></div><div>' + esc(m.body) + "</div></div>";
   }
-  html += '<div style="border-top:1px solid #2a2a2f;padding-top:12px">' + nameField("r-name") +
+  html += '<div style="border-top:1px solid #2a2b24;padding-top:12px">' + nameField("r-name") +
           '<textarea id="r-body" placeholder="Reply…"></textarea><button class="send" id="r-send">Reply</button></div>';
   panel.innerHTML = html;
   panel.classList.add("open");
@@ -1143,7 +1137,7 @@ function reportHtml(data: {
       const forVariant = (v: "a" | "b") =>
         sessions.filter((s) => (s.variant ?? "a") === v).flatMap((s) => s.tasks.filter((t) => t.taskId === task.id));
       return `<tr><td>${label} — <strong>A · current</strong></td>${statCells(forVariant("a"))}</tr>
-        <tr><td style="color:#a1a1a8">↳ <strong>B · ${escapeHtml(test.variant.label)}</strong></td>${statCells(forVariant("b"))}</tr>`;
+        <tr><td style="color:#a3a195">↳ <strong>B · ${escapeHtml(test.variant.label)}</strong></td>${statCells(forVariant("b"))}</tr>`;
     })
     .join("");
 
@@ -1169,22 +1163,22 @@ function reportHtml(data: {
 <title>${escapeHtml(test.title)} — test report</title>
 <style>
   :root { color-scheme: dark; }
-  body { margin: 0; padding: 40px 24px; background: #101012; color: #e7e7ea;
+  body { margin: 0; padding: 40px 24px; background: #1a1b17; color: #edebe0;
          font: 15px/1.6 -apple-system, system-ui, sans-serif; }
   .wrap { max-width: 760px; margin: 0 auto; }
   h1 { font-size: 24px; margin: 0 0 4px; }
   h2 { font-size: 16px; margin: 32px 0 12px; }
   h3 { font-size: 14px; margin: 0 0 4px; }
-  .sub { color: #a1a1a8; margin: 0 0 8px; }
+  .sub { color: #a3a195; margin: 0 0 8px; }
   .stats { display: flex; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
-  .stat { background: #18181b; border: 1px solid #2a2a2f; border-radius: 10px; padding: 14px 18px; }
+  .stat { background: #21221d; border: 1px solid #2a2b24; border-radius: 10px; padding: 14px 18px; }
   .stat strong { display: block; font-size: 22px; }
-  .stat span { color: #a1a1a8; font-size: 12px; }
-  table { width: 100%; border-collapse: collapse; background: #18181b; border: 1px solid #2a2a2f; border-radius: 10px; overflow: hidden; }
-  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid #2a2a2f; font-size: 13px; }
-  th { color: #a1a1a8; font-weight: 500; }
+  .stat span { color: #a3a195; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; background: #21221d; border: 1px solid #2a2b24; border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid #2a2b24; font-size: 13px; }
+  th { color: #a3a195; font-weight: 500; }
   tr:last-child td { border-bottom: 0; }
-  .q { background: #18181b; border: 1px solid #2a2a2f; border-radius: 10px; padding: 16px 18px; margin-bottom: 12px; }
+  .q { background: #21221d; border: 1px solid #2a2b24; border-radius: 10px; padding: 16px 18px; margin-bottom: 12px; }
   .q p, .q ul { color: #c7c7cd; margin: 0; }
   .q ul { padding-left: 18px; }
   .foot { color: #6a6a72; font-size: 12px; margin-top: 40px; }

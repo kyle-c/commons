@@ -89,7 +89,8 @@ export const startEmailSignIn = mutation({
             .query("invites")
             .withIndex("by_email", (q) => q.eq("email", email))
             .unique();
-    if (!existingUser && !secondary && !invite) return { ok: false as const, reason: "not_invited" as const };
+    // Open signup: anyone can request a link — clicking it proves they own
+    // the inbox, which is all the verification an email account needs.
 
     const now = Date.now();
     const state = randomToken(16);
@@ -141,10 +142,6 @@ export const completeEmailSignIn = internalMutation({
         .query("invites")
         .withIndex("by_email", (q) => q.eq("email", email))
         .unique();
-      if (!invite) {
-        await ctx.db.patch(session._id, { status: "failed", error: "not_invited" });
-        return { ok: false as const };
-      }
       const count = (await ctx.db.query("users").collect()).length;
       const userId = await ctx.db.insert("users", {
         name: email.split("@")[0],
@@ -153,7 +150,7 @@ export const completeEmailSignIn = internalMutation({
         lastSeenAt: Date.now(),
       });
       user = (await ctx.db.get(userId))!;
-      if (!invite.acceptedAt) {
+      if (invite && !invite.acceptedAt) {
         await ctx.db.patch(invite._id, { acceptedAt: Date.now() });
         inviteWorkspaceId = invite.workspaceId;
       }
@@ -369,11 +366,9 @@ export const completeGoogleSignIn = internalMutation({
         .query("invites")
         .withIndex("by_email", (q) => q.eq("email", normalized))
         .unique();
-      const anyUser = await ctx.db.query("users").first();
-      if (!invite && anyUser) {
-        await ctx.db.patch(session._id, { status: "failed", error: "not_invited" });
-        return { ok: false as const, reason: "not_invited" as const };
-      }
+      // Open signup: no invite required. A new account lands in its own
+      // personal workspace (onSignIn); team workspaces stay membership-gated,
+      // and an invite still carries its workspace like before.
       const count = (await ctx.db.query("users").collect()).length;
       const userId = await ctx.db.insert("users", {
         name,
