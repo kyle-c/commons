@@ -127,13 +127,6 @@ textarea:focus {
 .titlebar input {
   -webkit-app-region: no-drag;
 }
-.titlebar .wordmark {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
 .titlebar .crumb {
   color: var(--text-tertiary);
   /* The one flexible child: shrink to an ellipsis before anything wraps or clips. */

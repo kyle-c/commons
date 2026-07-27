@@ -182,7 +182,6 @@ export default function ProjectList({
       {/* The home's titlebar: search centered like a macOS toolbar; creation
           lives down in the grid where the project will actually land. */}
       <div className="titlebar">
-        <span className="wordmark">Commons</span>
         <span className="spacer" />
         <input
           className="titlebar-search centered"
