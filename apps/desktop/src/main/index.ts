@@ -193,9 +193,12 @@ app.whenReady().then(() => {
         error: "That folder is inside another git repo — pick a clean spot (like ~/Code) and Commons will clone into it.",
       };
     }
-    // Folder-safe name: "Felix Mobile App" clones as felix-mobile-app.
+    // An empty picked folder IS the destination (no felix-mobile-app/
+    // felix-mobile-app nesting); otherwise clone into a kebab-named child.
+    const entries = await fs.promises.readdir(pickedDir).catch(() => null);
+    const pickedIsEmpty = entries !== null && entries.filter((e) => !e.startsWith(".")).length === 0;
     const dirName = suggestedName.trim().replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-_.]/g, "").toLowerCase() || "repo";
-    const target = path.join(pickedDir, dirName);
+    const target = pickedIsEmpty ? pickedDir : path.join(pickedDir, dirName);
     const result = await gitOps.clone(gitRemote, target);
     return result.ok ? { repoPath: result.message } : { error: result.message };
   });

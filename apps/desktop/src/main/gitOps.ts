@@ -105,7 +105,20 @@ export async function clone(gitRemote: string, targetDir: string): Promise<{ ok:
       (error, _stdout, stderr) => resolve({ ok: !error, stderr: stderr.trim() })
     );
   });
-  return result.ok ? { ok: true, message: targetDir } : { ok: false, message: result.stderr || "Clone failed." };
+  if (result.ok) return { ok: true, message: targetDir };
+  // Translate git's cryptic failures into the actual remedy. GitHub answers
+  // "not found" for private repos the machine isn't signed in to — the most
+  // common failure on a fresh laptop, since Commons never stores credentials.
+  const stderr = result.stderr || "Clone failed.";
+  if (/repository .*not found|could not read Username|Authentication failed|Permission denied/i.test(stderr)) {
+    return {
+      ok: false,
+      message:
+        "GitHub can't see this repo from this machine — if it's private, this laptop's git isn't signed in yet. " +
+        "Run `gh auth login` in a terminal (or clone anything once so git saves credentials), then try Get the code again.",
+    };
+  }
+  return { ok: false, message: stderr };
 }
 
 /**
