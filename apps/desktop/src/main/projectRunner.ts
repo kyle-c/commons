@@ -106,7 +106,9 @@ export async function start(repoPath: string, name?: string): Promise<DevServerS
     : devCommand.slice(1);
 
   const child = spawn(spawnBin, spawnArgs, {
-    cwd: repoPath,
+    // inspectRepo may have descended into a monorepo's app folder — the
+    // server must run where the app lives, not where the link points.
+    cwd: inspection.repoPath,
     // CI=1 keeps the Expo CLI non-interactive and stops it opening a browser.
     env: { ...process.env, PORT: String(port), BROWSER: "none", CI: "1" },
     stdio: ["ignore", "pipe", "pipe"],

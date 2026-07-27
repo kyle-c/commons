@@ -258,6 +258,38 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
   const config = await readCommonsConfig(repoPath);
   if (config && framework === "unknown") framework = "custom";
 
+  // Monorepo descent: a picked root with no app of its own (vibebnb-style
+  // frontend/ + backend/ + mobile/ layouts) inspects one level down and
+  // adopts the best child app as the project path. Web apps win over
+  // mobile; the repo root still owns git via the subfolder.
+  if (framework === "unknown" && !config) {
+    const candidates: { path: string; framework: RepoInspection["framework"] }[] = [];
+    try {
+      for (const entry of await fs.readdir(repoPath, { withFileTypes: true })) {
+        if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "node_modules") continue;
+        try {
+          const childPkg = JSON.parse(
+            await fs.readFile(path.join(repoPath, entry.name, "package.json"), "utf8")
+          );
+          const childDeps = { ...childPkg.dependencies, ...childPkg.devDependencies };
+          if (childDeps.next) candidates.push({ path: entry.name, framework: "nextjs" });
+          else if (childDeps.vite) candidates.push({ path: entry.name, framework: "vite" });
+          else if (childDeps["expo-router"] && childDeps["react-native-web"])
+            candidates.push({ path: entry.name, framework: "expo" });
+        } catch {
+          // Not an app folder — skip.
+        }
+      }
+    } catch {
+      // Unreadable dir — fall through to the unknown result.
+    }
+    const rank = { nextjs: 0, vite: 1, expo: 2 } as Record<string, number>;
+    candidates.sort((a, b) => rank[a.framework] - rank[b.framework] || a.path.localeCompare(b.path));
+    if (candidates.length > 0) {
+      return inspectRepo(path.join(repoPath, candidates[0].path));
+    }
+  }
+
   const routes: DiscoveredRoute[] = [];
   // Declared routes beat discovery — deterministic across every framework.
   if (config?.routes?.length) {
