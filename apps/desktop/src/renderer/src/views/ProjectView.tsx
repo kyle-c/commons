@@ -1246,7 +1246,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         >
           <UrlSettingBody
             label="Draft previews"
-            hint={"Your host's per-branch deploy link, with {branch} in place of the name."}
+            hint={"Gives every agent draft its own live link anyone can open before it ships. Paste your host's pattern, with {branch} where the draft name goes."}
             placeholder={"https://myapp-git-{branch}-team.vercel.app"}
             value={project.branchPreviewPattern}
             validate={(v) =>

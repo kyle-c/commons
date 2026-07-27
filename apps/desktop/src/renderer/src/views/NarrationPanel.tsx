@@ -192,15 +192,15 @@ export default function NarrationPanel({ me, project, frames, threads, repoPath,
         {genError && <div className="agent-item failed">{genError}</div>}
         {!repoPath && annotations.length === 0 && !generating && (
           <div className="hint" style={{ padding: 16 }}>
-            Generating needs this project's repo on your machine. Teammates with the repo can run the pass;
-            everyone can review the drafts here.
+            Narrate writes the why behind each screen — pulled from this project's comments, tests, and
+            code history, with citations. Generating runs on a machine with the project's code; drafts land
+            here for the whole team to review.
           </div>
         )}
         {repoPath && annotations.length === 0 && !generating && !genError && (
           <div className="hint" style={{ padding: 16 }}>
-            No annotations yet. Generate reads the repo's git history, docs, and this project's threads and
-            tests, then drafts the "why" behind each screen for you to curate. Nothing is published until you
-            approve it.
+            Hit Generate and Narrate reads this project's comments, tests, and code history, then drafts
+            the why behind each screen — with citations. Nothing shows under a screen until you approve it.
           </div>
         )}
 
