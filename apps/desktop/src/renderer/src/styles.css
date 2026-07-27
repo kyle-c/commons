@@ -127,6 +127,19 @@ textarea:focus {
 .titlebar input {
   -webkit-app-region: no-drag;
 }
+/* Project context bar: the row under the titlebar holding everything scoped
+   to the open project (view switcher, server state, setup, tools, share).
+   Left edge aligns with the tab strip above. */
+.subnav {
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px 0 84px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-subtle);
+}
 .titlebar .crumb {
   color: var(--text-tertiary);
   /* The one flexible child: shrink to an ellipsis before anything wraps or clips. */
@@ -155,8 +168,12 @@ textarea:focus {
     display: none; /* "Projects /" goes first — the back arrow already says it */
   }
 }
-.titlebar .spacer {
+.titlebar .spacer,
+.subnav .spacer {
   flex: 1;
+}
+.subnav > :not(.spacer) {
+  flex-shrink: 0;
 }
 
 .btn {
@@ -2608,24 +2625,6 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.switcher-row {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 8px 14px;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  transition: background var(--dur-fast) var(--ease-out);
-}
-.switcher-row:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.switcher-row.all {
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-tertiary);
-}
-
 /* Full-bleed cover: flush left/top/right; body content keeps its inset. */
 .project-cover {
   position: relative;

@@ -10,6 +10,9 @@ import CanvasView from "../canvas/CanvasView";
 import PrototypeView, { DEVICES, type ProtoDevice } from "./PrototypeView";
 import Inbox from "./Inbox";
 import AccountMenu from "./AccountMenu";
+import ServersMenu from "./ServersMenu";
+import WorkspacesMenu from "./WorkspacesMenu";
+import Team from "./Team";
 import AgentPanel, { type PanelSession } from "../agents/AgentPanel";
 import NarrationPanel from "./NarrationPanel";
 import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessions";
@@ -933,8 +936,31 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
 
   return (
     <div className="app">
+      {/* Row 1 is app chrome, identical to home: tabs left, the global
+          cluster right. Everything project-scoped lives on the subnav. */}
       <div className="titlebar">
         {tabStrip}
+        <span className="spacer" />
+        <button
+          className="btn ghost icon-btn"
+          aria-label="Search"
+          title="Jump to project (⌘K)"
+          onClick={() => window.dispatchEvent(new Event("commons:palette"))}
+        >
+          <Icon name="search" />
+        </button>
+        <ServersMenu />
+        <WorkspacesMenu me={me} />
+        <Team me={me} />
+        <Inbox
+          me={me}
+          setNav={setNav}
+          open={sidePanel === "inbox"}
+          onOpenChange={(o) => setSidePanel(o ? "inbox" : null)}
+        />
+        <AccountMenu me={me} onSignOut={onSignOut} />
+      </div>
+      <div className="subnav">
         <div className="seg-wrap" ref={deviceMenuRef}>
           <div className="seg">
             <button
@@ -1091,11 +1117,13 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                   </>
                 );
               })()}
-              {/* Recents left this menu when tabs arrived — tabs are the
-                  switching surface now; this menu is servers + the way home. */}
-              <button className="switcher-row all" onClick={() => setNav({ screen: "home" })}>
-                All projects
-              </button>
+              {/* "All projects" left with the tabs: the home tab is the way
+                  back now, so this menu is purely servers. */}
+              {!repoPath && (
+                <div className="switcher-status">
+                  <span className="hint">No local repo connected</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1152,12 +1180,6 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             <span className="count-badge">{annotationData!.draftCount}</span>
           )}
         </button>
-        <Inbox
-          me={me}
-          setNav={setNav}
-          open={sidePanel === "inbox"}
-          onOpenChange={(o) => setSidePanel(o ? "inbox" : null)}
-        />
         <span className="tb-divider" />
         {/* Presence = teammates only; your own face is the account menu. */}
         <div className="avatar-stack">
@@ -1172,7 +1194,6 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           )}
         </div>
         <SharePopover project={project} me={me} users={users} nav={nav} />
-        <AccountMenu me={me} onSignOut={onSignOut} />
       </div>
 
       {catchUp && !catchUpDismissed && (

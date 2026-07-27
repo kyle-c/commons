@@ -34,6 +34,18 @@ export default function CommandPalette({ me, setNav }: { me: Doc<"users">; setNa
     []
   );
 
+  // The project view's search icon opens the palette too — search is the
+  // same act everywhere, so both surfaces share this one affordance.
+  useEffect(() => {
+    const onOpen = () => {
+      setOpen(true);
+      setQuery("");
+      setHighlighted(0);
+    };
+    window.addEventListener("commons:palette", onOpen);
+    return () => window.removeEventListener("commons:palette", onOpen);
+  }, []);
+
   const results = useMemo(() => {
     if (!projects) return [];
     const needle = query.trim().toLowerCase();
