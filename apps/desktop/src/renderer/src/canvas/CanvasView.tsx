@@ -374,33 +374,40 @@ export default function CanvasView({
       g.vx = 0;
       g.vy = 0;
     } else {
-      // Velocity-matched spring: damp toward the cursor's velocity, not
-      // toward zero. While the hand moves, the swarm rides centered on it;
-      // when a fling stops, the matched momentum carries the swarm past
-      // the cursor and the position spring reels it back — regroup.
-      const K = 140;
-      const C = 16;
-      // Frame-sampled cursor velocity: steady dt, so no event-burst spikes.
-      const cap = 2500;
+      // Trail model: the light rides a point just BEHIND the direction of
+      // travel — moving right lights dots slightly left of the cursor,
+      // moving down lights them slightly above, and stopping lets the
+      // light glide onto the cursor. Exponential smoothing, no spring,
+      // so it can never oscillate or wander.
+      const cap = 3000;
       const fvx = Math.max(-cap, Math.min(cap, (g.tx - g.ptx) / dt));
       const fvy = Math.max(-cap, Math.min(cap, (g.ty - g.pty) / dt));
       g.ptx = g.tx;
       g.pty = g.ty;
       g.tvx = g.tvx * 0.5 + fvx * 0.5;
       g.tvy = g.tvy * 0.5 + fvy * 0.5;
-      g.vx += ((g.tx - g.px) * K + (g.tvx - g.vx) * C) * dt;
-      g.vy += ((g.ty - g.py) * K + (g.tvy - g.vy) * C) * dt;
-      g.px += g.vx * dt;
-      g.py += g.vy * dt;
+      const speed = Math.hypot(g.tvx, g.tvy);
+      const trail = Math.min(26, speed * 0.02);
+      const ux = speed > 1 ? g.tvx / speed : 0;
+      const uy = speed > 1 ? g.tvy / speed : 0;
+      const k = Math.min(1, dt * 16);
+      g.px += (g.tx - ux * trail - g.px) * k;
+      g.py += (g.ty - uy * trail - g.py) * k;
     }
     g.alpha += (g.targetAlpha - g.alpha) * Math.min(1, dt * 9);
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const dpr = window.devicePixelRatio || 1;
+    const bw = Math.round(canvas.clientWidth * dpr);
+    const bh = Math.round(canvas.clientHeight * dpr);
+    if (canvas.width !== bw || canvas.height !== bh) {
+      canvas.width = bw;
+      canvas.height = bh;
+    }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-    const R = 105;
+    const R = 80;
     if (g.alpha > 0.01) {
       ctx.fillStyle = g.color;
       // The CSS grid tiles at 24px with each dot centered in its tile.
@@ -416,12 +423,12 @@ export default function CanvasView({
           const f = Math.exp(-((dist / R) * (dist / R)) * 3.6);
           // Swarm: dots near the point gather hard toward it (up to half
           // their distance), then relax back to the grid as it moves on.
-          const pull = g.reduced ? 0 : Math.min(8 * f, dist * 0.5);
+          const pull = g.reduced ? 0 : Math.min(5 * f, dist * 0.4);
           const ox = dist > 0 ? (-dx / dist) * pull : 0;
           const oy = dist > 0 ? (-dy / dist) * pull : 0;
-          ctx.globalAlpha = g.alpha * f;
+          ctx.globalAlpha = g.alpha * f * 0.8;
           ctx.beginPath();
-          ctx.arc(x + ox, y + oy, 1.2 + 1.2 * f, 0, Math.PI * 2);
+          ctx.arc(x + ox, y + oy, 1.2 + 0.8 * f, 0, Math.PI * 2);
           ctx.fill();
         }
       }
