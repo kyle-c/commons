@@ -23,6 +23,7 @@ export default function PrototypeView({
   devStatus,
   previewUrl,
   viewerHasRepo,
+  selfHasRepoElsewhere,
   repoHolderNames,
   project,
   me,
@@ -30,10 +31,12 @@ export default function PrototypeView({
   onSendToAgent,
   device,
 }: {
-  frames: Doc<"frames">[];
+  frames: (Doc<"frames"> & { snapshotUrl?: string | null })[];
   devStatus: DevServerStatus;
   previewUrl?: string | null;
   viewerHasRepo?: boolean;
+  /** The viewer holds this repo, just not on this machine. */
+  selfHasRepoElsewhere?: boolean;
   repoHolderNames?: string[];
   project: Doc<"projects">;
   me: Doc<"users">;
@@ -159,29 +162,46 @@ export default function PrototypeView({
           </div>
         )}
       <div className="proto-stage">
-        {url ? (
-          <div className="proto-device" style={device.width ? { width: device.width } : { flex: 1 }}>
-            {!loaded && <div className="frame-booting" />}
-            <iframe
-              src={url}
-              title="Prototype"
-              className={loaded ? "loaded" : ""}
-              onLoad={() => setLoadedUrl(url)}
-            />
-          </div>
-        ) : (
-          <div className="center-screen hint">
-            {devStatus.state === "starting"
+        {(() => {
+          if (url)
+            return (
+              <div className="proto-device" style={device.width ? { width: device.width } : { flex: 1 }}>
+                {!loaded && <div className="frame-booting" />}
+                <iframe
+                  src={url}
+                  title="Prototype"
+                  className={loaded ? "loaded" : ""}
+                  onLoad={() => setLoadedUrl(url)}
+                />
+              </div>
+            );
+          const hint =
+            devStatus.state === "starting"
               ? "Dev server starting…"
               : devStatus.state === "error"
                 ? devStatus.message
                 : viewerHasRepo
                   ? "Dev server stopped — set a preview URL as a fallback"
-                  : repoHolderNames && repoHolderNames.length > 0
-                    ? `Waiting for a preview — ask ${repoHolderNames[0]} to publish one`
-                    : "Waiting for a preview — ask a teammate with the repo to publish one"}
-          </div>
-        )}
+                  : selfHasRepoElsewhere
+                    ? "Your working copy is on another machine — locate or clone the repo here, or set a preview URL"
+                    : repoHolderNames && repoHolderNames.length > 0
+                      ? `Waiting for a preview — ask ${repoHolderNames[0]} to publish one`
+                      : "Waiting for a preview — ask a teammate with the repo to publish one";
+          // No live URL: the last snapshot beats an empty stage. Static, but
+          // it keeps the prototype browsable from any machine.
+          const current = routes.find((f) => (f.routePath ?? "/") === routePath);
+          if (current?.snapshotUrl)
+            return (
+              <div
+                className="proto-device proto-snapshot"
+                style={device.width ? { width: device.width } : { flex: 1 }}
+              >
+                <img src={current.snapshotUrl} alt={current.title} />
+                <div className="proto-snapshot-note">Snapshot · {hint}</div>
+              </div>
+            );
+          return <div className="center-screen hint">{hint}</div>;
+        })()}
       </div>
       </div>
     </div>

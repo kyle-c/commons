@@ -448,6 +448,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   // Which teammates have live frames — drives viewer empty states.
   const repoHolders = useQuery(api.repoLinks.holders, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() }) ?? [];
   const holderNames = repoHolders.filter((h) => h.userId !== me._id).map((h) => h.name);
+  // You hold this repo — on some other machine. Empty states say so.
+  const selfHasRepoElsewhere = repoHolders.some((h) => h.userId === me._id);
 
   const [devStatus, setDevStatus] = useState<DevServerStatus>({ state: "stopped" });
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -1248,6 +1250,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           devStatus={devStatus}
           previewUrl={project.previewUrl}
           viewerHasRepo={!!repoPath}
+          selfHasRepoElsewhere={!repoPath && selfHasRepoElsewhere}
           repoHolderNames={holderNames}
           initialThreadId={nav.threadId}
           initialFrameId={nav.frameId}
@@ -1274,6 +1277,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           devStatus={devStatus}
           previewUrl={project.previewUrl}
           viewerHasRepo={!!repoPath}
+          selfHasRepoElsewhere={!repoPath && selfHasRepoElsewhere}
           repoHolderNames={holderNames}
           project={project}
           me={me}

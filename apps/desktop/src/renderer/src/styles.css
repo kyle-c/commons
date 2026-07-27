@@ -832,6 +832,25 @@ textarea:focus {
   overflow: hidden;
   display: flex;
 }
+/* Static stand-in when no live URL exists on this machine. */
+.proto-snapshot img {
+  flex: 1;
+  width: 100%;
+  object-fit: contain;
+  object-position: top;
+  background: #fff;
+}
+.proto-snapshot-note {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 6px 12px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-panel) 92%, transparent);
+  border-top: 1px solid var(--border-subtle);
+}
 .proto-device iframe {
   border: none;
   flex: 1;
@@ -2939,9 +2958,17 @@ kbd {
 }
 
 /* Collapsed titlebar search: expands in from the icon, right-aligned. */
+/* Grows out of the search icon's footprint — a touch slower than the
+   standard entrance so the expansion itself is legible. */
+@keyframes search-expand {
+  from {
+    width: 34px;
+    opacity: 0.3;
+  }
+}
 .titlebar-search.flyout {
   width: 240px;
-  animation: rise-in var(--dur-med) var(--ease-out);
+  animation: search-expand 320ms var(--ease-out);
 }
 
 /* Prototype toolbar address chip: screen name + path, like a frame header. */

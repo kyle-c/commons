@@ -42,6 +42,8 @@ interface Props {
   previewUrl?: string | null;
   /** Whether this user has a working copy — empty states differ per persona. */
   viewerHasRepo?: boolean;
+  /** The viewer holds this repo, just not on this machine. */
+  selfHasRepoElsewhere?: boolean;
   /** Teammates (other than the viewer) who have live frames. */
   repoHolderNames?: string[];
   initialThreadId?: Id<"threads">;
@@ -134,6 +136,7 @@ const FrameLayer = memo(function FrameLayer({
   heatmap,
   commentMode,
   viewerHasRepo,
+  selfHasRepoElsewhere,
   repoHolderNames,
   onFrameDrag,
   onShieldDown,
@@ -150,6 +153,7 @@ const FrameLayer = memo(function FrameLayer({
   heatmap?: Props["heatmap"];
   commentMode: boolean;
   viewerHasRepo?: boolean;
+  selfHasRepoElsewhere?: boolean;
   repoHolderNames?: string[];
   onFrameDrag: (frame: Doc<"frames">, e: React.MouseEvent) => void;
   onShieldDown: (frame: Doc<"frames">, e: React.MouseEvent) => void;
@@ -217,9 +221,11 @@ const FrameLayer = memo(function FrameLayer({
                         ? devStatus.message
                         : viewerHasRepo
                           ? "Dev server stopped — set a preview URL as a fallback"
-                          : repoHolderNames && repoHolderNames.length > 0
-                            ? `Waiting for a preview — ask ${repoHolderNames[0]} to publish one`
-                            : "Waiting for a preview — ask a teammate with the repo to publish one"}
+                          : selfHasRepoElsewhere
+                            ? "Your working copy is on another machine — locate or clone the repo here"
+                            : repoHolderNames && repoHolderNames.length > 0
+                              ? `Waiting for a preview — ask ${repoHolderNames[0]} to publish one`
+                              : "Waiting for a preview — ask a teammate with the repo to publish one"}
                 </div>
               )}
               {heatmap && frame.routePath && (
@@ -263,6 +269,7 @@ export default function CanvasView({
   devStatus,
   previewUrl,
   viewerHasRepo,
+  selfHasRepoElsewhere,
   repoHolderNames,
   initialThreadId,
   initialFrameId,
@@ -785,6 +792,7 @@ export default function CanvasView({
           heatmap={heatmap}
           commentMode={commentMode}
           viewerHasRepo={viewerHasRepo}
+          selfHasRepoElsewhere={selfHasRepoElsewhere}
           repoHolderNames={repoHolderNames}
           {...stableFrameHandlers}
         />
