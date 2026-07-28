@@ -98,6 +98,80 @@ function SettingPopover({
 }
 
 /**
+ * A dev server Commons didn't start, with the option to stop it.
+ *
+ * Stopping asks twice on purpose. This is someone else's process — a terminal
+ * they alt-tabbed away from, an agent mid-run — and unlike stopping a server
+ * Commons owns, there is nothing here that can bring it back. The main process
+ * re-checks that this pid still serves this repo before signalling, so a pid
+ * recycled between render and click can't take an unrelated process with it.
+ */
+function ExternalServerRow({
+  server,
+  repoPath,
+  onStopped,
+}: {
+  server: { port: number; pid: number };
+  repoPath?: string;
+  onStopped: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const stop = async () => {
+    if (!repoPath || !window.commons?.stopExternalServer) return;
+    setBusy(true);
+    setError(null);
+    const result = await window.commons.stopExternalServer(repoPath, server.port, server.pid);
+    setBusy(false);
+    if (result.ok || result.reason === "gone") {
+      onStopped();
+      return;
+    }
+    setConfirming(false);
+    setError(
+      result.reason === "no_permission"
+        ? "That process belongs to another user — stop it where you started it."
+        : "Couldn't stop it."
+    );
+  };
+
+  return (
+    <div className="switcher-status">
+      <span className="status-dot starting" />
+      <span
+        className="hint"
+        title={`Process ${server.pid} is serving this project's folder — likely a terminal or coding agent.`}
+      >
+        also on :{server.port} · outside Commons
+      </span>
+      <span style={{ flex: 1 }} />
+      {error ? (
+        <span className="hint">{error}</span>
+      ) : confirming ? (
+        <>
+          <button className="btn ghost quiet-action" disabled={busy} onClick={() => void stop()}>
+            {busy ? "Stopping…" : "Confirm stop"}
+          </button>
+          <button className="btn ghost" disabled={busy} onClick={() => setConfirming(false)}>
+            Cancel
+          </button>
+        </>
+      ) : (
+        <button
+          className="btn ghost"
+          title="Stop this process. Commons didn't start it, so it won't be able to restart it either."
+          onClick={() => setConfirming(true)}
+        >
+          Stop
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
  * A URL-valued setting: first open shows the explainer and the field;
  * once set, shows the current value with Change/Remove.
  */
@@ -530,8 +604,9 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     return window.commons.onDevServerStatus(refreshServers);
   }, []);
   // Duplicate-port awareness: servers for THIS project started outside
-  // Commons (a terminal `pnpm dev`, a Claude Code session). Detected when
-  // the menu opens; read-only — we never kill other tools' processes.
+  // Commons (a terminal `pnpm dev`, a Claude Code session). Detected when the
+  // menu opens. Stopping one is possible, but only as a deliberate, confirmed
+  // act — Commons never reaps another tool's process on its own.
   const [externalServers, setExternalServers] = useState<{ port: number; pid: number }[]>([]);
   useEffect(() => {
     if (!switcherOpen || !repoPath || !window.commons?.detectExternalServers) return;
@@ -1156,15 +1231,12 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                 </div>
               )}
               {externalServers.map((ext) => (
-                <div key={ext.pid + ":" + ext.port} className="switcher-status">
-                  <span className="status-dot starting" />
-                  <span
-                    className="hint"
-                    title={`Process ${ext.pid} is serving this project's folder — likely a terminal or coding agent. Stop it there to free the port.`}
-                  >
-                    also on :{ext.port} · outside Commons
-                  </span>
-                </div>
+                <ExternalServerRow
+                  key={ext.pid + ":" + ext.port}
+                  server={ext}
+                  repoPath={repoPath}
+                  onStopped={() => setExternalServers((list) => list.filter((s) => s.pid !== ext.pid))}
+                />
               ))}
               {(() => {
                 const others = runningServers.filter(

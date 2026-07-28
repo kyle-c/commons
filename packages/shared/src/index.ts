@@ -231,6 +231,12 @@ export interface CommonsApi {
   /** Servers OTHER tools started (terminal, Claude Code) whose cwd is inside
    *  one of these repos — duplicate-port awareness. macOS only; read-only. */
   detectExternalServers(repoPaths: string[]): Promise<{ repoPath: string; port: number; pid: number }[]>;
+  /** Stop a dev server Commons didn't start. Re-verifies the pid still serves this repo first. */
+  stopExternalServer(
+    repoPath: string,
+    port: number,
+    pid: number
+  ): Promise<{ ok: boolean; reason?: string }>;
   stopDevServer(repoPath: string): Promise<void>;
   /** Leaving a project: stop its dev server after a grace period (reopening cancels). */
   releaseDevServer(repoPath: string): Promise<void>;

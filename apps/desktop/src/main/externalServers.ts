@@ -3,8 +3,11 @@ import { execFile } from "child_process";
 /**
  * Detect dev servers Commons did NOT start: anything listening on TCP whose
  * process cwd sits inside one of the given repos (a `pnpm dev` from a
- * terminal, a Claude Code/Codex session, etc.). Read-only — we surface them,
- * we don't kill other tools' processes.
+ * terminal, a Claude Code/Codex session, etc.).
+ *
+ * Detection is read-only. Stopping one is possible (stopExternal) but is
+ * always a deliberate, confirmed act by the person at the keyboard — Commons
+ * never reaps another tool's process on its own initiative.
  */
 
 function run(bin: string, args: string[]): Promise<string> {
@@ -54,4 +57,47 @@ export async function detectExternal(repoPaths: string[], ownedPorts: number[]):
     })
   );
   return results.sort((a, b) => a.port - b.port);
+}
+
+/**
+ * Stop a process Commons didn't start.
+ *
+ * The danger here is PID reuse: between the menu being drawn and the click,
+ * the server may have exited and the OS may have handed that number to
+ * something else entirely — so we re-detect and only proceed if this exact
+ * (pid, port, repo) triple is still a dev server for this project. Killing by
+ * a remembered pid alone is how a tool ends up shooting an unrelated process.
+ *
+ * SIGTERM first so the dev server can tear down its own children; SIGKILL
+ * only if it is still holding the port after a grace period.
+ */
+export async function stopExternal(
+  repoPath: string,
+  port: number,
+  pid: number
+): Promise<{ ok: boolean; reason?: string }> {
+  if (process.platform !== "darwin") return { ok: false, reason: "unsupported" };
+
+  const stillThere = (await detectExternal([repoPath], [])).some((s) => s.pid === pid && s.port === port);
+  if (!stillThere) return { ok: false, reason: "gone" };
+
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    return { ok: false, reason: "no_permission" };
+  }
+
+  for (let waited = 0; waited < 3000; waited += 300) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    if (!(await detectExternal([repoPath], [])).some((s) => s.pid === pid && s.port === port)) {
+      return { ok: true };
+    }
+  }
+  // Still listening after 3s of grace: it isn't going to leave politely.
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    return { ok: false, reason: "no_permission" };
+  }
+  return { ok: true };
 }

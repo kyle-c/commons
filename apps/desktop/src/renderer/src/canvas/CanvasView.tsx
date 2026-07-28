@@ -12,6 +12,7 @@ import { resolveFrameUrl } from "../lib/frameUrl";
 import { tidyPositions } from "../lib/frameLayout";
 import { registerShortcut } from "../lib/shortcuts";
 import Icon from "../components/icons";
+import PreviewAppearanceButton from "../components/PreviewAppearanceButton";
 
 interface Viewport {
   x: number;
@@ -1137,6 +1138,11 @@ export default function CanvasView({
         >
           <Icon name="maximize" />
         </button>
+        {/* The forced color scheme already reaches canvas frames — styles.css
+            targets .frame-body iframe as well as the prototype stage — so
+            without this control the canvas was stuck on whatever the prototype
+            view last set, with no way to see or change it from here. */}
+        <PreviewAppearanceButton />
         <button className="btn ghost zoom-step" title="Zoom out (⌘−)" onClick={() => zoomBy(0.8)}>
           −
         </button>
