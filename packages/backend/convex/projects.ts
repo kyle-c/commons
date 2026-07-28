@@ -602,10 +602,16 @@ export const setPreviewUrl = mutation({
     previewUrl: v.optional(v.string()),
     branchPreviewPattern: v.optional(v.string()),
     hasBranchPattern: v.optional(v.boolean()),
+    // Optional like every other mutation in this file: the access check below
+    // is what gates the write, so an old client that omits these fails on
+    // "no access" rather than on argument validation.
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, { projectId, previewUrl, branchPreviewPattern, hasBranchPattern }) => {
-    const project = await ctx.db.get(projectId);
-    if (!project) throw new Error("Project not found");
+  handler: async (ctx, args) => {
+    const { projectId, previewUrl, branchPreviewPattern, hasBranchPattern } = args;
+    const project = await accessibleProject(ctx, projectId, await resolveViewer(ctx, args));
+    if (!project) throw new Error("You don't have access to this project.");
     const pattern = hasBranchPattern ? branchPreviewPattern || undefined : project.branchPreviewPattern;
 
     /**

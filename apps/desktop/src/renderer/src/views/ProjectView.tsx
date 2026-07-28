@@ -1285,6 +1285,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             onSave={async (url) => {
               await setPreviewUrl({
                 projectId: project._id,
+                userId: me._id,
+                sessionToken: sessionToken(),
                 previewUrl: url ? url.replace(/\/+$/, "") : undefined,
               });
             }}
@@ -1309,6 +1311,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             onSave={async (patternValue) => {
               await setPreviewUrl({
                 projectId: project._id,
+                userId: me._id,
+                sessionToken: sessionToken(),
                 previewUrl: project.previewUrl,
                 branchPreviewPattern: patternValue ? patternValue.replace(/\/+$/, "") : undefined,
                 hasBranchPattern: true,
