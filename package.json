@@ -6,7 +6,8 @@
     "dev": "pnpm -C packages/backend dev:once && pnpm -C apps/desktop dev",
     "typecheck": "pnpm -r typecheck && node scripts/check-convex-auth.mjs",
     "build": "pnpm -C apps/desktop build",
-    "check:auth": "node scripts/check-convex-auth.mjs"
+    "check:auth": "node scripts/check-convex-auth.mjs",
+    "ship": "node scripts/ship.mjs"
   },
   "packageManager": "pnpm@10.12.4",
   "pnpm": {
