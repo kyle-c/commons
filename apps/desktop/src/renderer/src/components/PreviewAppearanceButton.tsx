@@ -6,29 +6,33 @@ import {
   type PreviewAppearance,
 } from "../lib/previewAppearance";
 
-const ORDER: PreviewAppearance[] = ["light", "dark", "system"];
-const ICONS = { light: "sun", dark: "moon", system: "monitor" } as const;
-const LABELS = { light: "light", dark: "dark", system: "this Mac's" };
-
 /**
- * Cycles the appearance embedded screens render with: light → dark → system.
- * Distinct from the titlebar theme toggle, which styles Commons itself.
- * Hidden in the browser app, where the OS scheme applies.
+ * Flips the appearance embedded screens render with: light <-> dark.
+ * Binary on purpose — the old third "system" stop read as a mystery
+ * monitor icon. A stored "system" preference resolves to what it
+ * currently means and flips from there. Distinct from the account
+ * menu's theme toggle, which styles Commons itself.
  */
 export default function PreviewAppearanceButton() {
   const [mode, setMode] = useState<PreviewAppearance>(getPreviewAppearance());
-  const next = ORDER[(ORDER.indexOf(mode) + 1) % ORDER.length];
+  const resolved =
+    mode === "system"
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light"
+      : mode;
+  const next = resolved === "light" ? "dark" : "light";
   return (
     <button
       className="btn ghost icon-btn"
       aria-label="Preview appearance"
-      title={`Screens render in ${LABELS[mode]} mode. Click to switch to ${LABELS[next]}.`}
+      title={`Screens render in ${resolved} mode. Click to switch to ${next}.`}
       onClick={() => {
         setPreviewAppearance(next);
         setMode(next);
       }}
     >
-      <Icon name={ICONS[mode]} size={14} />
+      <Icon name={resolved === "light" ? "sun" : "moon"} size={14} />
     </button>
   );
 }
