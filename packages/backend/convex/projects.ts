@@ -604,9 +604,23 @@ export const setPreviewUrl = mutation({
     hasBranchPattern: v.optional(v.boolean()),
   },
   handler: async (ctx, { projectId, previewUrl, branchPreviewPattern, hasBranchPattern }) => {
+    const project = await ctx.db.get(projectId);
+    if (!project) throw new Error("Project not found");
+    const pattern = hasBranchPattern ? branchPreviewPattern || undefined : project.branchPreviewPattern;
+
+    /**
+     * Typing a value here makes it yours, and dropping the provenance is what
+     * makes that stick: applyDeploy only writes over values it set itself.
+     *
+     * Keyed on what actually changed, not on what was submitted — the draft-
+     * pattern form passes the preview URL through untouched, and that must not
+     * disown a URL the person never edited.
+     */
     await ctx.db.patch(projectId, {
       previewUrl,
-      ...(hasBranchPattern ? { branchPreviewPattern: branchPreviewPattern || undefined } : {}),
+      ...(previewUrl !== project.previewUrl ? { previewSource: undefined } : {}),
+      ...(hasBranchPattern ? { branchPreviewPattern: pattern } : {}),
+      ...(pattern !== project.branchPreviewPattern ? { branchPatternSource: undefined } : {}),
     });
   },
 });

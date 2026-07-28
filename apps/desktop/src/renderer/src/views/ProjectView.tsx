@@ -16,7 +16,7 @@ import Team from "./Team";
 import AgentPanel, { type PanelSession } from "../agents/AgentPanel";
 import NarrationPanel from "./NarrationPanel";
 import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessions";
-import { getConvexUrl, initials, sessionToken } from "../lib/session";
+import { getConvexUrl, initials, sessionToken, timeAgo } from "../lib/session";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
@@ -106,6 +106,8 @@ function UrlSettingBody({
   hint,
   placeholder,
   value,
+  learned,
+  learnedAt,
   validate,
   onSave,
 }: {
@@ -113,6 +115,9 @@ function UrlSettingBody({
   hint: string;
   placeholder: string;
   value?: string | null;
+  /** True when Commons worked this value out from a GitHub deploy, not a person. */
+  learned?: boolean;
+  learnedAt?: number;
   validate: (v: string) => string | null;
   onSave: (v: string) => Promise<void>;
 }) {
@@ -183,6 +188,12 @@ function UrlSettingBody({
           <span className="setting-value" title={value ?? undefined}>
             {value}
           </span>
+          {learned && (
+            <span className="hint">
+              Filled in from your last GitHub deploy{learnedAt ? ` ${timeAgo(learnedAt)} ago` : ""}. Deploys keep it
+              current; type your own and it stops changing.
+            </span>
+          )}
           {error && <span className="form-error">{error}</span>}
           <div className="reveal-form-row">
             <button
@@ -1268,6 +1279,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             hint="Paste your app's deployed URL. Screens and user tests fall back to it."
             placeholder="https://myapp.vercel.app"
             value={project.previewUrl}
+            learned={project.previewSource === "github"}
+            learnedAt={project.lastDeployAt}
             validate={(url) => (/^https?:\/\/.+/.test(url) ? null : "Needs a full https:// link.")}
             onSave={async (url) => {
               await setPreviewUrl({
@@ -1288,6 +1301,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             hint={"Gives every agent draft its own live link anyone can open before it ships. Paste your host's pattern, with {branch} where the draft name goes."}
             placeholder={"https://myapp-git-{branch}-team.vercel.app"}
             value={project.branchPreviewPattern}
+            learned={project.branchPatternSource === "github"}
+            learnedAt={project.lastDeployAt}
             validate={(v) =>
               /^https?:\/\/.+/.test(v) && v.includes("{branch}") ? null : "Needs https:// and a {branch} placeholder."
             }
