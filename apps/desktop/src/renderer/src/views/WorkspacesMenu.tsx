@@ -15,6 +15,79 @@ const CREATE_ERRORS: Record<string, string> = {
   not_signed_in: "Sign in again and retry.",
 };
 
+type WorkspaceRow = { _id: Id<"workspaces">; githubAccounts: { _id: Id<"githubInstallations">; accountLogin: string }[] };
+
+/**
+ * Connect GitHub. The install itself happens on github.com, so all this does
+ * is mint a state token, hand the person the URL that carries it, and show
+ * what's linked once they come back.
+ */
+function GithubChip({ accounts, open, onToggle }: { accounts: WorkspaceRow["githubAccounts"]; open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      className={`slack-chip ${accounts.length > 0 ? "on" : ""} ${open ? "active" : ""}`}
+      title={
+        accounts.length > 0
+          ? `Deploys from ${accounts.map((a) => a.accountLogin).join(", ")} update this workspace's preview links`
+          : "Let Commons pick up preview links from your deploys instead of pasting them"
+      }
+      onClick={onToggle}
+    >
+      <span className={`status-dot ${accounts.length > 0 ? "ready" : ""}`} />
+      GitHub
+    </button>
+  );
+}
+
+function GithubPanel({ me, workspace }: { me: Doc<"users">; workspace: WorkspaceRow }) {
+  const startConnect = useMutation(api.github.startConnect);
+  const disconnect = useMutation(api.github.disconnect);
+  const [notice, setNotice] = useState<string | null>(null);
+  const accounts = workspace.githubAccounts;
+
+  const connect = async () => {
+    const result = await startConnect({ workspaceId: workspace._id, userId: me._id, sessionToken: sessionToken() });
+    if (!result.ok) {
+      setNotice(
+        result.reason === "app_not_configured"
+          ? "The GitHub App isn't set up on this deployment yet."
+          : "You need to be a member of this workspace to connect GitHub."
+      );
+      return;
+    }
+    setNotice("Finish in the browser, then come back — connected accounts show up here.");
+    if (window.commons) void window.commons.openExternal(result.url);
+    else window.open(result.url, "_blank");
+  };
+
+  return (
+    <div className="ws-github">
+      {accounts.map((account) => (
+        <div key={account._id} className="ws-github-row">
+          <span>{account.accountLogin}</span>
+          <button
+            className="btn ghost"
+            title="Stop using this account's deploys here. Doesn't uninstall anything on GitHub."
+            onClick={async () => {
+              await disconnect({ installationRowId: account._id, userId: me._id, sessionToken: sessionToken() });
+              setNotice("Disconnected.");
+            }}
+          >
+            Disconnect
+          </button>
+        </div>
+      ))}
+      <button className="btn ghost reveal-trigger" onClick={connect}>
+        {accounts.length > 0 ? "Connect another account ↗" : "Connect GitHub ↗"}
+      </button>
+      <div className="hint">
+        {notice ??
+          "Pick the repos you want. After that, every deploy tells Commons the project's preview link and its per-branch draft links."}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Titlebar popover: the viewer's workspaces (playground + teams). Teams are
  * created explicitly — never inferred from a domain — but a corporate domain
@@ -31,7 +104,7 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
   const [domain, setDomain] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   // One inline editor open at a time, keyed by workspace + which field.
-  const [editing, setEditing] = useState<{ id: string; field: "member" | "slack" } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; field: "member" | "slack" | "github" } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
 
@@ -86,11 +159,13 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
                       : "team"}
                 </span>
               </div>
-              {workspace.kind === "team" && (
-                <>
-                  {/* One line: who's here, add someone, Slack state. Actions
-                      sit with their objects instead of stacking as rows. */}
-                  <div className="ws-line">
+              {/* One line: who's here, add someone, Slack and GitHub state.
+                  Actions sit with their objects instead of stacking as rows.
+                  Playgrounds have no people or Slack, but their projects still
+                  deploy, so the GitHub chip is there too. */}
+              <div className="ws-line">
+                {workspace.kind === "team" && (
+                  <>
                     <div className="avatar-stack">
                       {workspace.members.map((member) => (
                         <span
@@ -132,7 +207,24 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
                       <span className={`status-dot ${workspace.slackWebhookUrl ? "ready" : ""}`} />
                       Slack
                     </button>
-                  </div>
+                  </>
+                )}
+                {workspace.kind === "personal" && <span style={{ flex: 1 }} />}
+                <GithubChip
+                  accounts={workspace.githubAccounts}
+                  open={editing?.id === workspace._id && editing.field === "github"}
+                  onToggle={() =>
+                    setEditing((e) =>
+                      e?.id === workspace._id && e.field === "github" ? null : { id: workspace._id, field: "github" }
+                    )
+                  }
+                />
+              </div>
+              {editing?.id === workspace._id && editing.field === "github" && (
+                <GithubPanel me={me} workspace={workspace} />
+              )}
+              {workspace.kind === "team" && (
+                <>
                   {editing?.id === workspace._id && editing.field === "member" && (
                     <InlineField
                       placeholder="teammate@company.com"

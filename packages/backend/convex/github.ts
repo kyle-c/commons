@@ -1,6 +1,8 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, mutation } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
+import { resolveViewer } from "./access";
 
 /**
  * The GitHub App listener: Commons learns each project's preview URL and its
@@ -86,6 +88,146 @@ export function isProductionDeploy(environment: string | undefined, ref: string,
   return env.includes("production") || ref === defaultBranch;
 }
 
+// ── Connecting an installation to a workspace ──────────────────────────────
+
+/**
+ * The binding problem: the App is registered once for the whole product, and a
+ * GitHub account installs it once. Neither of those facts says which Commons
+ * workspace the resulting deploy events belong to. Without an explicit link,
+ * matching a deploy to a project by git remote alone would let one workspace's
+ * deploys write into another workspace's projects.
+ *
+ * So a workspace member starts the connect, we mint a single-use state token
+ * tied to (workspace, user), GitHub hands that token back to our Setup URL
+ * alongside the installation_id, and only then is the pair bound. The token is
+ * what makes the redirect trustworthy: an installation_id on its own is a
+ * public number that anyone could guess or replay.
+ */
+
+const STATE_TTL_MS = 15 * 60 * 1000;
+
+function newStateToken(): string {
+  // Math.random is fine here: Convex mutations replay deterministically, and
+  // the token's job is unguessability within a 15-minute window, not secrecy
+  // at rest. 48 chars of base36 is far past what a redirect can be brute-forced for.
+  return Array.from({ length: 4 }, () => Math.random().toString(36).slice(2, 14)).join("");
+}
+
+async function isWorkspaceMember(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  userId: Id<"users">
+): Promise<boolean> {
+  const membership = await ctx.db
+    .query("workspaceMembers")
+    .withIndex("by_user_workspace", (q) => q.eq("userId", userId).eq("workspaceId", workspaceId))
+    .unique();
+  return membership !== null;
+}
+
+/**
+ * Step 1 of the connect: hand back the URL to send the person to. The state
+ * token rides along in the query string and comes back on the Setup URL.
+ */
+export const startConnect = mutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await resolveViewer(ctx, args);
+    if (!userId || !(await isWorkspaceMember(ctx, args.workspaceId, userId))) {
+      return { ok: false as const, reason: "not_allowed" };
+    }
+    const slug = process.env.GITHUB_APP_SLUG;
+    if (!slug) return { ok: false as const, reason: "app_not_configured" };
+
+    const token = newStateToken();
+    await ctx.db.insert("githubConnectStates", {
+      token,
+      workspaceId: args.workspaceId,
+      userId,
+      expiresAt: Date.now() + STATE_TTL_MS,
+    });
+    return {
+      ok: true as const,
+      url: `https://github.com/apps/${slug}/installations/new?state=${token}`,
+    };
+  },
+});
+
+/**
+ * Step 2: GitHub redirected to our Setup URL. Bind, but only on proof.
+ *
+ * Returns a reason rather than throwing, because the caller is an HTTP action
+ * rendering a page for a human who needs to be told what to do next.
+ */
+export const completeConnect = internalMutation({
+  args: {
+    state: v.string(),
+    installationId: v.number(),
+    accountLogin: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("githubConnectStates")
+      .withIndex("by_token", (q) => q.eq("token", args.state))
+      .first();
+    if (!row) return { ok: false as const, reason: "unknown_state" };
+    if (row.usedAt) return { ok: false as const, reason: "already_used" };
+    if (row.expiresAt < Date.now()) return { ok: false as const, reason: "expired" };
+
+    const workspace = await ctx.db.get(row.workspaceId);
+    if (!workspace) return { ok: false as const, reason: "unknown_workspace" };
+
+    // Re-check membership at redemption: someone removed from the workspace
+    // between clicking Connect and finishing on GitHub must not bind it.
+    if (!(await isWorkspaceMember(ctx, row.workspaceId, row.userId))) {
+      return { ok: false as const, reason: "not_allowed" };
+    }
+
+    const existing = await ctx.db
+      .query("githubInstallations")
+      .withIndex("by_installation", (q) => q.eq("installationId", args.installationId))
+      .first();
+    const fields = {
+      installationId: args.installationId,
+      accountLogin: args.accountLogin ?? existing?.accountLogin ?? "unknown",
+      installedBy: row.userId,
+      workspaceId: row.workspaceId,
+      removedAt: undefined,
+    };
+    if (existing) await ctx.db.patch(existing._id, fields);
+    else await ctx.db.insert("githubInstallations", fields);
+
+    await ctx.db.patch(row._id, { usedAt: Date.now() });
+    return { ok: true as const, workspaceName: workspace.name, accountLogin: fields.accountLogin };
+  },
+});
+
+/**
+ * Unbind an installation from this workspace. Deliberately does not uninstall
+ * the App on GitHub — revoking someone's repo access is their call to make on
+ * GitHub, not a side effect of a click in here.
+ */
+export const disconnect = mutation({
+  args: {
+    installationRowId: v.id("githubInstallations"),
+    userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await resolveViewer(ctx, args);
+    const row = await ctx.db.get(args.installationRowId);
+    if (!row?.workspaceId || !userId || !(await isWorkspaceMember(ctx, row.workspaceId, userId))) {
+      throw new Error("Not allowed");
+    }
+    await ctx.db.patch(row._id, { workspaceId: undefined });
+    return null;
+  },
+});
+
 // ── Installations ──────────────────────────────────────────────────────────
 
 export const recordInstallation = internalMutation({
@@ -125,9 +267,14 @@ export const installations = internalQuery({
  * learn what it proves: the production URL, or another (branch -> url) sample
  * for pattern inference. Snapshots are marked stale so a client can refresh
  * them (Phase 2).
+ *
+ * Matching is scoped to the workspace the installation is bound to. A git
+ * remote is not a secret, so remote-only matching would let anyone who can
+ * deploy a fork write a preview URL into a stranger's project.
  */
 export const handleDeployment = internalMutation({
   args: {
+    installationId: v.number(),
     repoUrls: v.array(v.string()), // html_url, clone_url, ssh_url, full_name
     branch: v.string(),
     defaultBranch: v.string(),
@@ -136,16 +283,27 @@ export const handleDeployment = internalMutation({
   },
   handler: async (ctx, args) => {
     const url = args.environmentUrl.replace(/\/+$/, "");
-    if (!/^https?:\/\/.+/.test(url)) return { matched: 0 };
+    if (!/^https?:\/\/.+/.test(url)) return { matched: 0, reason: "bad_url" };
+
+    const installation = await ctx.db
+      .query("githubInstallations")
+      .withIndex("by_installation", (q) => q.eq("installationId", args.installationId))
+      .first();
+    // Installed but never connected to a workspace: nothing to write into yet.
+    // The row still exists, so the UI can offer to finish the connect.
+    if (!installation || installation.removedAt) return { matched: 0, reason: "unknown_installation" };
+    if (!installation.workspaceId) return { matched: 0, reason: "unbound_installation" };
+    const workspaceId = installation.workspaceId;
 
     const wanted = new Set(args.repoUrls.map(normalizeRemote));
     const projects = (await ctx.db.query("projects").collect()).filter((p) => {
       if (!p.gitRemote || p.archivedAt) return false;
+      if (p.workspaceId !== workspaceId) return false;
       const mine = normalizeRemote(p.gitRemote);
       // full_name ("kyle-c/commons") matches the tail of a remote URL too.
       return [...wanted].some((w) => w === mine || mine.endsWith(`/${w}`) || w.endsWith(mine));
     });
-    if (projects.length === 0) return { matched: 0 };
+    if (projects.length === 0) return { matched: 0, reason: "no_project" };
 
     const production = isProductionDeploy(args.environment, args.branch, args.defaultBranch);
     for (const project of projects) {
@@ -156,7 +314,7 @@ export const handleDeployment = internalMutation({
 });
 
 async function applyDeploy(
-  ctx: { db: any },
+  ctx: MutationCtx,
   project: Doc<"projects">,
   deploy: { url: string; branch: string; production: boolean; environment?: string }
 ): Promise<void> {
@@ -183,18 +341,18 @@ async function applyDeploy(
     });
     const samples = await ctx.db
       .query("deploymentSamples")
-      .withIndex("by_project", (q: any) => q.eq("projectId", project._id))
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
       .collect();
     // Keep the window small: recent deploys describe the current host setup.
-    const recent = samples.sort((a: any, b: any) => b.at - a.at).slice(0, 12);
-    const pattern = inferBranchPattern(recent.map((s: any) => ({ branch: s.branch, url: s.url })));
+    const recent = samples.sort((a, b) => b.at - a.at).slice(0, 12);
+    const pattern = inferBranchPattern(recent.map((s) => ({ branch: s.branch, url: s.url })));
     const canWrite = !project.branchPreviewPattern || project.branchPatternSource === "github";
     if (pattern && canWrite && project.branchPreviewPattern !== pattern) {
       patch.branchPreviewPattern = pattern;
       patch.branchPatternSource = "github";
     }
     // Drop anything beyond the window so the table cannot grow without bound.
-    for (const stale of samples.filter((s: any) => !recent.includes(s))) {
+    for (const stale of samples.filter((s) => !recent.includes(s))) {
       await ctx.db.delete(stale._id);
     }
   }

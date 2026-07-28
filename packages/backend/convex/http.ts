@@ -151,6 +151,7 @@ http.route({
       if (state !== "success" || !url) return new Response("ignored");
       const repo = payload.repository ?? {};
       const result = await ctx.runMutation(internal.github.handleDeployment, {
+        installationId: Number(payload.installation?.id ?? 0),
         repoUrls: [repo.html_url, repo.clone_url, repo.ssh_url, repo.full_name].filter(
           (u: unknown): u is string => typeof u === "string" && u.length > 0
         ),
@@ -165,6 +166,68 @@ http.route({
     return new Response("ignored");
   }),
 });
+
+// The App's Setup URL. GitHub sends people here after they install or
+// reconfigure, with installation_id and the state token we minted. This is
+// where an installation becomes a workspace's installation.
+http.route({
+  path: "/api/github/setup",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const params = new URL(request.url).searchParams;
+    const installationId = Number(params.get("installation_id") ?? 0);
+    const state = params.get("state") ?? "";
+
+    if (!installationId) return setupPage("Nothing to connect", NO_INSTALL_BODY);
+    if (!state) return setupPage("Almost there", NO_STATE_BODY);
+
+    const result = await ctx.runMutation(internal.github.completeConnect, {
+      state,
+      installationId,
+      accountLogin: params.get("account") ?? undefined,
+    });
+    if (!result.ok) return setupPage("Couldn't finish connecting", SETUP_REASONS[result.reason] ?? NO_STATE_BODY);
+    return setupPage(
+      "Connected",
+      `<p><strong>${escapeHtml(result.accountLogin)}</strong> is linked to <strong>${escapeHtml(result.workspaceName)}</strong>.</p>
+       <p>When one of those repos deploys, Commons picks up the preview URL on its own. You can close this tab and go back to the app.</p>`
+    );
+  }),
+});
+
+const NO_INSTALL_BODY = `<p>GitHub sent us here without an installation to connect.</p>
+  <p>Start from Commons instead: open the workspaces menu and click Connect GitHub.</p>`;
+
+const NO_STATE_BODY = `<p>We can't tell which workspace this installation belongs to, so we haven't linked anything.</p>
+  <p>Open Commons, go to the workspaces menu, and click Connect GitHub. That link carries the workspace with it.</p>`;
+
+const SETUP_REASONS: Record<string, string> = {
+  expired: `<p>That connect link sat for more than 15 minutes, so it expired.</p>
+    <p>Click Connect GitHub in Commons again — the install itself is fine, it just needs a fresh link.</p>`,
+  already_used: `<p>That connect link was already used.</p>
+    <p>If the connection isn't showing in Commons, click Connect GitHub again.</p>`,
+  not_allowed: `<p>You're not a member of the workspace that link was made for.</p>`,
+  unknown_state: NO_STATE_BODY,
+  unknown_workspace: `<p>That workspace no longer exists.</p>`,
+};
+
+/** A plain, self-contained page: this is the one screen of Commons that has to work in any browser. */
+function setupPage(title: string, body: string): Response {
+  return new Response(
+    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+     <title>${escapeHtml(title)} · Commons</title><style>
+     :root{color-scheme:light dark}
+     body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f3f0e8;color:#26251e;
+       font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:24px}
+     main{max-width:26rem;background:#fbf9f4;border:1px solid #d8d3c4;border-radius:12px;padding:28px 30px}
+     h1{margin:0 0 12px;font-size:19px;letter-spacing:-.01em}
+     p{margin:0 0 12px;color:#5c5a4f} p:last-child{margin-bottom:0} strong{color:#26251e}
+     @media (prefers-color-scheme:dark){body{background:#1a1b17;color:#edebe0}
+       main{background:#21221d;border-color:#363730} p{color:#a3a195} strong{color:#edebe0}}
+     </style></head><body><main><h1>${escapeHtml(title)}</h1>${body}</main></body></html>`,
+    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
+  );
+}
 
 /** Constant-time compare of GitHub's sha256 HMAC over the raw body. */
 async function verifyGithubSignature(secret: string, body: string, header: string): Promise<boolean> {

@@ -692,6 +692,45 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [devStatus.state, frames.length]);
 
+  // Phase 2: a deploy landed, so the canvas is showing pictures of the old
+  // build. Recapture from the deployed preview URL — unlike the effect above,
+  // this needs no local dev server, which is the whole point: the person who
+  // notices the change first is rarely the person running the app.
+  const claimSnapshotRefresh = useMutation(api.projects.claimSnapshotRefresh);
+  useEffect(() => {
+    if (!project?.snapshotsStaleAt || !window.commons?.captureSnapshot) return;
+    void (async () => {
+      // Whoever gets here first takes the job; the rest bail.
+      const claim = await claimSnapshotRefresh({
+        projectId: project._id,
+        userId: me._id,
+        sessionToken: sessionToken(),
+      });
+      if (!claim.claimed) return;
+      const base = claim.previewUrl.replace(/\/+$/, "");
+      for (const frame of frames.filter((f) => f.kind === "route")) {
+        try {
+          const png = await window.commons.captureSnapshot(`${base}${frame.routePath ?? "/"}`, {
+            width: frame.width,
+            height: frame.height,
+          });
+          if (!png) continue;
+          const uploadUrl = await generateUploadUrl();
+          const res = await fetch(uploadUrl, {
+            method: "POST",
+            headers: { "Content-Type": "image/png" },
+            body: new Blob([png as BlobPart], { type: "image/png" }),
+          });
+          const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+          await saveFrameSnapshot({ frameId: frame._id, storageId, userId: me._id, sessionToken: sessionToken() });
+        } catch (err) {
+          console.warn("post-deploy snapshot failed", frame.title, err);
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.snapshotsStaleAt]);
+
   /**
    * SNAP-2: before/after images on draft results. "Before" is the current
    * preview at the session's route; "after" is the draft branch's deploy

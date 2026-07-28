@@ -143,7 +143,17 @@ export const mine = query({
         const profiles = (await Promise.all(members.map((row) => ctx.db.get(row.userId)))).filter(
           (u): u is Doc<"users"> => u !== null
         );
-        return { ...workspace, members: profiles };
+        // GitHub accounts feeding deploys into this workspace. Carried here so
+        // the popover doesn't need a query per workspace row.
+        const githubAccounts = (
+          await ctx.db
+            .query("githubInstallations")
+            .withIndex("by_workspace", (q) => q.eq("workspaceId", workspace._id))
+            .collect()
+        )
+          .filter((row) => !row.removedAt)
+          .map((row) => ({ _id: row._id, accountLogin: row.accountLogin }));
+        return { ...workspace, members: profiles, githubAccounts };
       })
     );
     return workspaces

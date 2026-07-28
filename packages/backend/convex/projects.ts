@@ -203,6 +203,34 @@ export const saveFrameSnapshot = mutation({
   },
 });
 
+/**
+ * Phase 2: a deploy landed, so every snapshot now predates the running app.
+ * The webhook can't take pictures — it has no browser — so the work falls to
+ * whichever desktop client has the project open.
+ *
+ * Every open client sees the same staleness flag at the same moment, so this
+ * hands out the job exactly once: the mutation is a transaction, so only the
+ * first caller sees a non-null snapshotsStaleAt and clears it. Everyone else
+ * gets false and does nothing.
+ *
+ * If the winner then quits mid-capture, the snapshots simply stay old until
+ * the next deploy. That's the deliberate trade: a stale picture is a smaller
+ * harm than every open client capturing the same routes at once.
+ */
+export const claimSnapshotRefresh = mutation({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const project = await accessibleProject(ctx, args.projectId, await resolveViewer(ctx, args));
+    if (!project?.snapshotsStaleAt || !project.previewUrl) return { claimed: false as const };
+    await ctx.db.patch(project._id, { snapshotsStaleAt: undefined });
+    return { claimed: true as const, previewUrl: project.previewUrl };
+  },
+});
+
 // Web share link: mint/revoke the read-only /p/<token> page (creator-only).
 export const setShareToken = mutation({
   args: {

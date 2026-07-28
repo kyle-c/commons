@@ -271,7 +271,20 @@ export default defineSchema({
     removedAt: v.optional(v.number()),
   })
     .index("by_installation", ["installationId"])
-    .index("by_account", ["accountLogin"]),
+    .index("by_account", ["accountLogin"])
+    .index("by_workspace", ["workspaceId"]),
+
+  // Short-lived proof that the person GitHub is about to send back to us is
+  // the same person who clicked Connect, for the workspace they clicked it in.
+  // Without this, anyone could POST an installation_id and adopt someone
+  // else's repos. Single-use and expiring, like any OAuth state parameter.
+  githubConnectStates: defineTable({
+    token: v.string(),
+    workspaceId: v.id("workspaces"),
+    userId: v.id("users"),
+    expiresAt: v.number(),
+    usedAt: v.optional(v.number()),
+  }).index("by_token", ["token"]),
 
   // Observed (branch -> preview URL) pairs from deployment_status events.
   // Two or more samples let us infer the {branch} pattern, and we keep them
