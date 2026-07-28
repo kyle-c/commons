@@ -1,6 +1,6 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireViewer } from "./access";
+import { resolveViewer } from "./access";
 
 const WEEK = 7 * 24 * 60 * 60 * 1000;
 
@@ -15,7 +15,10 @@ export const pilot = query({
   args: { userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     // Full-table scans over every user, thread, message and error: never open.
-    await requireViewer(ctx, args);
+    // Fails soft, not loud: a throwing query takes the whole render down
+    // with it, and a client whose token hasn't loaded yet would white-screen
+    // instead of showing an empty panel. Returning nothing leaks nothing.
+    if (!(await resolveViewer(ctx, args))) return null;
     const now = Date.now();
     const weekAgo = now - WEEK;
     const priorWeekAgo = now - 2 * WEEK;

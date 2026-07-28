@@ -14,7 +14,11 @@ import { requireViewer, resolveViewer } from "./access";
 export const get = query({
   args: { userId: v.id("users"), viewerId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
   handler: async (ctx, { userId, viewerId, sessionToken }) => {
-    const viewer = await requireViewer(ctx, { userId: viewerId, sessionToken });
+    const viewer = await resolveViewer(ctx, { userId: viewerId, sessionToken });
+    // Fails soft, not loud: a throwing query takes the whole render down
+    // with it, and a client whose token hasn't loaded yet would white-screen
+    // instead of showing an empty panel. Returning nothing leaks nothing.
+    if (!viewer) return null;
     const user = await ctx.db.get(userId);
     if (!user) return null;
     if (viewer === userId) return user;

@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { requireViewer } from "./access";
+import { requireViewer, resolveViewer } from "./access";
 
 // Invite a teammate by email. Sign-in is invite-gated (see auth.completeGoogleSignIn),
 // so this is what actually opens the door; the email is a courtesy nudge.
@@ -42,7 +42,10 @@ export const create = mutation({
 export const pending = query({
   args: { userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await requireViewer(ctx, args);
+    // Fails soft, not loud: a throwing query takes the whole render down
+    // with it, and a client whose token hasn't loaded yet would white-screen
+    // instead of showing an empty panel. Returning nothing leaks nothing.
+    if (!(await resolveViewer(ctx, args))) return [];
     const invites = await ctx.db.query("invites").collect();
     return await Promise.all(
       invites

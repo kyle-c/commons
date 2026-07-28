@@ -364,7 +364,11 @@ export const threadsForProject = query({
 export const inbox = query({
   args: { userId: v.id("users"), sessionToken: v.optional(v.string()) },
   handler: async (ctx, viewerArgs) => {
-    const userId = await requireViewer(ctx, viewerArgs);
+    // Fails soft, not loud: a throwing query takes the whole render down
+    // with it, and a client whose token hasn't loaded yet would white-screen
+    // instead of showing an empty panel. Returning nothing leaks nothing.
+    const userId = await resolveViewer(ctx, viewerArgs);
+    if (!userId) return [];
     const items = await ctx.db
       .query("notifications")
       .withIndex("by_user", (q) => q.eq("userId", userId))
