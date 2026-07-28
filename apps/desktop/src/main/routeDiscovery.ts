@@ -190,6 +190,37 @@ async function detectBrandColors(repoPath: string): Promise<string[] | undefined
   return second ? [`#${first.hex}`, `#${second.hex}`] : [`#${first.hex}`];
 }
 
+/**
+ * Does this repo deploy on Vercel, and what is the project called?
+ *
+ * Deliberately does not return a branch-preview pattern. The URL is
+ * `<project>-git-<branch>-<scope>.vercel.app`, and the scope is the team slug,
+ * which appears in neither vercel.json nor .vercel/project.json (that file has
+ * projectId and orgId — opaque ids — and only sometimes projectName). Guessing
+ * the scope would produce a URL that 404s, which is worse than an empty field.
+ * So this feeds a placeholder, and the GitHub App learns the real pattern from
+ * observed deploys.
+ */
+async function detectVercel(repoPath: string): Promise<{ projectName?: string } | undefined> {
+  let found = false;
+  let projectName: string | undefined;
+  try {
+    await fs.access(path.join(repoPath, "vercel.json"));
+    found = true;
+  } catch {
+    /* not there; .vercel may still be */
+  }
+  try {
+    const raw = await fs.readFile(path.join(repoPath, ".vercel", "project.json"), "utf8");
+    found = true;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.projectName === "string") projectName = parsed.projectName;
+  } catch {
+    /* absent or unparseable — the vercel.json signal may still stand */
+  }
+  return found ? { projectName } : undefined;
+}
+
 /** origin URL from .git/config — no git binary needed. */
 async function detectGitRemote(repoPath: string): Promise<string | undefined> {
   try {
@@ -364,5 +395,6 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
     routes,
     gitRemote: await detectGitRemote(repoPath),
     brandColors: await detectBrandColors(repoPath),
+    vercel: await detectVercel(repoPath),
   };
 }

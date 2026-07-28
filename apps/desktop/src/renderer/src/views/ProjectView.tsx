@@ -617,6 +617,24 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   }, [switcherOpen, repoPath]);
   const [cloning, setCloning] = useState(false);
 
+  // If the repo deploys on Vercel, use its project name to make the empty
+  // draft-previews field self-explanatory. A hint for the placeholder only —
+  // the team slug isn't knowable locally, so nothing is ever filled in for you.
+  const [vercelProject, setVercelProject] = useState<string | null>(null);
+  useEffect(() => {
+    if (!repoPath || !window.commons?.inspectRepo) return;
+    let cancelled = false;
+    void window.commons
+      .inspectRepo(repoPath)
+      .then((inspection) => {
+        if (!cancelled) setVercelProject(inspection.vercel?.projectName ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [repoPath]);
+
   // Ambient git: drift is visible on the chip; a fast-forward pull onto a
   // clean tree can't conflict, so that case syncs automatically. Dirty or
   // diverged trees get a manual button instead — Commons never risks WIP.
@@ -1380,7 +1398,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           <UrlSettingBody
             label="Draft previews"
             hint={"Gives every agent draft its own live link anyone can open before it ships. Paste your host's pattern, with {branch} where the draft name goes."}
-            placeholder={"https://myapp-git-{branch}-team.vercel.app"}
+            placeholder={`https://${vercelProject ?? "myapp"}-git-{branch}-team.vercel.app`}
             value={project.branchPreviewPattern}
             learned={project.branchPatternSource === "github"}
             learnedAt={project.lastDeployAt}

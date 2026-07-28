@@ -39,6 +39,48 @@ async function requireProject(
   return { project, viewerId };
 }
 
+/**
+ * What this team's curation has taught us about their voice.
+ *
+ * annotationEdits has been recording every approve / edit / reject since
+ * Narrate shipped, and nothing read it — the corpus accumulated while each run
+ * started from the same cold prompt. These rows are the highest-signal thing
+ * available about how this particular team writes: an edit is a correction in
+ * their own words, a reject is a whole category they don't want.
+ *
+ * Returned newest-first and capped, because this becomes prompt context and
+ * the point is a few sharp examples, not an archive.
+ */
+export const voiceCorpus = query({
+  args: { projectId: v.id("projects"), ...viewerArgs },
+  handler: async (ctx, args) => {
+    await requireProject(ctx, args.projectId, args);
+    const rows = await ctx.db
+      .query("annotationEdits")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .order("desc")
+      .take(120);
+
+    const trim = (text: string) => (text.length > 400 ? `${text.slice(0, 400)}…` : text);
+    const edits = rows
+      .filter((r) => r.action === "edit" && r.after.trim() && r.after !== r.before)
+      .slice(0, 12)
+      .map((r) => ({ action: "edit" as const, before: trim(r.before), after: trim(r.after), reason: r.reason }));
+    const rejects = rows
+      .filter((r) => r.action === "reject")
+      .slice(0, 6)
+      .map((r) => ({ action: "reject" as const, before: trim(r.before), after: "", reason: r.reason }));
+    // Approved untouched: the shape that already works, worth keeping in view
+    // so the model isn't only shown its mistakes.
+    const kept = rows
+      .filter((r) => r.action === "approve" && r.before === r.after)
+      .slice(0, 6)
+      .map((r) => ({ action: "approve" as const, before: trim(r.before), after: trim(r.after), reason: undefined }));
+
+    return [...edits, ...rejects, ...kept];
+  },
+});
+
 /** All annotations for a project (team view: drafts + approved), plus the latest run. */
 export const forProject = query({
   args: { projectId: v.id("projects"), ...viewerArgs },

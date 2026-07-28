@@ -29,6 +29,13 @@ export interface RepoInspection {
   gitRemote?: string;
   /** Two most prominent brand colors found in the repo's stylesheets. */
   brandColors?: string[];
+  /**
+   * Vercel deployment config found in the repo. Only ever a hint for
+   * prefilling: .vercel/project.json carries projectId/orgId and sometimes
+   * projectName, but never the team slug the branch-preview URL needs, so the
+   * pattern cannot be derived here — only suggested.
+   */
+  vercel?: { projectName?: string };
 }
 
 /** Status of the dev server Commons runs for a project. */
@@ -163,6 +170,8 @@ export interface AnnotationDraft {
 export interface AnnotationEvidence {
   threads: { id: string; frameTitle?: string; summary: string }[];
   tests: { id: string; summary: string }[];
+  /** Past curation decisions, used as voice examples (NAR-4). */
+  voice?: { action: "edit" | "reject" | "approve"; before: string; after: string; reason?: string }[];
 }
 
 export interface AnnotationGenerateRequest {

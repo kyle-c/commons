@@ -52,6 +52,13 @@ export default function NarrationPanel({ me, project, frames, threads, repoPath,
     userId: me._id,
     sessionToken: sessionToken(),
   });
+  // NAR-4: what the team's past edits taught us about their voice, fed back
+  // into the next run so each pass starts warmer than the last.
+  const voice = useQuery(api.annotations.voiceCorpus, {
+    projectId: project._id,
+    userId: me._id,
+    sessionToken: sessionToken(),
+  });
   const startRun = useMutation(api.annotations.startRun);
   const finishRun = useMutation(api.annotations.finishRun);
   const curate = useMutation(api.annotations.curate);
@@ -99,6 +106,7 @@ export default function NarrationPanel({ me, project, frames, threads, repoPath,
             (t.messages.length > 1 ? ` (+${t.messages.length - 1} replies)` : ""),
         })),
         tests: (tests ?? []).slice(0, 20).map((t) => ({ id: t._id, summary: `${t.title} (${t.status})` })),
+        voice: voice ?? [],
       };
       const result = await window.commons.generateAnnotations({
         repoPath,

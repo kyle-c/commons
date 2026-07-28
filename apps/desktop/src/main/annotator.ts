@@ -50,10 +50,43 @@ function evidenceBlock(evidence?: AnnotationEvidence): string {
     .join("\n");
 }
 
+/**
+ * Past curation, as instruction.
+ *
+ * Shown as concrete before/after pairs rather than distilled into rules: the
+ * team's edits carry their phrasing, and a rule derived from them would lose
+ * exactly the thing worth copying. Rejects are included because "don't write
+ * this kind of thing at all" is the strongest signal in the set.
+ */
+function buildVoiceSection(voice: NonNullable<AnnotationEvidence["voice"]>): string {
+  if (voice.length === 0) return "";
+  const edits = voice.filter((v) => v.action === "edit");
+  const rejects = voice.filter((v) => v.action === "reject");
+  const kept = voice.filter((v) => v.action === "approve");
+  const parts: string[] = [
+    "",
+    "How this team edits your drafts (match this voice — it matters more than the style rules above):",
+  ];
+  for (const v of edits) {
+    parts.push(`- You wrote: "${v.before}"`);
+    parts.push(`  They rewrote it to: "${v.after}"${v.reason ? ` (tagged: ${v.reason})` : ""}`);
+  }
+  if (rejects.length > 0) {
+    parts.push("", "They rejected these outright — do not write annotations like these:");
+    for (const v of rejects) parts.push(`- "${v.before}"${v.reason ? ` (tagged: ${v.reason})` : ""}`);
+  }
+  if (kept.length > 0) {
+    parts.push("", "They approved these untouched — this shape is working:");
+    for (const v of kept) parts.push(`- "${v.before}"`);
+  }
+  return parts.join("\n");
+}
+
 function buildPrompt(request: AnnotationGenerateRequest): string {
   const frames = request.frames
     .map((f) => `- ${f.title}${f.routePath ? ` (route ${f.routePath})` : ""}`)
     .join("\n");
+  const voiceSection = buildVoiceSection(request.evidence?.voice ?? []);
   return `You are the narration engine inside Commons, a design collaboration tool. Write the first draft of design annotations for the prototype in this repository ("${request.projectName}"), in the voice of the project's senior product designer explaining their own work to a stakeholder.
 
 Before writing anything, mine the project's own record for design rationale:
@@ -78,6 +111,8 @@ Grounding rules (non-negotiable):
 - Every annotation carries citations, or an empty citations array meaning inferred. Never invent a citation.
 - Citation kinds: "commit" (ref = short hash + one-line subject), "doc" (ref = path + section), "code" (ref = path + what it shows), "thread" / "test" (ref = the Commons id above).
 - When guessing at intent, prefer "the design suggests" phrasing and an empty citations array.
+
+${voiceSection}
 
 Write 2-4 annotations per screen. When you are done, output ONLY a fenced json block as the final thing in your reply:
 
