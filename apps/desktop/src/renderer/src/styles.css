@@ -522,54 +522,72 @@ textarea:focus {
 .canvas-wrap.commenting {
   cursor: crosshair;
 }
-/* Cursor trail, CSS-only: a second, brighter dot layer masked to a small
-   spotlight whose center rides two registered custom properties. The
-   transitions on those properties ARE the trail — the light eases toward
-   a point just behind the direction of travel and glides onto the cursor
-   when the hand stops. Plain masked painting; the compositor stays safe. */
-@property --glow-x {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: -400px;
-}
-@property --glow-y {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: -400px;
-}
+/* Cursor trail: a second, brighter dot layer masked to a small spotlight that
+   eases toward a point just behind the direction of travel and glides onto the
+   cursor when the hand stops. Both layers move by transform only — see the
+   note in CanvasView for why the mask center is no longer animated.
+
+   The patch: 240px square (2 × 120, and 120 = 5 × 24 so its dots stay in
+   phase with the base grid), centred on the point by the negative margin.
+   The mask is static — it never recomputes, it just rides the transform. */
 .dot-glow {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
+  width: 240px;
+  height: 240px;
+  margin: -120px 0 0 -120px;
+  overflow: hidden;
   pointer-events: none;
+  opacity: 0;
+  will-change: transform;
+  transform: translate3d(-400px, -400px, 0);
+  -webkit-mask-image: radial-gradient(
+    circle 80px at 120px 120px,
+    rgba(0, 0, 0, 0.75),
+    rgba(0, 0, 0, 0.28) 55%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    circle 80px at 120px 120px,
+    rgba(0, 0, 0, 0.75),
+    rgba(0, 0, 0, 0.28) 55%,
+    transparent 100%
+  );
+  transition:
+    opacity 260ms var(--ease-out),
+    transform 150ms ease-out;
+}
+/* Counter-translated by exactly the patch's offset, so the dots it shows stay
+   pinned to the canvas grid instead of sliding along with the spotlight.
+   Its transition must match the patch's exactly or the two drift apart
+   mid-flight and the dots visibly swim. */
+.dot-glow-field {
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* Its own top-left sits at a fixed (-120, -120) in canvas coordinates, so it
+     has to reach 120px past the far edge for the patch to stay filled when the
+     cursor is in the bottom-right corner. The slack is a multiple of 24 to
+     keep the grid in phase. */
+  width: calc(100vw + 480px);
+  height: calc(100vh + 480px);
+  will-change: transform;
+  transform: translate3d(400px, 400px, 0);
   background-image: radial-gradient(
     circle,
     color-mix(in srgb, var(--canvas-dot) 45%, var(--text-primary)) 1.9px,
     transparent 1.9px
   );
   background-size: 24px 24px;
-  -webkit-mask-image: radial-gradient(
-    circle 80px at var(--glow-x) var(--glow-y),
-    rgba(0, 0, 0, 0.75),
-    rgba(0, 0, 0, 0.28) 55%,
-    transparent 100%
-  );
-  mask-image: radial-gradient(
-    circle 80px at var(--glow-x) var(--glow-y),
-    rgba(0, 0, 0, 0.75),
-    rgba(0, 0, 0, 0.28) 55%,
-    transparent 100%
-  );
-  opacity: 0;
-  transition:
-    opacity 260ms var(--ease-out),
-    --glow-x 150ms ease-out,
-    --glow-y 150ms ease-out;
+  transition: transform 150ms ease-out;
 }
 .dot-glow.on {
   opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {
-  .dot-glow {
+  .dot-glow,
+  .dot-glow-field {
     transition: opacity 260ms var(--ease-out);
   }
 }

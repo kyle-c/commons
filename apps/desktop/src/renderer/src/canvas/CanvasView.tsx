@@ -337,22 +337,58 @@ export default function CanvasView({
   const lastCursorSend = useRef(0);
   const cursorTrailing = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
-   * Dot-grid trail, CSS-only: a masked bright-dot layer whose spotlight
-   * center is two CSS custom properties. JS writes a target just behind
-   * the direction of travel; registered-@property transitions supply the
-   * trailing motion and the glide onto a stopped cursor. No canvas, no
-   * bitmaps, no rAF — nothing here can touch the compositor's health.
+   * Dot-grid trail: a small bright-dot patch with a *static* mask, moved by
+   * transform, over a dot field that counter-translates by exactly the
+   * opposite amount.
+   *
+   * The counter-translation is the whole trick. The patch slides while the
+   * field stays put in the viewport, so the bright dots land exactly on the
+   * base grid underneath — and both layers move by transform alone, which the
+   * compositor handles without repainting either one.
+   *
+   * The earlier version animated the mask's gradient center across a
+   * full-viewport layer. That is a paint-time property, so every frame
+   * re-rastered the whole viewport; on the web build, with frames rendering
+   * alongside, that is what made it crawl.
+   *
+   * GLOW_HALF must stay a multiple of the 24px grid, or the patch's dots
+   * drift out of phase with the base grid.
    */
   const glowRef = useRef<HTMLDivElement>(null);
+  const glowFieldRef = useRef<HTMLDivElement>(null);
   const glowMeta = useRef({ x: 0, y: 0, dirX: 0, dirY: 0, mag: 0, settle: 0 as ReturnType<typeof setTimeout> | 0 });
+  // Read once, not per mousemove: both were synchronous work on a hot path.
+  const glowEnabled = useRef(localStorage.getItem("commons.dotGlow") !== "off");
+  const wrapRect = useRef<{ left: number; top: number } | null>(null);
+
+  // getBoundingClientRect on every mousemove forced a synchronous layout, with
+  // the canvas's frames and iframes in the tree. Measure on resize instead.
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const measure = () => {
+      const rect = wrap.getBoundingClientRect();
+      wrapRect.current = { left: rect.left, top: rect.top };
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(wrap);
+    window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
 
   const onCursorMove = (e: React.MouseEvent) => {
-    // Dot-grid trail: two CSS-var writes per mousemove, nothing else.
-    const wrap = wrapRef.current;
+    // Dot-grid trail: two transform writes per mousemove, nothing else.
     const glow = glowRef.current;
-    if (wrap && glow && localStorage.getItem("commons.dotGlow") !== "off") {
+    const field = glowFieldRef.current;
+    if (glow && field && glowEnabled.current) {
       const m = glowMeta.current;
-      const rect = wrap.getBoundingClientRect();
+      const rect = wrapRect.current ?? { left: 0, top: 0 };
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
       const dx = x - m.x;
@@ -368,8 +404,14 @@ export default function CanvasView({
       m.x = x;
       m.y = y;
       const norm = Math.hypot(m.dirX, m.dirY) || 1;
-      glow.style.setProperty("--glow-x", `${x - (m.dirX / norm) * m.mag}px`);
-      glow.style.setProperty("--glow-y", `${y - (m.dirY / norm) * m.mag}px`);
+      // Aim the patch just behind the direction of travel; the transition
+      // does the trailing. The field takes the exact negative so the dots it
+      // shows stay pinned to the grid rather than sliding with the patch.
+      const place = (tx: number, ty: number) => {
+        glow.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+        field.style.transform = `translate3d(${-tx}px, ${-ty}px, 0)`;
+      };
+      place(x - (m.dirX / norm) * m.mag, y - (m.dirY / norm) * m.mag);
       const overEmpty = !(e.target as HTMLElement).closest(
         ".frame, .pin, .canvas-toolbar, .minimap, .frame-notes, .frame-farlabel"
       );
@@ -378,8 +420,7 @@ export default function CanvasView({
       if (m.settle) clearTimeout(m.settle);
       m.settle = setTimeout(() => {
         m.mag = 0;
-        glow.style.setProperty("--glow-x", `${m.x}px`);
-        glow.style.setProperty("--glow-y", `${m.y}px`);
+        place(m.x, m.y);
       }, 130);
     }
     const send = (clientX: number, clientY: number) => {
@@ -842,7 +883,9 @@ export default function CanvasView({
       onMouseMove={onCursorMove}
       onMouseLeave={() => glowRef.current?.classList.remove("on")}
     >
-      <div ref={glowRef} className="dot-glow" aria-hidden />
+      <div ref={glowRef} className="dot-glow" aria-hidden>
+        <div ref={glowFieldRef} className="dot-glow-field" />
+      </div>
       <div
         className={`canvas-stage ${layoutAnim ? "layout-anim" : ""}`}
         style={{ transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.scale})` }}

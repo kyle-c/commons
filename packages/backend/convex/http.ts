@@ -956,18 +956,27 @@ function sharePageHtml(data: {
   #stage-wrap.dragging { cursor: grabbing; }
   /* Cursor trail: brighter dots masked to a small spotlight that eases just
      behind the pointer — the same CSS-only mechanism as the app. */
-  @property --glow-x { syntax: "<length>"; inherits: false; initial-value: -400px; }
-  @property --glow-y { syntax: "<length>"; inherits: false; initial-value: -400px; }
-  #dot-glow { position: absolute; inset: 0; pointer-events: none;
+  /* A small patch with a STATIC mask, moved by transform, over a dot field
+     counter-translated by exactly the opposite amount: the patch slides while
+     the field stays put, so its dots land on the grid underneath and neither
+     layer ever repaints. Animating the mask center instead re-rastered the
+     whole viewport every frame. 120 = 5 x 24 keeps the dots in phase. */
+  #dot-glow { position: absolute; left: 0; top: 0; width: 240px; height: 240px;
+              margin: -120px 0 0 -120px; overflow: hidden; pointer-events: none;
+              opacity: 0; will-change: transform; transform: translate3d(-400px,-400px,0);
+              -webkit-mask-image: radial-gradient(circle 80px at 120px 120px,
+                rgba(0,0,0,0.75), rgba(0,0,0,0.28) 55%, transparent 100%);
+              mask-image: radial-gradient(circle 80px at 120px 120px,
+                rgba(0,0,0,0.75), rgba(0,0,0,0.28) 55%, transparent 100%);
+              transition: opacity 260ms ease-out, transform 150ms ease-out; }
+  #dot-glow-field { position: absolute; left: 0; top: 0;
+              width: calc(100vw + 480px); height: calc(100vh + 480px);
+              will-change: transform; transform: translate3d(400px,400px,0);
               background-image: radial-gradient(circle, #8e8d80 1.9px, transparent 1.9px);
-              background-size: 24px 24px;
-              -webkit-mask-image: radial-gradient(circle 80px at var(--glow-x) var(--glow-y),
-                rgba(0,0,0,0.75), rgba(0,0,0,0.28) 55%, transparent 100%);
-              mask-image: radial-gradient(circle 80px at var(--glow-x) var(--glow-y),
-                rgba(0,0,0,0.75), rgba(0,0,0,0.28) 55%, transparent 100%);
-              opacity: 0; transition: opacity 260ms ease-out, --glow-x 150ms ease-out, --glow-y 150ms ease-out; }
+              background-size: 24px 24px; transition: transform 150ms ease-out; }
   #dot-glow.on { opacity: 1; }
-  @media (prefers-reduced-motion: reduce) { #dot-glow { transition: opacity 260ms ease-out; } }
+  @media (prefers-reduced-motion: reduce) {
+    #dot-glow, #dot-glow-field { transition: opacity 260ms ease-out; } }
   #stage { position: relative; transform-origin: 0 0; }
   /* Bottom toolbar, app-style. */
   #toolbar { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex;
@@ -1041,7 +1050,7 @@ function sharePageHtml(data: {
   <button class="cbtn" id="comment-mode" title="Then click anywhere on a screen to leave a comment">💬 Comment</button>
   <a id="open-app" href="#">Open in Commons →</a>
 </header>
-<div id="stage-wrap"><div id="dot-glow" aria-hidden></div><div id="stage"></div></div>
+<div id="stage-wrap"><div id="dot-glow" aria-hidden><div id="dot-glow-field"></div></div><div id="stage"></div></div>
 <div id="proto"><div id="routes"></div><iframe id="proto-frame" title="Prototype"></iframe></div>
 <div id="toolbar">
   <button id="zoom-out" title="Zoom out">−</button>
@@ -1123,10 +1132,20 @@ addEventListener("resize", fit);
 // Dot trail: the light rides just behind the direction of travel and
 // glides onto the cursor on stop — pure CSS transitions, two var writes.
 const glow = document.getElementById("dot-glow");
+const glowField = document.getElementById("dot-glow-field");
 const gm = { x: 0, y: 0, dx: 0, dy: 0, mag: 0, settle: 0 };
+// Measured on resize, not per move: getBoundingClientRect on every mousemove
+// forces a synchronous layout of a stage full of frames.
+let wrapRect = wrap.getBoundingClientRect();
+const remeasure = () => { wrapRect = wrap.getBoundingClientRect(); };
+window.addEventListener("resize", remeasure);
+window.addEventListener("scroll", remeasure, true);
+const placeGlow = (tx, ty) => {
+  glow.style.transform = "translate3d(" + tx + "px," + ty + "px,0)";
+  glowField.style.transform = "translate3d(" + (-tx) + "px," + (-ty) + "px,0)";
+};
 wrap.addEventListener("mousemove", (e) => {
-  const r = wrap.getBoundingClientRect();
-  const x = e.clientX - r.left, y = e.clientY - r.top;
+  const x = e.clientX - wrapRect.left, y = e.clientY - wrapRect.top;
   const ddx = x - gm.x, ddy = y - gm.y;
   const dist = Math.hypot(ddx, ddy);
   if (dist > 0.5) {
@@ -1136,14 +1155,12 @@ wrap.addEventListener("mousemove", (e) => {
   }
   gm.x = x; gm.y = y;
   const n = Math.hypot(gm.dx, gm.dy) || 1;
-  glow.style.setProperty("--glow-x", (x - (gm.dx / n) * gm.mag) + "px");
-  glow.style.setProperty("--glow-y", (y - (gm.dy / n) * gm.mag) + "px");
+  placeGlow(x - (gm.dx / n) * gm.mag, y - (gm.dy / n) * gm.mag);
   glow.classList.toggle("on", !e.target.closest(".frame, .pin, .note"));
   clearTimeout(gm.settle);
   gm.settle = setTimeout(() => {
     gm.mag = 0;
-    glow.style.setProperty("--glow-x", gm.x + "px");
-    glow.style.setProperty("--glow-y", gm.y + "px");
+    placeGlow(gm.x, gm.y);
   }, 130);
 });
 wrap.addEventListener("mouseleave", () => glow.classList.remove("on"));
