@@ -116,6 +116,17 @@ export default defineSchema({
     // "https://myapp-git-{branch}-team.vercel.app" — lets everyone see an
     // agent draft live before it merges (PRJ-14).
     branchPreviewPattern: v.optional(v.string()),
+    // Where previewUrl / branchPreviewPattern came from. "manual" is a human
+    // decision and the GitHub listener never overwrites it; "github" was
+    // learned from deployment_status events and may be refined as more
+    // deploys arrive. Absent = manual (every pre-GitHub-App row).
+    previewSource: v.optional(v.union(v.literal("manual"), v.literal("github"))),
+    branchPatternSource: v.optional(v.union(v.literal("manual"), v.literal("github"))),
+    // Last successful production deploy seen for this project's repo.
+    lastDeployAt: v.optional(v.number()),
+    // Set when a deploy lands: existing snapshots now show older pixels than
+    // the deployed app. A desktop client refreshes them opportunistically.
+    snapshotsStaleAt: v.optional(v.number()),
     // Two most prominent colors from the repo's stylesheets — drives the
     // project card cover.
     brandColors: v.optional(v.array(v.string())),
@@ -250,6 +261,29 @@ export default defineSchema({
 
   // Latest snapshot image per frame (SNAP-3), captured by a host whose dev
   // server is live. Powers the web share page and canvas placeholders.
+  // A GitHub App installation on an org or user account. One connect gives
+  // Commons the deployment feed for every repo the installation covers.
+  githubInstallations: defineTable({
+    installationId: v.number(),
+    accountLogin: v.string(),
+    installedBy: v.optional(v.id("users")),
+    workspaceId: v.optional(v.id("workspaces")),
+    removedAt: v.optional(v.number()),
+  })
+    .index("by_installation", ["installationId"])
+    .index("by_account", ["accountLogin"]),
+
+  // Observed (branch -> preview URL) pairs from deployment_status events.
+  // Two or more samples let us infer the {branch} pattern, and we keep them
+  // so a later sample can *disprove* a pattern we previously inferred.
+  deploymentSamples: defineTable({
+    projectId: v.id("projects"),
+    branch: v.string(),
+    url: v.string(),
+    environment: v.optional(v.string()),
+    at: v.number(),
+  }).index("by_project", ["projectId"]),
+
   frameSnapshots: defineTable({
     frameId: v.id("frames"),
     projectId: v.id("projects"),

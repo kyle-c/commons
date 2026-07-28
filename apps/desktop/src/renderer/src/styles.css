@@ -118,10 +118,15 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 16px 0 84px; /* room for traffic lights */
+  padding: 0 16px;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border-subtle);
   -webkit-app-region: drag;
+}
+/* Desktop only: clear the traffic lights. The subnav sits below them and
+   keeps the window's own inset, so both rows line up in the browser. */
+:root[data-desktop="1"] .titlebar {
+  padding-left: 84px;
 }
 .titlebar button,
 .titlebar input {

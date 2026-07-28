@@ -15,6 +15,7 @@ import type * as auth from "../auth.js";
 import type * as comments from "../comments.js";
 import type * as emails from "../emails.js";
 import type * as errors from "../errors.js";
+import type * as github from "../github.js";
 import type * as http from "../http.js";
 import type * as invites from "../invites.js";
 import type * as landing from "../landing.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   comments: typeof comments;
   emails: typeof emails;
   errors: typeof errors;
+  github: typeof github;
   http: typeof http;
   invites: typeof invites;
   landing: typeof landing;

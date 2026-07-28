@@ -21,6 +21,10 @@ import "./styles.css";
   document.head.appendChild(link);
 }
 
+// Only the desktop window has macOS traffic lights to clear; in the browser
+// that reserved inset would push the tab strip out of line with the subnav.
+document.documentElement.dataset.desktop = window.commons ? "1" : "0";
+
 initTheme();
 initErrorReporting();
 

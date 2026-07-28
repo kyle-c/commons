@@ -111,6 +111,80 @@ http.route({
   }),
 });
 
+// GitHub App webhook: Commons learns preview URLs and branch patterns by
+// watching deployments instead of asking a human to paste them. Every request
+// is HMAC-verified against GITHUB_WEBHOOK_SECRET before it is trusted.
+http.route({
+  path: "/api/github/webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const secret = process.env.GITHUB_WEBHOOK_SECRET;
+    if (!secret) return new Response("not configured", { status: 503 });
+
+    const signature = request.headers.get("x-hub-signature-256") ?? "";
+    const body = await request.text();
+    if (!(await verifyGithubSignature(secret, body, signature))) {
+      return new Response("bad signature", { status: 401 });
+    }
+
+    const event = request.headers.get("x-github-event") ?? "";
+    let payload: any;
+    try {
+      payload = JSON.parse(body);
+    } catch {
+      return new Response("bad json", { status: 400 });
+    }
+
+    if (event === "installation") {
+      const action = payload.action;
+      await ctx.runMutation(internal.github.recordInstallation, {
+        installationId: Number(payload.installation?.id ?? 0),
+        accountLogin: String(payload.installation?.account?.login ?? "unknown"),
+        removed: action === "deleted" || action === "suspend",
+      });
+      return new Response("ok");
+    }
+
+    if (event === "deployment_status") {
+      const state = payload.deployment_status?.state;
+      const url = payload.deployment_status?.environment_url ?? payload.deployment_status?.target_url;
+      if (state !== "success" || !url) return new Response("ignored");
+      const repo = payload.repository ?? {};
+      const result = await ctx.runMutation(internal.github.handleDeployment, {
+        repoUrls: [repo.html_url, repo.clone_url, repo.ssh_url, repo.full_name].filter(
+          (u: unknown): u is string => typeof u === "string" && u.length > 0
+        ),
+        branch: String(payload.deployment?.ref ?? ""),
+        defaultBranch: String(repo.default_branch ?? "main"),
+        environment: payload.deployment_status?.environment ?? payload.deployment?.environment,
+        environmentUrl: String(url),
+      });
+      return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
+    }
+
+    return new Response("ignored");
+  }),
+});
+
+/** Constant-time compare of GitHub's sha256 HMAC over the raw body. */
+async function verifyGithubSignature(secret: string, body: string, header: string): Promise<boolean> {
+  if (!header.startsWith("sha256=")) return false;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+  const expected = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const given = header.slice("sha256=".length);
+  if (given.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i);
+  return diff === 0;
+}
+
 // Guest comments from the share page — token-gated, capped, no accounts.
 http.route({
   path: "/api/p/thread",
