@@ -735,6 +735,7 @@ function sharePageHtml(data: {
     height: number;
     snapshotUrl: string | null;
   }[];
+  previewUrl?: string | null;
   threads: {
     _id: string;
     frameId?: string;
@@ -750,6 +751,7 @@ function sharePageHtml(data: {
 }): string {
   const payload = {
     name: data.name,
+    previewUrl: data.previewUrl ?? null,
     deepLink: `commons://project/${data.projectId}/canvas`,
     annotations: data.annotations ?? [],
     frames: data.frames.map((f) => ({
@@ -795,8 +797,49 @@ function sharePageHtml(data: {
   header h1 { font-size: 16px; margin: 0; }
   header .hint { color: #716f64; font-size: 12px; }
   header a { margin-left: auto; color: #45a898; text-decoration: none; font-size: 13px; }
-  #stage-wrap { overflow: auto; padding: 32px; }
+  html, body { height: 100%; overflow: hidden; }
+  /* The canvas viewport: same dot grid as the app, pan/zoom via transform. */
+  #stage-wrap { position: fixed; top: 53px; left: 0; right: 0; bottom: 0; overflow: hidden;
+                background-image: radial-gradient(circle, #3a3b33 1.2px, transparent 1.2px);
+                background-size: 24px 24px; cursor: grab; }
+  #stage-wrap.dragging { cursor: grabbing; }
+  /* Cursor trail: brighter dots masked to a small spotlight that eases just
+     behind the pointer — the same CSS-only mechanism as the app. */
+  @property --glow-x { syntax: "<length>"; inherits: false; initial-value: -400px; }
+  @property --glow-y { syntax: "<length>"; inherits: false; initial-value: -400px; }
+  #dot-glow { position: absolute; inset: 0; pointer-events: none;
+              background-image: radial-gradient(circle, #8e8d80 1.9px, transparent 1.9px);
+              background-size: 24px 24px;
+              -webkit-mask-image: radial-gradient(circle 80px at var(--glow-x) var(--glow-y),
+                rgba(0,0,0,0.75), rgba(0,0,0,0.28) 55%, transparent 100%);
+              mask-image: radial-gradient(circle 80px at var(--glow-x) var(--glow-y),
+                rgba(0,0,0,0.75), rgba(0,0,0,0.28) 55%, transparent 100%);
+              opacity: 0; transition: opacity 260ms ease-out, --glow-x 150ms ease-out, --glow-y 150ms ease-out; }
+  #dot-glow.on { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { #dot-glow { transition: opacity 260ms ease-out; } }
   #stage { position: relative; transform-origin: 0 0; }
+  /* Bottom toolbar, app-style. */
+  #toolbar { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex;
+             align-items: center; gap: 2px; background: #21221d; border: 1px solid #2a2b24;
+             border-radius: 12px; padding: 5px 8px; z-index: 6; }
+  #toolbar button { background: none; border: none; color: #a3a195; font: inherit; padding: 5px 10px;
+                    border-radius: 8px; cursor: pointer; }
+  #toolbar button:hover { color: #edebe0; background: #2b2c25; }
+  #toolbar .pct { color: #716f64; font-size: 12px; min-width: 42px; text-align: center; }
+  /* Canvas / Prototype switcher. */
+  .seg { display: flex; border: 1px solid #2a2b24; border-radius: 8px; overflow: hidden; }
+  .seg button { background: none; border: none; color: #a3a195; padding: 5px 12px; font: inherit; cursor: pointer; }
+  .seg button.on { background: #2b2c25; color: #edebe0; }
+  /* Prototype mode: route list + live app. */
+  #proto { position: fixed; top: 53px; left: 0; right: 0; bottom: 0; display: none; z-index: 4; background: #1a1b17; }
+  #proto.open { display: flex; }
+  #routes { width: 220px; flex: none; border-right: 1px solid #2a2b24; overflow-y: auto; padding: 8px 0; }
+  #routes button { display: flex; justify-content: space-between; gap: 8px; width: 100%; background: none;
+                   border: none; color: #a3a195; font: inherit; font-size: 13px; text-align: left;
+                   padding: 8px 14px; cursor: pointer; }
+  #routes button.on { background: #21221d; color: #edebe0; }
+  #routes button span.r { color: #716f64; font-family: ui-monospace, monospace; font-size: 11px; }
+  #proto iframe { border: none; flex: 1; background: #fff; }
   .frame { position: absolute; background: #21221d; border: 1px solid #2a2b24; border-radius: 8px; overflow: hidden; }
   .frame img { display: block; width: 100%; height: calc(100% - 26px); object-fit: cover; object-position: top; background: #fff; }
   .frame .ph { display: flex; align-items: center; justify-content: center; height: calc(100% - 26px);
@@ -814,7 +857,7 @@ function sharePageHtml(data: {
   #panel .who { font-weight: 600; font-size: 12px; }
   #panel .who small { color: #716f64; font-weight: 400; margin-left: 6px; }
   #panel .close { float: right; background: none; border: none; color: #a3a195; cursor: pointer; font-size: 14px; }
-  footer { padding: 10px 20px 24px; color: #55555c; font-size: 12px; }
+  footer { position: fixed; right: 16px; bottom: 16px; z-index: 6; color: #55555c; font-size: 12px; }
   .cbtn { background: #2b2c25; border: 1px solid #46473d; color: #edebe0; border-radius: 8px;
           padding: 6px 12px; font: inherit; cursor: pointer; margin-left: 16px; }
   .cbtn.on { background: #45a898; border-color: #45a898; color: #fff; }
@@ -828,7 +871,8 @@ function sharePageHtml(data: {
           border-radius: 8px; padding: 10px 12px; color: #a3a195; font-size: 13px; line-height: 1.45; z-index: 2; }
   .note .inf { display: inline-block; margin-left: 8px; padding: 0 8px; border: 1px dashed #8a6d2f; border-radius: 999px;
           color: #d9a03f; font-size: 10px; }
-  #flow-notes { max-width: 860px; margin: 8px 20px 0; padding: 14px 16px; background: #21221d;
+  #flow-notes { position: fixed; left: 16px; bottom: 16px; z-index: 6; max-width: 380px;
+          max-height: 38vh; overflow-y: auto; padding: 14px 16px; background: #21221d;
           border: 1px solid #2a2b24; border-radius: 12px; }
   #flow-notes h2 { font-size: 13px; margin: 0 0 8px; color: #a3a195; }
   #flow-notes .fn { margin: 0 0 8px; color: #c9c9cf; font-size: 13px; line-height: 1.5; }
@@ -838,10 +882,22 @@ function sharePageHtml(data: {
 <header>
   <h1 id="title"></h1>
   <span class="hint" id="counts"></span>
+  <div class="seg" id="view-seg" style="display:none">
+    <button id="seg-canvas" class="on">Canvas</button>
+    <button id="seg-proto">Prototype</button>
+  </div>
+  <button class="cbtn" id="appearance" style="display:none" title="Flip the app between light and dark">☀︎</button>
   <button class="cbtn" id="comment-mode" title="Then click anywhere on a screen to leave a comment">💬 Comment</button>
   <a id="open-app" href="#">Open in Commons →</a>
 </header>
-<div id="stage-wrap"><div id="stage"></div></div>
+<div id="stage-wrap"><div id="dot-glow" aria-hidden></div><div id="stage"></div></div>
+<div id="proto"><div id="routes"></div><iframe id="proto-frame" title="Prototype"></iframe></div>
+<div id="toolbar">
+  <button id="zoom-out" title="Zoom out">−</button>
+  <span class="pct" id="zoom-pct">100%</span>
+  <button id="zoom-in" title="Zoom in">+</button>
+  <button id="fit" title="Fit everything">Fit</button>
+</div>
 <div id="flow-notes" style="display:none"></div>
 <div id="panel"></div>
 <footer>Read-only view shared from Commons · snapshots update as the team works</footer>
@@ -864,13 +920,123 @@ const maxY = Math.max(...DATA.frames.map((f) => f.y + f.h + HEADER), 600) + pad 
 const stage = document.getElementById("stage");
 stage.style.width = maxX - minX + "px";
 stage.style.height = maxY - minY + "px";
-function fit() {
-  const avail = document.getElementById("stage-wrap").clientWidth - 64;
-  const scale = Math.min(1, avail / (maxX - minX));
-  stage.style.transform = "scale(" + scale + ")";
-  document.getElementById("stage-wrap").style.height = (maxY - minY) * scale + 64 + "px";
+// App-style viewport: pan with wheel/drag, zoom with pinch or cmd+wheel.
+const wrap = document.getElementById("stage-wrap");
+const vp = { x: 0, y: 0, scale: 1 };
+function apply() {
+  stage.style.transform = "translate(" + vp.x + "px," + vp.y + "px) scale(" + vp.scale + ")";
+  document.getElementById("zoom-pct").textContent = Math.round(vp.scale * 100) + "%";
 }
+function fit() {
+  const w = maxX - minX, h = maxY - minY;
+  vp.scale = Math.max(0.05, Math.min((wrap.clientWidth - 80) / w, (wrap.clientHeight - 80) / h, 1));
+  vp.x = (wrap.clientWidth - w * vp.scale) / 2;
+  vp.y = (wrap.clientHeight - h * vp.scale) / 2;
+  apply();
+}
+function zoomAt(cx, cy, factor) {
+  const next = Math.max(0.05, Math.min(2, vp.scale * factor));
+  const k = next / vp.scale;
+  vp.x = cx - (cx - vp.x) * k;
+  vp.y = cy - (cy - vp.y) * k;
+  vp.scale = next;
+  apply();
+}
+wrap.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  if (e.ctrlKey || e.metaKey) {
+    const r = wrap.getBoundingClientRect();
+    zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.01));
+  } else {
+    vp.x -= e.deltaX; vp.y -= e.deltaY; apply();
+  }
+}, { passive: false });
+let drag = null;
+wrap.addEventListener("mousedown", (e) => {
+  if (commenting || e.target.closest(".frame, .pin, .note")) return;
+  drag = { x: e.clientX, y: e.clientY };
+  wrap.classList.add("dragging");
+});
+addEventListener("mousemove", (e) => {
+  if (!drag) return;
+  vp.x += e.clientX - drag.x; vp.y += e.clientY - drag.y;
+  drag = { x: e.clientX, y: e.clientY };
+  apply();
+});
+addEventListener("mouseup", () => { drag = null; wrap.classList.remove("dragging"); });
+document.getElementById("zoom-in").addEventListener("click", () => zoomAt(wrap.clientWidth / 2, wrap.clientHeight / 2, 1.25));
+document.getElementById("zoom-out").addEventListener("click", () => zoomAt(wrap.clientWidth / 2, wrap.clientHeight / 2, 0.8));
+document.getElementById("fit").addEventListener("click", fit);
 addEventListener("resize", fit);
+
+// Dot trail: the light rides just behind the direction of travel and
+// glides onto the cursor on stop — pure CSS transitions, two var writes.
+const glow = document.getElementById("dot-glow");
+const gm = { x: 0, y: 0, dx: 0, dy: 0, mag: 0, settle: 0 };
+wrap.addEventListener("mousemove", (e) => {
+  const r = wrap.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  const ddx = x - gm.x, ddy = y - gm.y;
+  const dist = Math.hypot(ddx, ddy);
+  if (dist > 0.5) {
+    gm.dx = gm.dx * 0.55 + (ddx / dist) * 0.45;
+    gm.dy = gm.dy * 0.55 + (ddy / dist) * 0.45;
+    gm.mag = Math.min(22, gm.mag * 0.6 + dist * 0.8);
+  }
+  gm.x = x; gm.y = y;
+  const n = Math.hypot(gm.dx, gm.dy) || 1;
+  glow.style.setProperty("--glow-x", (x - (gm.dx / n) * gm.mag) + "px");
+  glow.style.setProperty("--glow-y", (y - (gm.dy / n) * gm.mag) + "px");
+  glow.classList.toggle("on", !e.target.closest(".frame, .pin, .note"));
+  clearTimeout(gm.settle);
+  gm.settle = setTimeout(() => {
+    gm.mag = 0;
+    glow.style.setProperty("--glow-x", gm.x + "px");
+    glow.style.setProperty("--glow-y", gm.y + "px");
+  }, 130);
+});
+wrap.addEventListener("mouseleave", () => glow.classList.remove("on"));
+
+// Prototype mode: the live app, route by route (needs the preview link).
+if (DATA.previewUrl) {
+  document.getElementById("view-seg").style.display = "flex";
+  const routes = [];
+  const seen = new Set();
+  for (const f of DATA.frames) {
+    if (f.route && !seen.has(f.route)) { seen.add(f.route); routes.push({ title: f.title, route: f.route }); }
+  }
+  const routesEl = document.getElementById("routes");
+  const frame = document.getElementById("proto-frame");
+  let appearanceDark = false;
+  const setRoute = (r, btn) => {
+    frame.src = DATA.previewUrl.replace(/\\/+$/, "") + r;
+    for (const b of routesEl.children) b.classList.toggle("on", b === btn);
+  };
+  routes.forEach((r, i) => {
+    const b = document.createElement("button");
+    b.innerHTML = "<span>" + esc(r.title) + "</span><span class=r>" + esc(r.route) + "</span>";
+    b.addEventListener("click", () => setRoute(r.route, b));
+    routesEl.appendChild(b);
+    if (i === 0) setRoute(r.route, b);
+  });
+  const setMode = (proto) => {
+    document.getElementById("proto").classList.toggle("open", proto);
+    const fn = document.getElementById("flow-notes");
+    if (fn.innerHTML) fn.style.display = proto ? "none" : "block";
+    document.getElementById("toolbar").style.display = proto ? "none" : "flex";
+    document.getElementById("appearance").style.display = proto ? "" : "none";
+    document.getElementById("comment-mode").style.display = proto ? "none" : "";
+    document.getElementById("seg-canvas").classList.toggle("on", !proto);
+    document.getElementById("seg-proto").classList.toggle("on", proto);
+  };
+  document.getElementById("seg-canvas").addEventListener("click", () => setMode(false));
+  document.getElementById("seg-proto").addEventListener("click", () => setMode(true));
+  document.getElementById("appearance").addEventListener("click", (e) => {
+    appearanceDark = !appearanceDark;
+    frame.style.colorScheme = appearanceDark ? "dark" : "light";
+    e.currentTarget.textContent = appearanceDark ? "☾" : "☀︎";
+  });
+}
 
 const frameById = {};
 for (const f of DATA.frames) {

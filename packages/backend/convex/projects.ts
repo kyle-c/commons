@@ -345,6 +345,7 @@ export const sharePageData = internalQuery({
     return {
       name: project.name,
       projectId: project._id,
+      previewUrl: project.previewUrl ?? null,
       frames: framesWithSnapshots,
       threads: threadsWithMessages,
       annotations,
