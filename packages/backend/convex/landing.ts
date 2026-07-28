@@ -10,9 +10,13 @@
  */
 
 const APP_URL = "/app";
-const DOWNLOAD_URL = "https://github.com/kyle-c/commons/releases/latest";
+// Stable URL, resolved per request against the published release (see the
+// /download route). Never hard-code a versioned artifact here: the filename
+// changes every release, and updating this by hand is a step that gets missed.
+const DOWNLOAD_URL = "/download";
 
-export function landingHtml(): string {
+export function landingHtml(version?: string): string {
+  const buildLabel = version ? `Version ${version} · Apple silicon` : "Apple silicon";
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -284,7 +288,7 @@ export function landingHtml(): string {
       <a class="btn primary lg" href="${APP_URL}">Open Commons in your browser</a>
       <a class="btn ghost lg" href="${DOWNLOAD_URL}">Download for Mac</a>
     </div>
-    <p class="fine">Free while in preview. Sign in with Google or an email link, no invite needed.</p>
+    <p class="fine">Free while in preview. Sign in with Google or an email link, no invite needed. ${buildLabel}.</p>
 
     <div class="hero-shot reveal">
       <div class="shot big">

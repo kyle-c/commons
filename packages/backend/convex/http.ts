@@ -11,10 +11,45 @@ const http = httpRouter();
 http.route({
   path: "/",
   method: "GET",
-  handler: httpAction(async () => {
-    return new Response(landingHtml(), {
+  handler: httpAction(async (ctx) => {
+    // The page shows which build /download will hand you, so the claim on the
+    // button is checkable rather than a promise.
+    const release = await ctx.runQuery(internal.updates.latest, {});
+    return new Response(landingHtml(release?.version), {
       status: 200,
       headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" },
+    });
+  }),
+});
+
+/**
+ * One stable download URL that always points at the current DMG.
+ *
+ * The artifact filename carries its version, so nothing static can link to
+ * "the latest" — and hand-editing the landing page each release is exactly
+ * the kind of step that gets forgotten. This reads the same record the
+ * auto-updater uses, so the website and the update feed can never disagree
+ * about what the current build is.
+ */
+http.route({
+  path: "/download",
+  method: "GET",
+  handler: httpAction(async (ctx) => {
+    const release = await ctx.runQuery(internal.updates.latest, {});
+    const dmg = release?.files.find((f) => f.name.endsWith(".dmg"));
+    const url = dmg ? await ctx.storage.getUrl(dmg.storageId) : null;
+    // Nothing published yet (or storage lost the file): send people to the
+    // releases page rather than a dead end.
+    if (!url) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "https://github.com/kyle-c/commons/releases/latest" },
+      });
+    }
+    return new Response(null, {
+      status: 302,
+      // no-store: this URL's whole job is to be re-resolved every time.
+      headers: { Location: url, "Cache-Control": "no-store" },
     });
   }),
 });
