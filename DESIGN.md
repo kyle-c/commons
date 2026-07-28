@@ -157,9 +157,28 @@ as broken. Empty states are persona-aware and name the action that fills them.
 
 ## Web surfaces (share pages, tester harness, reports)
 
-Self-contained inline CSS mirroring the app's dark palette by value (#101012 canvas,
-#18181b panels, #2a2a2f borders, #7c9cf5 links). Same copy voice. Read-only surfaces say
-who they're from ("shared from Commons") and route back via deep link.
+Self-contained inline CSS mirroring the app's dark palette by value (#1a1b17 canvas,
+#21221d panels, #2a2b24 borders, #45a898 accent and links, Georgia-stack serif page
+headings). Same copy voice. Read-only surfaces say who they're from ("shared from
+Commons") and route back via deep link.
+
+The share page is not a printout: it carries the canvas controls people expect from the
+app. Pan by drag or wheel, zoom by pinch or the toolbar (with Fit), the same dot grid
+with the CSS cursor trail, and a Canvas/Prototype switcher when the project has a
+preview link, including the route list and the light/dark appearance flip. Narrate flow
+notes and the provenance footer float as overlays rather than pushing the canvas down.
+
+## Marketing surface (trycommons.app)
+
+The only place Commons leads with light mode. Paper (#f3f0e8) and panels (#fbf9f4) under
+ink (#26251e), deep teal accent (#1f7a6e) for contrast on paper, serif display at every
+heading level. Product imagery is dark, so the page reads calm and the app reads focused,
+which is the same figure/ground logic the app uses between chrome and canvas.
+
+Rules that keep it honest: no external fonts, scripts, or images (it renders instantly
+and survives any CSP), product visuals are drawn in CSS rather than faked in a mockup
+tool, and claims map to shipped behaviour. Motion is one gentle reveal on first sight and
+nothing else, disabled under reduced motion.
 
 ## Anti-patterns (audit-enforced)
 
