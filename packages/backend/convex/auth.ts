@@ -1,4 +1,5 @@
 import { internalMutation, mutation, query } from "./_generated/server";
+import { googleCallbackUrl, siteUrl } from "./siteUrl";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
@@ -51,7 +52,7 @@ export const start = mutation({
     await ctx.db.insert("authSessions", { state, status: "pending", expiresAt: now + AUTH_SESSION_TTL_MS, linkUserId });
     const params = new URLSearchParams({
       client_id: clientId,
-      redirect_uri: `${process.env.CONVEX_SITE_URL}/auth/google/callback`,
+      redirect_uri: googleCallbackUrl(),
       response_type: "code",
       scope: "openid email profile",
       state,
@@ -104,7 +105,7 @@ export const startEmailSignIn = mutation({
     });
     await ctx.scheduler.runAfter(0, internal.emails.sendMagicLinkEmail, {
       email,
-      link: `${process.env.CONVEX_SITE_URL}/auth/email/callback?token=${emailToken}`,
+      link: `${siteUrl()}/auth/email/callback?token=${emailToken}`,
     });
     return { ok: true as const, state };
   },

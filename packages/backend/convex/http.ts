@@ -1,9 +1,23 @@
 import { httpRouter } from "convex/server";
+import { googleCallbackUrl } from "./siteUrl";
+import { landingHtml } from "./landing";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { buildAuthCallbackUrl } from "@commons/shared";
 
 const http = httpRouter();
+
+// trycommons.app lands here: the marketing page at the site root.
+http.route({
+  path: "/",
+  method: "GET",
+  handler: httpAction(async () => {
+    return new Response(landingHtml(), {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" },
+    });
+  }),
+});
 
 // Google's authorization-code redirect. Exchanges the code, records the result
 // on the authSession, then bounces the browser back into the app via the
@@ -31,7 +45,7 @@ http.route({
         client_secret: process.env.GOOGLE_CLIENT_SECRET!,
         code,
         grant_type: "authorization_code",
-        redirect_uri: `${process.env.CONVEX_SITE_URL}/auth/google/callback`,
+        redirect_uri: googleCallbackUrl(),
       }),
     });
     if (!tokenRes.ok) {
