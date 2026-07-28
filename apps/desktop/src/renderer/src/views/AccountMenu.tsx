@@ -73,7 +73,7 @@ export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSig
   const uploadPhoto = async (file: File) => {
     setBusy(true);
     try {
-      const uploadUrl = await generateUploadUrl();
+      const uploadUrl = await generateUploadUrl({ userId: me._id, sessionToken: sessionToken() });
       const res = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": file.type },
@@ -81,7 +81,7 @@ export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSig
       });
       if (!res.ok) throw new Error(`Upload failed (${res.status})`);
       const { storageId } = await res.json();
-      await setAvatarImage({ userId: me._id, storageId });
+      await setAvatarImage({ userId: me._id, storageId, sessionToken: sessionToken() });
       setOpen(false);
     } catch (err) {
       console.error("avatar upload failed", err);
@@ -143,7 +143,7 @@ export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSig
             {busy ? "Uploading…" : "Change photo…"}
           </button>
           {me.avatarStorageId && (
-            <button disabled={busy} onClick={() => void resetAvatar({ userId: me._id })}>
+            <button disabled={busy} onClick={() => void resetAvatar({ userId: me._id, sessionToken: sessionToken() })}>
               Reset to Google photo
             </button>
           )}

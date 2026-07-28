@@ -84,6 +84,7 @@ function NewTestForm({
       await create({
         projectId: project._id,
         userId: me._id,
+        sessionToken: sessionToken(),
         title: title.trim(),
         startRoute,
         device: { width: device.width, height: device.height },
@@ -552,7 +553,7 @@ export default function UserTests({
           <button
             className="btn ghost"
             title={test.status === "live" ? "Stop accepting responses" : "Reopen the test"}
-            onClick={() => void setStatus({ testId: test._id, userId: me._id, status: test.status === "live" ? "closed" : "live" })}
+            onClick={() => void setStatus({ testId: test._id, userId: me._id, sessionToken: sessionToken(), status: test.status === "live" ? "closed" : "live" })}
           >
             {test.status === "live" ? "Close" : "Reopen"}
           </button>

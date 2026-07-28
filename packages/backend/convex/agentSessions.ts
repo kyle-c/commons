@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { accessibleProject, resolveViewer } from "./access";
+import { accessibleProject, requireProjectAccess, requireViewer, resolveViewer } from "./access";
 
 // Agent sessions execute on the host's machine (Electron main process); the
 // host mirrors every AgentSessionEvent here so the whole team can watch live.
@@ -14,17 +14,29 @@ export const create = mutation({
     threadId: v.optional(v.id("threads")),
     frameId: v.optional(v.id("frames")),
     routePath: v.optional(v.string()),
+    sessionToken: v.optional(v.string()),
   },
-  handler: (ctx, args) => ctx.db.insert("agentSessions", { ...args, status: "starting", editedFiles: [] }),
+  handler: async (ctx, { sessionToken, ...session }) => {
+    await requireProjectAccess(ctx, session.projectId, { userId: session.hostUserId, sessionToken });
+    return await ctx.db.insert("agentSessions", { ...session, status: "starting", editedFiles: [] });
+  },
 });
 
 // Append one transcript event. Status and result events also fold their
 // payload into the session document so lists stay live without reading events.
 export const appendEvent = mutation({
-  args: { sessionId: v.id("agentSessions"), event: v.any() },
-  handler: async (ctx, { sessionId, event }) => {
+  args: {
+    sessionId: v.id("agentSessions"),
+    event: v.any(),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { sessionId, event, ...viewer }) => {
     const session = await ctx.db.get(sessionId);
     if (!session) return;
+    // Agent transcripts land in threads and on the canvas, so only someone
+    // who can see the project may append to one.
+    await requireProjectAccess(ctx, session.projectId, viewer);
     await ctx.db.insert("agentEvents", { sessionId, event });
     if (event.type === "status") {
       await ctx.db.patch(sessionId, { status: event.status, error: event.error });
@@ -52,12 +64,18 @@ export const forProject = query({
 // Called on host launch with the sessions actually alive in its main process;
 // anything else still marked active is finalized as stopped.
 export const reconcileHost = mutation({
-  args: { hostUserId: v.id("users"), activeMirrorIds: v.array(v.id("agentSessions")) },
-  handler: async (ctx, { hostUserId, activeMirrorIds }) => {
+  args: {
+    hostUserId: v.id("users"),
+    activeMirrorIds: v.array(v.id("agentSessions")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { activeMirrorIds, hostUserId, sessionToken }) => {
+    // Only a host reconciles its own sessions.
+    const viewerId = await requireViewer(ctx, { userId: hostUserId, sessionToken });
     const alive = new Set(activeMirrorIds);
     const sessions = await ctx.db
       .query("agentSessions")
-      .withIndex("by_host", (q) => q.eq("hostUserId", hostUserId))
+      .withIndex("by_host", (q) => q.eq("hostUserId", viewerId))
       .collect();
     for (const session of sessions) {
       if (alive.has(session._id)) continue;

@@ -104,7 +104,7 @@ export default function ProjectList({
   const [coverTarget, setCoverTarget] = useState<Id<"projects"> | null>(null);
   const uploadCover = async (file: File) => {
     if (!coverTarget) return;
-    const url = await generateUploadUrl();
+    const url = await generateUploadUrl({ userId: me._id, sessionToken: sessionToken() });
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": file.type }, body: file });
     const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
     await setCover({ projectId: coverTarget, storageId, userId: me._id, sessionToken: sessionToken() });
@@ -143,7 +143,7 @@ export default function ProjectList({
         frames: layoutFrames(inspection),
       });
       // The creator's working copy is the one we just inspected.
-      await linkRepo({ projectId, userId: me._id, repoPath: inspection.repoPath, machineId: machineId ?? undefined });
+      await linkRepo({ projectId, userId: me._id, repoPath: inspection.repoPath, machineId: machineId ?? undefined, sessionToken: sessionToken() });
       setNav({ screen: "project", projectId, view: "canvas" });
     } finally {
       setAdding(false);

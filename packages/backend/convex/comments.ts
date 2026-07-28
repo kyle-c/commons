@@ -4,7 +4,14 @@ import { internal } from "./_generated/api";
 import { buildDeepLink } from "@commons/shared";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { accessibleProject, canAccessProject, filterMentions, resolveViewer } from "./access";
+import {
+  accessibleProject,
+  canAccessProject,
+  filterMentions,
+  requireProjectAccess,
+  requireViewer,
+  resolveViewer,
+} from "./access";
 
 // @mentions notify twice: an inbox row (inserted by the caller) and an email,
 // sent from an action so a slow/failed Resend call never blocks the mutation.
@@ -122,9 +129,13 @@ export const createThread = mutation({
 });
 
 // Upload target for message-image attachments (snapshots).
+// Signed-in only — see the note on users.generateAvatarUploadUrl.
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => await ctx.storage.generateUploadUrl(),
+  args: { userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requireViewer(ctx, args);
+    return await ctx.storage.generateUploadUrl();
+  },
 });
 
 // The first-class author for agent replies (open question 3): summaries no
@@ -296,8 +307,16 @@ export const reply = mutation({
 });
 
 export const setResolved = mutation({
-  args: { threadId: v.id("threads"), resolved: v.boolean() },
-  handler: async (ctx, { threadId, resolved }) => {
+  args: {
+    threadId: v.id("threads"),
+    resolved: v.boolean(),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { threadId, resolved, ...viewer }) => {
+    const thread = await ctx.db.get(threadId);
+    if (!thread) throw new Error("Thread not found");
+    await requireProjectAccess(ctx, thread.projectId, viewer);
     await ctx.db.patch(threadId, { resolvedAt: resolved ? Date.now() : undefined });
   },
 });
@@ -335,9 +354,17 @@ export const threadsForProject = query({
   },
 });
 
+/**
+ * Your notifications, and only ever yours.
+ *
+ * This returns message bodies, threads, and projects, so serving it against a
+ * claimed userId handed out private discussion from any workspace to anyone
+ * holding a user id. The id now comes from the session.
+ */
 export const inbox = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
+  args: { userId: v.id("users"), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, viewerArgs) => {
+    const userId = await requireViewer(ctx, viewerArgs);
     const items = await ctx.db
       .query("notifications")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -356,8 +383,15 @@ export const inbox = query({
 });
 
 export const markRead = mutation({
-  args: { notificationId: v.id("notifications") },
-  handler: async (ctx, { notificationId }) => {
+  args: {
+    notificationId: v.id("notifications"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { notificationId, ...viewer }) => {
+    const userId = await requireViewer(ctx, viewer);
+    const notification = await ctx.db.get(notificationId);
+    if (!notification || notification.userId !== userId) throw new Error("Not allowed");
     await ctx.db.patch(notificationId, { readAt: Date.now() });
   },
 });

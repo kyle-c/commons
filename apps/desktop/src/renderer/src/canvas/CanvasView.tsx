@@ -7,7 +7,7 @@ import type { ThreadWithMessages } from "../comments/types";
 import Composer from "../comments/Composer";
 import ThreadPanel from "../comments/ThreadPanel";
 import Minimap from "./Minimap";
-import { initials } from "../lib/session";
+import { initials, sessionToken } from "../lib/session";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { tidyPositions } from "../lib/frameLayout";
 import { registerShortcut } from "../lib/shortcuts";
@@ -70,7 +70,7 @@ interface Props {
  * re-rendered every frame on the canvas.
  */
 function CursorLayer({ me, projectId, scale }: { me: Doc<"users">; projectId: Id<"projects">; scale: number }) {
-  const cursors = useQuery(api.presence.cursorsInProject, { projectId, userId: me._id }) ?? [];
+  const cursors = useQuery(api.presence.cursorsInProject, { projectId, userId: me._id, sessionToken: sessionToken() }) ?? [];
   // Re-filter periodically so idle teammates' cursors fade even when no new
   // cursor writes arrive to re-run the query.
   const [, tick] = useState(0);
@@ -385,7 +385,7 @@ export default function CanvasView({
     const send = (clientX: number, clientY: number) => {
       lastCursorSend.current = Date.now();
       const p = screenToCanvas(clientX, clientY);
-      void moveCursor({ userId: me._id, projectId, x: p.x, y: p.y });
+      void moveCursor({ userId: me._id, projectId, x: p.x, y: p.y, sessionToken: sessionToken() });
     };
     if (Date.now() - lastCursorSend.current >= 120) {
       send(e.clientX, e.clientY);
@@ -693,7 +693,7 @@ export default function CanvasView({
       setLocalPos((prev) => ({ ...prev, ...commit }));
       for (const other of frames) {
         const c = commit[other._id];
-        if (c && (c.x !== other.x || c.y !== other.y)) void moveFrame({ frameId: other._id, x: c.x, y: c.y });
+        if (c && (c.x !== other.x || c.y !== other.y)) void moveFrame({ frameId: other._id, x: c.x, y: c.y, userId: me._id, sessionToken: sessionToken() });
       }
       setTidyOn(false);
       setOverviewFrom(null);
@@ -712,7 +712,7 @@ export default function CanvasView({
     const up = () => {
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
-      moveFrame({ frameId: frame._id, x: latest.x, y: latest.y });
+      moveFrame({ frameId: frame._id, x: latest.x, y: latest.y, userId: me._id, sessionToken: sessionToken() });
     };
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);

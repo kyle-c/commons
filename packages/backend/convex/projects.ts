@@ -1,6 +1,12 @@
 import { mutation, query, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
-import { accessibleProject, canAccessProject, resolveViewer } from "./access";
+import {
+  accessibleProject,
+  canAccessProject,
+  requireProjectAccess,
+  requireViewer,
+  resolveViewer,
+} from "./access";
 import { isMember, ensurePersonalWorkspace } from "./workspaces";
 
 export const create = mutation({
@@ -386,9 +392,13 @@ export const setVisibility = mutation({
   args: {
     projectId: v.id("projects"),
     userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
     visibility: v.union(v.literal("team"), v.literal("private")),
   },
-  handler: async (ctx, { projectId, userId, visibility }) => {
+  handler: async (ctx, { projectId, visibility, ...viewer }) => {
+    // The creator check is only as good as the identity behind it, so the
+    // identity comes from the session, never from the userId argument.
+    const userId = await requireViewer(ctx, viewer);
     const project = await ctx.db.get(projectId);
     if (!project || project.createdBy !== userId) throw new Error("Only the project's creator can change visibility.");
     await ctx.db.patch(projectId, { visibility });
@@ -396,8 +406,14 @@ export const setVisibility = mutation({
 });
 
 export const setMembers = mutation({
-  args: { projectId: v.id("projects"), userId: v.id("users"), memberIds: v.array(v.id("users")) },
-  handler: async (ctx, { projectId, userId, memberIds }) => {
+  args: {
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
+    memberIds: v.array(v.id("users")),
+  },
+  handler: async (ctx, { projectId, memberIds, ...viewer }) => {
+    const userId = await requireViewer(ctx, viewer);
     const project = await ctx.db.get(projectId);
     if (!project || project.createdBy !== userId) throw new Error("Only the project's creator can manage members.");
     await ctx.db.patch(projectId, { memberIds: memberIds.filter((id) => id !== project.createdBy) });
@@ -409,15 +425,25 @@ export const moveFrame = mutation({
     frameId: v.id("frames"),
     x: v.number(),
     y: v.number(),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, { frameId, x, y }) => {
+  handler: async (ctx, { frameId, x, y, ...viewer }) => {
+    const frame = await ctx.db.get(frameId);
+    if (!frame) throw new Error("Frame not found");
+    await requireProjectAccess(ctx, frame.projectId, viewer);
     await ctx.db.patch(frameId, { x, y });
   },
 });
 
 export const archive = mutation({
-  args: { projectId: v.id("projects") },
-  handler: async (ctx, { projectId }) => {
+  args: {
+    projectId: v.id("projects"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { projectId, ...viewer }) => {
+    await requireProjectAccess(ctx, projectId, viewer);
     await ctx.db.patch(projectId, { archivedAt: Date.now() });
   },
 });
@@ -489,8 +515,14 @@ export const togglePin = mutation({
 
 // DEPRECATED: machine-local paths live in repoLinks now. Kept for old callers.
 export const setRepoPath = mutation({
-  args: { projectId: v.id("projects"), repoPath: v.string() },
-  handler: async (ctx, { projectId, repoPath }) => {
+  args: {
+    projectId: v.id("projects"),
+    repoPath: v.string(),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { projectId, repoPath, ...viewer }) => {
+    await requireProjectAccess(ctx, projectId, viewer);
     await ctx.db.patch(projectId, { repoPath });
   },
 });
@@ -517,8 +549,11 @@ export const rediscover = mutation({
     // "Tidy": also move/resize known frames into the derived section layout.
     relayout: v.optional(v.boolean()),
     brandColors: v.optional(v.array(v.string())),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, { projectId, framework, frames, relayout, brandColors }) => {
+  handler: async (ctx, { projectId, framework, frames, relayout, brandColors, ...viewer }) => {
+    await requireProjectAccess(ctx, projectId, viewer);
     if (framework) await ctx.db.patch(projectId, { framework });
     if (brandColors) await ctx.db.patch(projectId, { brandColors });
     const existing = await ctx.db
@@ -587,8 +622,14 @@ export const rename = mutation({
 
 // Canonical identity of the project's code source (e.g. the origin URL).
 export const setGitRemote = mutation({
-  args: { projectId: v.id("projects"), gitRemote: v.string() },
-  handler: async (ctx, { projectId, gitRemote }) => {
+  args: {
+    projectId: v.id("projects"),
+    gitRemote: v.string(),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { projectId, gitRemote, ...viewer }) => {
+    await requireProjectAccess(ctx, projectId, viewer);
     await ctx.db.patch(projectId, { gitRemote });
   },
 });

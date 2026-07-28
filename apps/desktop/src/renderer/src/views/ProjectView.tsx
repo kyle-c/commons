@@ -297,7 +297,7 @@ function SharePopover({
   const isPrivate = project.visibility === "private";
   const toggleMember = (userId: Id<"users">) => {
     const next = memberIds.includes(userId) ? memberIds.filter((id) => id !== userId) : [...memberIds, userId];
-    void setMembers({ projectId: project._id, userId: me._id, memberIds: next });
+    void setMembers({ projectId: project._id, userId: me._id, sessionToken: sessionToken(), memberIds: next });
   };
 
   return (
@@ -369,14 +369,14 @@ function SharePopover({
                   <button
                     className={!isPrivate ? "on" : ""}
                     style={{ flex: 1 }}
-                    onClick={() => setVisibility({ projectId: project._id, userId: me._id, visibility: "team" })}
+                    onClick={() => setVisibility({ projectId: project._id, userId: me._id, sessionToken: sessionToken(), visibility: "team" })}
                   >
                     Team
                   </button>
                   <button
                     className={isPrivate ? "on" : ""}
                     style={{ flex: 1 }}
-                    onClick={() => setVisibility({ projectId: project._id, userId: me._id, visibility: "private" })}
+                    onClick={() => setVisibility({ projectId: project._id, userId: me._id, sessionToken: sessionToken(), visibility: "private" })}
                   >
                     Private
                   </button>
@@ -486,7 +486,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         const norm = (r: string) => r.replace(/\.git$/, "").replace(/\/+$/, "").toLowerCase();
         if (project?.gitRemote && inspection.gitRemote && norm(inspection.gitRemote) !== norm(project.gitRemote))
           return;
-        await linkRepo({ projectId: nav.projectId, userId: me._id, repoPath: repoLink.repoPath, machineId });
+        await linkRepo({ projectId: nav.projectId, userId: me._id, repoPath: repoLink.repoPath, machineId, sessionToken: sessionToken() });
       } catch {
         // Path isn't on this machine — leave the legacy row for its owner.
       }
@@ -576,7 +576,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     try {
       const result = await window.commons.cloneRepo(project.gitRemote, project.name);
       if (result && "repoPath" in result) {
-        await linkRepo({ projectId: nav.projectId, userId: me._id, repoPath: result.repoPath, machineId: machineId ?? undefined });
+        await linkRepo({ projectId: nav.projectId, userId: me._id, repoPath: result.repoPath, machineId: machineId ?? undefined, sessionToken: sessionToken() });
       } else if (result && "error" in result) {
         alert(`Clone failed: ${result.error}`);
       }
@@ -687,7 +687,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         try {
           const png = await window.commons.captureSnapshot(url, { width: frame.width, height: frame.height });
           if (!png) continue;
-          const uploadUrl = await generateUploadUrl();
+          const uploadUrl = await generateUploadUrl({ userId: me._id, sessionToken: sessionToken() });
           const res = await fetch(uploadUrl, {
             method: "POST",
             headers: { "Content-Type": "image/png" },
@@ -726,7 +726,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             height: frame.height,
           });
           if (!png) continue;
-          const uploadUrl = await generateUploadUrl();
+          const uploadUrl = await generateUploadUrl({ userId: me._id, sessionToken: sessionToken() });
           const res = await fetch(uploadUrl, {
             method: "POST",
             headers: { "Content-Type": "image/png" },
@@ -757,7 +757,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     if (!beforeUrl) return;
 
     const upload = async (png: Uint8Array) => {
-      const url = await generateUploadUrl();
+      const url = await generateUploadUrl({ userId: me._id, sessionToken: sessionToken() });
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "image/png" },
@@ -914,7 +914,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const activePanelId = activeAgentSessionId ?? convexSessions[0]?._id ?? null;
   const transcript = (useQuery(
     api.agentSessions.events,
-    activePanelId ? { sessionId: activePanelId as Id<"agentSessions">, userId: me._id } : "skip"
+    activePanelId ? { sessionId: activePanelId as Id<"agentSessions">, userId: me._id, sessionToken: sessionToken() } : "skip"
   ) ?? []) as AgentSessionEvent[];
 
   const projectName = project?.name;
@@ -933,8 +933,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
 
   // Presence heartbeat while the project is open.
   useEffect(() => {
-    heartbeat({ userId: me._id, projectId: nav.projectId });
-    const interval = setInterval(() => heartbeat({ userId: me._id, projectId: nav.projectId }), 15_000);
+    heartbeat({ userId: me._id, projectId: nav.projectId, sessionToken: sessionToken() });
+    const interval = setInterval(() => heartbeat({ userId: me._id, projectId: nav.projectId, sessionToken: sessionToken() }), 15_000);
     return () => clearInterval(interval);
   }, [me._id, nav.projectId, heartbeat]);
 
@@ -965,9 +965,9 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     if (!window.commons) return;
     const inspection = await window.commons.pickRepo();
     if (!inspection) return;
-    await linkRepo({ projectId: nav.projectId, userId: me._id, repoPath: inspection.repoPath, machineId: machineId ?? undefined });
+    await linkRepo({ projectId: nav.projectId, userId: me._id, repoPath: inspection.repoPath, machineId: machineId ?? undefined, sessionToken: sessionToken() });
     if (inspection.gitRemote && !project?.gitRemote) {
-      await setGitRemote({ projectId: nav.projectId, gitRemote: inspection.gitRemote });
+      await setGitRemote({ projectId: nav.projectId, gitRemote: inspection.gitRemote, userId: me._id, sessionToken: sessionToken() });
     }
     // Backfill frames for projects added before their framework was supported.
     if (frames.length === 0 && inspection.routes.length > 0) {
@@ -976,6 +976,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         framework: inspection.framework,
         brandColors: inspection.brandColors,
         frames: layoutFrames(inspection),
+        userId: me._id,
+        sessionToken: sessionToken(),
       });
     }
   };
@@ -995,6 +997,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         framework: inspection.framework,
         brandColors: inspection.brandColors,
         frames: layoutFrames(inspection),
+        userId: me._id,
+        sessionToken: sessionToken(),
       });
     })().catch((err) => console.error("auto-discovery failed", err));
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -84,16 +84,36 @@ function createWindow(): void {
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
-      sandbox: false,
+      // The preload only touches contextBridge and ipcRenderer, so it costs
+      // nothing to run it sandboxed — and it caps the damage if the renderer
+      // is ever compromised.
+      sandbox: true,
     },
   });
 
   mainWindow.on("ready-to-show", () => mainWindow?.show());
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    // The canvas embeds pages we don't control (the user's app, deploy
+    // previews). A window.open from any of them lands here, so hand the OS
+    // only schemes that mean "a web page" — file:// and custom schemes hand
+    // whatever is registered for them a launch.
+    if (isSafeExternalUrl(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
+
+  // Nothing may navigate the top frame off the app. The preload bridge is
+  // attached here, and it can start dev servers, clone repos, run git, and
+  // start agents with arbitrary paths — remote content must never inherit it.
+  // (Subframes are unaffected: nodeIntegrationInSubFrames is off, so iframes
+  // never receive the preload at all.)
+  const blockOffAppNavigation = (event: { preventDefault: () => void }, url: string) => {
+    if (isAppUrl(url)) return;
+    event.preventDefault();
+    if (isSafeExternalUrl(url)) void shell.openExternal(url);
+  };
+  mainWindow.webContents.on("will-navigate", blockOffAppNavigation);
+  mainWindow.webContents.on("will-redirect", blockOffAppNavigation);
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -107,6 +127,36 @@ function createWindow(): void {
       pendingDeepLink = null;
     }
   });
+}
+
+/**
+ * Only ever hand the OS a URL that means "open a web page".
+ *
+ * shell.openExternal defers to whatever the system has registered for a
+ * scheme, so file://, and custom schemes registered by other installed apps,
+ * turn a link click into a launch. http/https is the whole legitimate need.
+ */
+function isSafeExternalUrl(target: string): boolean {
+  try {
+    const protocol = new URL(target).protocol;
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false; // unparseable is not safe
+  }
+}
+
+/** The app's own renderer: the dev server in development, the bundled files when packaged. */
+function isAppUrl(target: string): boolean {
+  const dev = process.env.ELECTRON_RENDERER_URL;
+  if (dev && target.startsWith(dev)) return true;
+  try {
+    const url = new URL(target);
+    if (url.protocol !== "file:") return false;
+    const rendererDir = path.join(__dirname, "..", "renderer");
+    return path.normalize(decodeURIComponent(url.pathname)).startsWith(rendererDir);
+  } catch {
+    return false;
+  }
 }
 
 function dispatchDeepLink(raw: string): void {
@@ -160,7 +210,10 @@ app.whenReady().then(() => {
   ipcMain.handle("stop-dev-server", (_e, repoPath: string) => runner.stop(repoPath));
   ipcMain.handle("release-dev-server", (_e, repoPath: string) => runner.release(repoPath));
   ipcMain.handle("get-dev-server-status", (_e, repoPath: string) => runner.getStatus(repoPath));
-  ipcMain.handle("open-external", (_e, url: string) => shell.openExternal(url));
+  ipcMain.handle("open-external", (_e, url: string) => {
+    if (!isSafeExternalUrl(url)) return;
+    return shell.openExternal(url);
+  });
   ipcMain.handle(
     "wrap-preview-url",
     (_e, url: string, opts: { width: number; height: number; title?: string }) =>

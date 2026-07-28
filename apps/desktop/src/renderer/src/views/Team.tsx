@@ -19,8 +19,8 @@ export default function Team({ me }: { me: Doc<"users"> }) {
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const users = useQuery(api.users.list, open ? { userId: me._id, sessionToken: sessionToken() } : "skip") ?? [];
-  const pending = useQuery(api.invites.pending, open ? {} : "skip") ?? [];
-  const pulse = useQuery(api.metrics.pilot, open ? { userId: me._id } : "skip");
+  const pending = useQuery(api.invites.pending, open ? { userId: me._id, sessionToken: sessionToken() } : "skip") ?? [];
+  const pulse = useQuery(api.metrics.pilot, open ? { userId: me._id, sessionToken: sessionToken() } : "skip");
   const invite = useMutation(api.invites.create);
   const revoke = useMutation(api.invites.revoke);
 

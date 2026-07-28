@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { accessibleProject, resolveViewer } from "./access";
+import { accessibleProject, requireProjectAccess, requireViewer, resolveViewer } from "./access";
 
 /**
  * Working-copy locations, per (user, project, machine). Paths only mean
@@ -16,8 +16,13 @@ export const link = mutation({
     userId: v.id("users"),
     repoPath: v.string(),
     machineId: v.optional(v.string()),
+    sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, { projectId, userId, repoPath, machineId }) => {
+  handler: async (ctx, { projectId, repoPath, machineId, ...claim }) => {
+    // A repo link says "this path on my machine is this project". It is
+    // recorded against the proven viewer, never against a claimed id.
+    await requireProjectAccess(ctx, projectId, claim);
+    const userId = await requireViewer(ctx, claim);
     const rows = await ctx.db
       .query("repoLinks")
       .withIndex("by_user_project", (q) => q.eq("userId", userId).eq("projectId", projectId))

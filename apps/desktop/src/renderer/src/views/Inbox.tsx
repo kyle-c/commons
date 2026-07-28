@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc } from "@commons/backend/convex/_generated/dataModel";
 import type { Nav } from "../App";
-import { timeAgo } from "../lib/session";
+import { sessionToken, timeAgo } from "../lib/session";
 import { registerShortcut } from "../lib/shortcuts";
 import Icon from "../components/icons";
 
@@ -27,7 +27,7 @@ export default function Inbox({
   const [selfOpen, setSelfOpen] = useState(false);
   const open = controlledOpen ?? selfOpen;
   const setOpen = onOpenChange ?? setSelfOpen;
-  const items = useQuery(api.comments.inbox, { userId: me._id }) ?? [];
+  const items = useQuery(api.comments.inbox, { userId: me._id, sessionToken: sessionToken() }) ?? [];
   const markRead = useMutation(api.comments.markRead);
   const unread = items.filter((i) => !i.readAt).length;
 
@@ -67,7 +67,7 @@ export default function Inbox({
                 key={item._id}
                 className={`inbox-item ${item.readAt ? "read" : ""}`}
                 onClick={() => {
-                  if (!item.readAt) markRead({ notificationId: item._id });
+                  if (!item.readAt) markRead({ notificationId: item._id, userId: me._id, sessionToken: sessionToken() });
                   if (item.thread) {
                     setNav({
                       screen: "project",

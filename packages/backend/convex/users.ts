@@ -1,13 +1,32 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { resolveViewer } from "./access";
+import { requireViewer, resolveViewer } from "./access";
 
 // Users are created by Google sign-in (auth.completeGoogleSignIn), never here.
 
+/**
+ * A teammate's profile. Signed-in callers only, and only the fields the UI
+ * actually renders — the raw document carries the email address and the
+ * sign-in provider's avatar, which a name-and-face lookup has no business
+ * handing out. Your own row comes back whole.
+ */
 export const get = query({
-  args: { userId: v.id("users") },
-  handler: (ctx, { userId }) => ctx.db.get(userId),
+  args: { userId: v.id("users"), viewerId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, { userId, viewerId, sessionToken }) => {
+    const viewer = await requireViewer(ctx, { userId: viewerId, sessionToken });
+    const user = await ctx.db.get(userId);
+    if (!user) return null;
+    if (viewer === userId) return user;
+    return {
+      _id: user._id,
+      _creationTime: user._creationTime,
+      name: user.name,
+      avatarUrl: user.avatarUrl,
+      avatarColor: user.avatarColor,
+      lastSeenAt: user.lastSeenAt,
+    };
+  },
 });
 
 // With viewer args: only people who share a workspace with you (plus
@@ -37,14 +56,22 @@ export const list = query({
 
 // Custom avatar upload: client POSTs the image to this URL, then calls
 // setAvatarImage with the returned storageId.
+// Signed-in only: an open upload-URL minter lets anyone host arbitrary files
+// on this deployment's storage, under your domain and on your bill.
 export const generateAvatarUploadUrl = mutation({
-  args: {},
-  handler: (ctx) => ctx.storage.generateUploadUrl(),
+  args: { userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requireViewer(ctx, args);
+    return await ctx.storage.generateUploadUrl();
+  },
 });
 
 export const setAvatarImage = mutation({
-  args: { userId: v.id("users"), storageId: v.id("_storage") },
-  handler: async (ctx, { userId, storageId }) => {
+  args: { userId: v.id("users"), storageId: v.id("_storage"), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, { storageId, ...viewer }) => {
+    // Your face, your row. Anyone could previously repaint anyone's avatar,
+    // which in a review tool is impersonation with real weight.
+    const userId = await requireViewer(ctx, viewer);
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found.");
     const url = await ctx.storage.getUrl(storageId);
@@ -57,8 +84,9 @@ export const setAvatarImage = mutation({
 
 // Back to the Google profile photo (the default).
 export const resetAvatar = mutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
+  args: { userId: v.id("users"), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, viewerArgs) => {
+    const userId = await requireViewer(ctx, viewerArgs);
     const user = await ctx.db.get(userId);
     if (!user) return;
     if (user.avatarStorageId) await ctx.storage.delete(user.avatarStorageId);

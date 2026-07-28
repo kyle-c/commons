@@ -5,7 +5,7 @@ import type { Doc } from "@commons/backend/convex/_generated/dataModel";
 import type { ThreadWithMessages } from "./types";
 import Composer from "./Composer";
 import MessageText from "./MessageText";
-import { initials, timeAgo } from "../lib/session";
+import { initials, sessionToken, timeAgo } from "../lib/session";
 
 interface Props {
   thread: ThreadWithMessages;
@@ -52,7 +52,7 @@ export default function ThreadPanel({ thread, me, users, mentionUsers, onClose, 
           <button
             className="btn ghost"
             title={resolved ? "Reopen" : "Resolve"}
-            onClick={() => setResolved({ threadId: thread._id, resolved: !resolved })}
+            onClick={() => setResolved({ threadId: thread._id, resolved: !resolved, userId: me._id, sessionToken: sessionToken() })}
           >
             {resolved ? "Reopen" : "Resolve"}
           </button>

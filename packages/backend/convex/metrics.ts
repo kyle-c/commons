@@ -1,5 +1,6 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
+import { requireViewer } from "./access";
 
 const WEEK = 7 * 24 * 60 * 60 * 1000;
 
@@ -11,8 +12,10 @@ const WEEK = 7 * 24 * 60 * 60 * 1000;
  * Also runnable headless: `npx convex run metrics:pilot '{}'`.
  */
 export const pilot = query({
-  args: { userId: v.optional(v.id("users")) },
-  handler: async (ctx) => {
+  args: { userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    // Full-table scans over every user, thread, message and error: never open.
+    await requireViewer(ctx, args);
     const now = Date.now();
     const weekAgo = now - WEEK;
     const priorWeekAgo = now - 2 * WEEK;

@@ -38,8 +38,10 @@ export const start = mutation({
     if (linkSessionToken) {
       const session = await ctx.db
         .query("sessions")
+        // first(), not unique(): a duplicated token row must never throw and
+        // brick sign-in — the same failure this codebase already hit once.
         .withIndex("by_token", (q) => q.eq("token", linkSessionToken))
-        .unique();
+        .first();
       if (!session) throw new Error("Sign in again before linking an email.");
       linkUserId = session.userId;
     }

@@ -1,10 +1,15 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { accessibleProject, resolveViewer } from "./access";
+import { accessibleProject, requireViewer, resolveViewer } from "./access";
 
 export const heartbeat = mutation({
-  args: { userId: v.id("users"), projectId: v.id("projects") },
-  handler: async (ctx, { userId, projectId }) => {
+  args: { userId: v.id("users"), projectId: v.id("projects"), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, { projectId, ...viewer }) => {
+    // Presence is an identity claim ("I am here, in this project"), so both
+    // halves are proven: who you are from the session, then whether you can
+    // see the project. The resolved id is what gets written, never the claim.
+    const userId = await requireViewer(ctx, viewer);
+    if (!(await accessibleProject(ctx, projectId, userId))) throw new Error("Not allowed");
     const existing = await ctx.db
       .query("presence")
       .withIndex("by_user_project", (q) => q.eq("userId", userId).eq("projectId", projectId))
@@ -26,8 +31,16 @@ export const heartbeat = mutation({
 
 // Throttled by the client (~8 writes/s max while the mouse moves).
 export const moveCursor = mutation({
-  args: { userId: v.id("users"), projectId: v.id("projects"), x: v.number(), y: v.number() },
-  handler: async (ctx, { userId, projectId, x, y }) => {
+  args: {
+    userId: v.id("users"),
+    projectId: v.id("projects"),
+    x: v.number(),
+    y: v.number(),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { projectId, x, y, ...viewer }) => {
+    const userId = await requireViewer(ctx, viewer);
+    if (!(await accessibleProject(ctx, projectId, userId))) throw new Error("Not allowed");
     const existing = await ctx.db
       .query("cursors")
       .withIndex("by_user_project", (q) => q.eq("userId", userId).eq("projectId", projectId))
