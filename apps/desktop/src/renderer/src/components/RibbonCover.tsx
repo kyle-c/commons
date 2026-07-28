@@ -82,7 +82,15 @@ export default function RibbonCover({ seed }: { seed: string }) {
     >
       <rect width={W} height={H} fill="var(--bg-input)" />
       {ribbons.map((ribbon, i) => (
-        <g key={i} className="band">
+        <g
+          key={i}
+          className="band"
+          // Each band drifts on its own clock, so the layers separate instead
+          // of sliding as one sheet. Negative delay starts them mid-phase, so
+          // a freshly rendered card is already in motion rather than visibly
+          // beginning to move as you look at it.
+          style={{ animationDuration: `${23 + i * 8}s`, animationDelay: `${i * -6}s` }}
+        >
           <path d={ribbon.d} fill={ribbon.fill} opacity={ribbon.opacity} />
         </g>
       ))}

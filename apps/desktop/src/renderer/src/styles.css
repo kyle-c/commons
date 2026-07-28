@@ -2828,6 +2828,37 @@ kbd {
 .ribbon-cover .band {
   opacity: 0.46;
 }
+/* The bands breathe. Vertical only — the ribbons span the full width, so any
+   horizontal drift would walk their ends into view. Amplitude is a few pixels
+   over ~half a minute: at a glance the card is still, and you only notice it
+   is alive if you rest on it, which is the point.
+
+   No shaders here on purpose. A WebGL context per card would mean dozens of
+   contexts on the home screen (browsers cap them, and the oldest get dropped),
+   plus real battery cost, to animate something the eye is barely meant to
+   catch. A transform on a group the SVG already had costs nothing to add and
+   nothing to maintain. */
+@media (prefers-reduced-motion: no-preference) {
+  .ribbon-cover .band {
+    /* Pin the reference box so the offsets below are viewBox user units
+       (400 x 220), not a percentage of some bounding box that differs per
+       band and per browser. */
+    transform-box: view-box;
+    animation-name: band-drift;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+    /* duration and delay are set per band in RibbonCover */
+  }
+}
+@keyframes band-drift {
+  from {
+    transform: translate3d(0, -3px, 0);
+  }
+  to {
+    transform: translate3d(0, 4px, 0);
+  }
+}
 :root[data-theme="light"] .ribbon-cover .band {
   opacity: 0.68;
 }
