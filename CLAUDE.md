@@ -16,5 +16,6 @@ Product and architecture decisions live in the private [kyle-c/commons-docs](htt
 - TypeScript everywhere, strict. Shared types live in `packages/shared` — never duplicate a type across renderer/main/backend.
 - Renderer never touches fs/network-to-localhost-services directly; everything through the preload IPC bridge (`window.commons`).
 - Convex functions are the only way data moves; no direct table access patterns in the client beyond generated hooks.
+- Every public Convex function must resolve identity from `sessionToken` (`requireViewer` / `requireProjectAccess` in `access.ts`). A `userId` argument is a claim, never proof — Convex publishes public functions to the open internet. `pnpm typecheck` runs `scripts/check-convex-auth.mjs`, which fails on any ungated function; genuinely open ones go in its `OPEN_BY_DESIGN` list with a reason.
 - Dark-chrome design tokens live in `apps/desktop/src/renderer/src/theme.css`. Use the CSS variables; no hardcoded colors.
 - Keyboard-first: every new surface gets a shortcut; register it in `lib/shortcuts.ts`.
