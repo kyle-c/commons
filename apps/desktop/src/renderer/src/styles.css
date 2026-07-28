@@ -2851,12 +2851,16 @@ kbd {
     /* duration and delay are set per band in RibbonCover */
   }
 }
+/* 22 viewBox units of travel over 11-21s. On a cover rendering ~160px tall
+   that is ~16px on screen at ~1.5px/sec — above the ~1px/sec floor where slow
+   drift stops registering as motion at all. The first pass used 7 units over
+   23s, which computes to 0.22px/sec: running perfectly, and invisible. */
 @keyframes band-drift {
   from {
-    transform: translate3d(0, -3px, 0);
+    transform: translate3d(0, -10px, 0);
   }
   to {
-    transform: translate3d(0, 4px, 0);
+    transform: translate3d(0, 12px, 0);
   }
 }
 :root[data-theme="light"] .ribbon-cover .band {

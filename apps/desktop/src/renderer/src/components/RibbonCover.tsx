@@ -89,7 +89,7 @@ export default function RibbonCover({ seed }: { seed: string }) {
           // of sliding as one sheet. Negative delay starts them mid-phase, so
           // a freshly rendered card is already in motion rather than visibly
           // beginning to move as you look at it.
-          style={{ animationDuration: `${23 + i * 8}s`, animationDelay: `${i * -6}s` }}
+          style={{ animationDuration: `${11 + i * 5}s`, animationDelay: `${i * -4}s` }}
         >
           <path d={ribbon.d} fill={ribbon.fill} opacity={ribbon.opacity} />
         </g>
