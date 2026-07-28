@@ -9,3 +9,8 @@ out/
 apps/desktop/release/
 .env.local.*
 .claude/settings.local.json
+
+# Private keys and certs (GitHub App .pem, signing keys) — never commit
+*.pem
+*.p12
+*.key
