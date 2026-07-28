@@ -160,7 +160,10 @@ export default defineSchema({
     repoPath: v.string(),
   })
     .index("by_user_project", ["userId", "projectId"])
-    .index("by_project", ["projectId"]),
+    .index("by_project", ["projectId"])
+    // All of one person's working copies, for the port viewer's path -> project
+    // lookup (by_user_project needs a projectId you don't have yet).
+    .index("by_user", ["userId"]),
 
   // Agent sessions run on one member's machine (the host) but are mirrored
   // here so the whole team can watch. Events land in agentEvents.

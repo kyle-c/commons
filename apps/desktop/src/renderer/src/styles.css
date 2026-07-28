@@ -2197,6 +2197,25 @@ kbd {
   background: var(--warning);
   border: 2px solid var(--bg-panel);
 }
+/* The name+path block became a button so the row can act as a switcher; it
+   must keep reading as text, not as a control, until you're over it. */
+.server-open {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.server-open.plain {
+  cursor: default;
+}
+.server-open:not(.plain):hover .name {
+  color: var(--accent);
+}
+
 .tb-divider {
   width: 1px;
   height: 18px;

@@ -231,7 +231,10 @@ export default function ProjectList({
             <Icon name="search" />
           </button>
         )}
-        <ServersMenu />
+        <ServersMenu
+          me={me}
+          onOpenProject={(projectId) => setNav({ screen: "project", projectId, view: "prototype" })}
+        />
         <WorkspacesMenu me={me} />
         <Team me={me} />
         <Inbox me={me} setNav={setNav} />

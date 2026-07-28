@@ -1109,7 +1109,10 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         >
           <Icon name="search" />
         </button>
-        <ServersMenu />
+        <ServersMenu
+          me={me}
+          onOpenProject={(projectId) => setNav({ screen: "project", projectId, view: "prototype" })}
+        />
         <WorkspacesMenu me={me} />
         <Team me={me} />
         <Inbox

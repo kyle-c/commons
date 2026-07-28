@@ -62,6 +62,35 @@ export const holders = query({
   },
 });
 
+/**
+ * Every working copy this viewer has on this machine, as (projectId, path).
+ *
+ * The reverse of forUser: the port viewer knows a dev server by its repo path
+ * and needs the project behind it, so it can act as a switcher. One query for
+ * the whole list rather than one per row, since rows can't each hold a hook.
+ */
+export const mine = query({
+  args: {
+    userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
+    machineId: v.optional(v.string()),
+  },
+  handler: async (ctx, { machineId, ...viewer }) => {
+    const userId = await resolveViewer(ctx, viewer);
+    if (!userId) return [];
+    const rows = await ctx.db
+      .query("repoLinks")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    return rows
+      // A path from another laptop would point the switcher at a project whose
+      // server isn't the one running here; legacy rows (no machineId) are
+      // still offered, as elsewhere.
+      .filter((row) => !machineId || !row.machineId || row.machineId === machineId)
+      .map((row) => ({ projectId: row.projectId, repoPath: row.repoPath }));
+  },
+});
+
 export const forUser = query({
   args: {
     projectId: v.id("projects"),
