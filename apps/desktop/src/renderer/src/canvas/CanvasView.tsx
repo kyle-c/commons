@@ -1119,11 +1119,12 @@ export default function CanvasView({
         </button>
         {(annotations?.length ?? 0) > 0 && (
           <button
-            className={`btn ghost ${notesOn ? "active" : ""}`}
+            className={`btn ghost icon-btn ${notesOn ? "active" : ""}`}
+            aria-label="Design notes"
             title="Design notes: approved rationale under each screen"
             onClick={() => setNotesOn((on) => !on)}
           >
-            <Icon name="pen" size={14} /> Notes
+            <Icon name="pen" />
           </button>
         )}
         <button
