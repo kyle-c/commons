@@ -2202,6 +2202,10 @@ kbd {
   height: 18px;
   background: var(--border-default);
   flex: none;
+  /* Fixed height in a stretch container would pin it to the top; the toolbars
+     it sits in don't all center their children. */
+  align-self: center;
+  margin: 0 2px;
 }
 .btn.primary svg {
   color: var(--text-inverse);

@@ -1144,6 +1144,9 @@ export default function CanvasView({
             without this control the canvas was stuck on whatever the prototype
             view last set, with no way to see or change it from here. */}
         <PreviewAppearanceButton />
+        {/* Everything left of this changes what you're looking at; everything
+            right of it changes how close you are. */}
+        <span className="tb-divider" />
         <button className="btn ghost zoom-step" title="Zoom out (⌘−)" onClick={() => zoomBy(0.8)}>
           −
         </button>
