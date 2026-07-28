@@ -66,7 +66,11 @@ http.route({
       if (result.reason === "email_in_use") {
         return page("Email already in use", `${claims.email} already belongs to another Commons account.`);
       }
-      return page("Sign-in expired", "This sign-in took too long. Return to Commons and try again.");
+      return page(
+        "That sign-in link is no longer valid",
+        "Each sign-in attempt works once — this one was already used, cancelled, or timed out. " +
+          "Go back to the Commons tab and press Continue with Google again; a fresh attempt will go straight through."
+      );
     }
     if ("linked" in result && result.linked) {
       return page("Email linked", `${result.email} is now linked to your Commons account — you can close this tab.`);
