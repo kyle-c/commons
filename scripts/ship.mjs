@@ -83,7 +83,9 @@ if (git("status", "--porcelain")) {
 const branch = git("rev-parse", "--abbrev-ref", "HEAD");
 if (branch !== "main") die(`On branch "${branch}". Releases ship from main.`);
 
-git("fetch", "--quiet", "origin", "main");
+// Tags too, not just main: `gh release create` makes the tag server-side, so
+// a machine that has shipped from elsewhere is missing recent ones entirely.
+git("fetch", "--quiet", "--tags", "origin", "main");
 if (git("rev-parse", "HEAD") !== git("rev-parse", "origin/main")) {
   die("Local main and origin/main disagree. Pull or push first.");
 }
@@ -110,18 +112,31 @@ const version =
   })();
 if (version === current) die(`Version ${version} is already the current version.`);
 
-const tags = git("tag", "--list").split("\n");
+const tags = git("tag", "--list").split("\n").filter(Boolean);
 if (tags.includes(`v${version}`)) die(`Tag v${version} already exists.`);
 detail(`version ${current} → ${version}`);
+
+/** Semver order, not string order — "v0.2.9" sorts above "v0.2.71" lexically. */
+function latestTag(all) {
+  const parsed = all
+    .filter((t) => /^v\d+\.\d+\.\d+$/.test(t))
+    .map((t) => ({ tag: t, parts: t.slice(1).split(".").map(Number) }));
+  if (parsed.length === 0) return null;
+  parsed.sort((a, b) => a.parts[0] - b.parts[0] || a.parts[1] - b.parts[1] || a.parts[2] - b.parts[2]);
+  return parsed[parsed.length - 1].tag;
+}
 
 // Does the backend need deploying? Compare convex/ against the last shipped
 // tag: shipping a client that needs a function the deployment lacks is the
 // failure mode, and so is deploying a backend nobody asked for.
-const lastTag = tags.filter((t) => /^v\d/.test(t)).sort().pop();
+const lastTag = latestTag(tags);
 const convexChanged = lastTag
   ? git("diff", "--name-only", `${lastTag}..HEAD`, "--", "packages/backend/convex").length > 0
   : true;
-detail(convexChanged ? "backend changed since last tag → will deploy" : "no backend changes → client-only ship");
+detail(
+  `baseline ${lastTag ?? "(no tags)"} — ` +
+    (convexChanged ? "backend changed → will deploy" : "no backend changes → client-only ship")
+);
 
 say("Typecheck and authorization check");
 if (dryRun) {
