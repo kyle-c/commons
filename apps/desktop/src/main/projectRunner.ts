@@ -35,11 +35,45 @@ async function findFreePort(start: number): Promise<number> {
       const srv = net.createServer();
       srv.once("error", () => resolve(false));
       srv.once("listening", () => srv.close(() => resolve(true)));
-      srv.listen(port, "127.0.0.1");
+      // No host: a port held on 0.0.0.0 or :: by another dev server counts as
+      // taken. Probing 127.0.0.1 alone could call it free and hand the port to
+      // a framework that then quietly falls back to a different one.
+      srv.listen(port);
     });
     if (free) return port;
   }
   throw new Error("No free port found");
+}
+
+/**
+ * Is this port actually held by the process we started?
+ *
+ * pollUntilReady only proves *something* answers. Frameworks fall back to
+ * another port when the requested one is busy (Next says so on stdout and
+ * carries on), so "something answered on 4310" can mean a completely
+ * different project's server — which is precisely how a Next site's frames
+ * ended up rendering an Expo app's not-found page.
+ *
+ * The spawned child is a process-group leader (detached), and the real server
+ * is usually a grandchild inside that group, so ownership means "listening pid
+ * is in our child's process group".
+ */
+async function portOwnedBy(port: number, pgid: number): Promise<boolean> {
+  const pids = await new Promise<string[]>((resolve) => {
+    execFile("lsof", ["-iTCP:" + port, "-sTCP:LISTEN", "-n", "-P", "-t"], { timeout: 4000 }, (err, stdout) =>
+      resolve(err ? [] : stdout.split("\n").filter(Boolean))
+    );
+  });
+  if (pids.length === 0) return false; // can't see it; don't claim ownership
+  for (const pid of pids) {
+    const owned = await new Promise<boolean>((resolve) => {
+      execFile("ps", ["-o", "pgid=", "-p", pid], { timeout: 4000 }, (err, stdout) =>
+        resolve(!err && Number(stdout.trim()) === pgid)
+      );
+    });
+    if (owned) return true;
+  }
+  return false;
 }
 
 function pollUntilReady(url: string, timeoutMs: number): Promise<void> {
@@ -164,6 +198,13 @@ export async function start(repoPath: string, name?: string): Promise<DevServerS
 
   try {
     await pollUntilReady(url, 90_000);
+    // Something answered — but is it ours? See portOwnedBy.
+    if (child.pid && !(await portOwnedBy(port, child.pid))) {
+      throw new Error(
+        `Port ${port} is served by a different process, so this project's screens would show another app. ` +
+          `Stop whatever is on :${port} and start again.`
+      );
+    }
     const status: DevServerStatus = { state: "ready", port, url };
     setStatus(repoPath, status);
     return status;
