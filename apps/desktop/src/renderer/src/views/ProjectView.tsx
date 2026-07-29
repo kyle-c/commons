@@ -1017,6 +1017,32 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     setSidePanel("agents");
   };
 
+  /**
+   * Hand a conflicted draft back to the agent instead of to a person.
+   *
+   * The alternative is a merge UI, which the guardrails rule out and which
+   * would be useless to the audience anyway: someone who reviews screens is
+   * not going to resolve a three-way diff. The agent already knows why it
+   * made these changes, which makes it better placed to redo them on top of
+   * the moved base than anyone reading conflict markers cold.
+   *
+   * Stays on the Commons-owned branch, so nothing here touches the base.
+   */
+  const reconcileDraft = async (branch: string, baseBranch: string, conflicts: string[]) => {
+    await startAgentSession({
+      title: `Reconcile ${branch}`,
+      prompt: [
+        `The branch "${branch}" no longer merges cleanly into "${baseBranch}" — "${baseBranch}" has moved since this work started.`,
+        "",
+        `Conflicting files: ${conflicts.join(", ")}`,
+        "",
+        `Rebase "${branch}" onto the latest "${baseBranch}" and resolve every conflict, preserving the intent of the changes on this branch rather than discarding them for whatever is on ${baseBranch}. Where the two genuinely disagree, keep this branch's behaviour and adapt it to the new surroundings.`,
+        "",
+        `Stay on "${branch}". Do not merge, rebase, or push anything to "${baseBranch}". When you are done, summarize in one or two sentences what conflicted and how you resolved it.`,
+      ].join("\n"),
+    });
+  };
+
   const sendThreadToAgent = async (thread: ThreadWithMessages) => {
     const frame = thread.frameId ? frames.find((f) => f._id === thread.frameId) : undefined;
     const firstBody = thread.messages[0]?.body ?? "Comment thread";
@@ -1625,6 +1651,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           onCompareDraft={(draftPreviewUrl, routePath, title) =>
             setCompare({ draftPreviewUrl, routePath, title })
           }
+          repoPath={repoPath}
+          onReconcile={(branch, baseBranch, conflicts) => void reconcileDraft(branch, baseBranch, conflicts)}
         />
       )}
 

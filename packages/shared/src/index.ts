@@ -199,6 +199,16 @@ export interface GitRepoStatus {
   behind: number;
 }
 
+/**
+ * Whether a draft branch still merges into its base. "supported: false" means
+ * the local git is too old to answer, which is reported rather than guessed.
+ */
+export interface MergePreview {
+  supported: boolean;
+  clean: boolean;
+  conflicts: string[];
+}
+
 /** Onboarding preflight for the git integration. */
 export interface GitSetupStatus {
   gitInstalled: boolean;
@@ -240,6 +250,8 @@ export interface CommonsApi {
   /** Servers OTHER tools started (terminal, Claude Code) whose cwd is inside
    *  one of these repos — duplicate-port awareness. macOS only; read-only. */
   detectExternalServers(repoPaths: string[]): Promise<{ repoPath: string; port: number; pid: number }[]>;
+  /** Would this draft merge into its base cleanly? Never touches the working tree. */
+  mergePreview(repoPath: string, draftBranch: string, baseBranch: string): Promise<MergePreview>;
   /** Stop a dev server Commons didn't start. Re-verifies the pid still serves this repo first. */
   stopExternalServer(
     repoPath: string,

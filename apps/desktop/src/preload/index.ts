@@ -46,6 +46,8 @@ const api: CommonsApi = {
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
   wrapPreviewUrl: (url, opts) => ipcRenderer.invoke("wrap-preview-url", url, opts),
   getGitStatus: (repoPath) => ipcRenderer.invoke("git-status", repoPath),
+  mergePreview: (repoPath, draftBranch, baseBranch) =>
+    ipcRenderer.invoke("git-merge-preview", repoPath, draftBranch, baseBranch),
   pullRepo: (repoPath) => ipcRenderer.invoke("git-pull", repoPath),
   cloneRepo: (gitRemote, suggestedName) => ipcRenderer.invoke("clone-repo", gitRemote, suggestedName),
   checkGitSetup: (probeRemote) => ipcRenderer.invoke("git-setup-check", probeRemote),

@@ -199,6 +199,44 @@ export interface GitSetupStatus {
  * The remote probe runs with terminal prompts disabled so a missing credential
  * fails cleanly instead of hanging on an invisible password prompt.
  */
+/**
+ * Would this draft branch merge into its base cleanly, and if not, which files
+ * disagree?
+ *
+ * Uses `merge-tree --write-tree`, which resolves the merge entirely in the
+ * object database and never touches the index or the working tree. That
+ * matters: the guardrail is that Commons never disturbs a dirty tree, and a
+ * conflict check that ran `git merge` would violate it precisely when the
+ * answer is "there is a conflict".
+ *
+ * Requires git 2.38. Older git reports "unsupported" rather than guessing,
+ * because claiming a clean merge we could not verify is the one answer that
+ * would cause harm.
+ */
+export async function mergePreview(
+  repoPath: string,
+  draftBranch: string,
+  baseBranch: string
+): Promise<{ supported: boolean; clean: boolean; conflicts: string[] }> {
+  await maybeFetch(repoPath);
+  const probe = await git(repoPath, ["merge-tree", "--write-tree", "--name-only", baseBranch, draftBranch]);
+  // Unknown option / unknown revision: we cannot answer, so say so.
+  if (!probe.ok && !/CONFLICT|Auto-merging/i.test(probe.stdout + probe.stderr)) {
+    return { supported: false, clean: false, conflicts: [] };
+  }
+  if (probe.ok) return { supported: true, clean: true, conflicts: [] };
+
+  // Conflict output is: tree oid, then one conflicted path per line, then a
+  // blank line and human-readable notes we don't need.
+  const [block = ""] = probe.stdout.split("\n\n");
+  const conflicts = block
+    .split("\n")
+    .slice(1)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return { supported: true, clean: false, conflicts };
+}
+
 export async function checkSetup(probeRemote?: string): Promise<GitSetupStatus> {
   const home = process.env.HOME ?? "/";
   const version = await git(home, ["--version"], { timeout: 10_000 });

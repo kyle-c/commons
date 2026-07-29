@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { AgentSessionEvent, AgentSessionStatus } from "@commons/shared";
+import type { AgentSessionEvent, AgentSessionStatus, MergePreview } from "@commons/shared";
 
 /** Panel view of a mirrored agent session (source of truth: Convex). */
 export interface PanelSession {
@@ -23,16 +23,24 @@ interface Props {
   onClose: () => void;
   /** Open the main-vs-draft side-by-side compare (PRJ-14). */
   onCompareDraft?: (draftPreviewUrl: string, routePath: string | undefined, title: string) => void;
+  /** This machine's working copy, for the merge check. Absent = no check. */
+  repoPath?: string;
+  /** Hand a conflicted draft back to the agent that wrote it. */
+  onReconcile?: (branch: string, baseBranch: string, conflicts: string[]) => void;
 }
 
 function TranscriptItem({
   event,
   session,
   onCompareDraft,
+  repoPath,
+  onReconcile,
 }: {
   event: AgentSessionEvent;
   session: PanelSession | null;
   onCompareDraft?: Props["onCompareDraft"];
+  repoPath?: string;
+  onReconcile?: Props["onReconcile"];
 }) {
   switch (event.type) {
     case "prompt":
@@ -90,11 +98,7 @@ function TranscriptItem({
                   Compare
                 </button>
               )}
-              {event.draft.compareUrl && (
-                <button className="btn" onClick={() => window.commons.openExternal(event.draft!.compareUrl!)}>
-                  Ship ↗
-                </button>
-              )}
+              <DraftActions draft={event.draft} repoPath={repoPath} onReconcile={onReconcile} />
               {event.draft.committed && !event.draft.pushed && (
                 <span className="failed" title={event.draft.pushError}>
                   push failed
@@ -108,6 +112,73 @@ function TranscriptItem({
   }
 }
 
+/**
+ * Ship, or reconcile first.
+ *
+ * A draft branch is cut from the base at session start, and the base keeps
+ * moving. By the time someone reviews the draft it may no longer merge, and
+ * the honest place to say so is next to the button that would have merged it.
+ *
+ * The remedy is deliberately not a merge UI. Conflicts go back to the agent
+ * that wrote the branch, which is the only resolution path that works for
+ * someone who does not read diffs. The check itself never touches the working
+ * tree, so asking the question cannot disturb anything.
+ */
+function DraftActions({
+  draft,
+  repoPath,
+  onReconcile,
+}: {
+  draft: { branch: string; baseBranch: string; compareUrl?: string };
+  repoPath?: string;
+  onReconcile?: (branch: string, baseBranch: string, conflicts: string[]) => void;
+}) {
+  const [preview, setPreview] = useState<MergePreview | null>(null);
+
+  useEffect(() => {
+    if (!repoPath || !window.commons?.mergePreview) return;
+    let cancelled = false;
+    void window.commons
+      .mergePreview(repoPath, draft.branch, draft.baseBranch)
+      .then((result) => !cancelled && setPreview(result))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [repoPath, draft.branch, draft.baseBranch]);
+
+  const conflicted = preview?.supported === true && preview.clean === false;
+
+  return (
+    <>
+      {draft.compareUrl && (
+        <button
+          className={conflicted ? "btn ghost" : "btn"}
+          title={
+            conflicted
+              ? `${draft.branch} no longer merges into ${draft.baseBranch} cleanly. Reconcile first.`
+              : undefined
+          }
+          onClick={() => window.commons.openExternal(draft.compareUrl!)}
+        >
+          Ship ↗
+        </button>
+      )}
+      {conflicted && onReconcile && (
+        <button
+          className="btn"
+          title={`${preview!.conflicts.length} file${preview!.conflicts.length === 1 ? "" : "s"} conflict with ${
+            draft.baseBranch
+          }: ${preview!.conflicts.join(", ")}. Hands them back to the agent.`}
+          onClick={() => onReconcile(draft.branch, draft.baseBranch, preview!.conflicts)}
+        >
+          Reconcile
+        </button>
+      )}
+    </>
+  );
+}
+
 export default function AgentPanel({
   sessions,
   transcript,
@@ -117,6 +188,8 @@ export default function AgentPanel({
   onStop,
   onClose,
   onCompareDraft,
+  repoPath,
+  onReconcile,
 }: Props) {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -193,7 +266,14 @@ export default function AgentPanel({
           <div className="agent-transcript" ref={scrollRef}>
             {transcript.length === 0 && <div className="agent-item tool">Starting session…</div>}
             {transcript.map((event, i) => (
-              <TranscriptItem key={i} event={event} session={active} onCompareDraft={onCompareDraft} />
+              <TranscriptItem
+                key={i}
+                event={event}
+                session={active}
+                onCompareDraft={onCompareDraft}
+                repoPath={repoPath}
+                onReconcile={onReconcile}
+              />
             ))}
           </div>
           {active.canControl ? (

@@ -221,6 +221,9 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("git-status", (_e, repoPath: string) => gitOps.status(repoPath));
+  ipcMain.handle("git-merge-preview", (_e, repoPath: string, draftBranch: string, baseBranch: string) =>
+    gitOps.mergePreview(repoPath, draftBranch, baseBranch)
+  );
   ipcMain.handle("git-pull", (_e, repoPath: string) => gitOps.pullFastForward(repoPath));
   ipcMain.handle("git-setup-check", (_e, probeRemote?: string) => gitOps.checkSetup(probeRemote));
   ipcMain.handle("git-set-identity", (_e, name: string, email: string) => gitOps.setIdentity(name, email));
