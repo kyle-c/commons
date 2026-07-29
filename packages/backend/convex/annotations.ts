@@ -54,7 +54,13 @@ async function requireProject(
 export const voiceCorpus = query({
   args: { projectId: v.id("projects"), ...viewerArgs },
   handler: async (ctx, args) => {
-    await requireProject(ctx, args.projectId, args);
+    // Degrades rather than throws: this is prompt seasoning, and a query that
+    // throws takes the whole panel down with it through the error boundary —
+    // the failure that white-screened v0.2.68. Nothing here is essential
+    // enough to be worth that, and no access means no rows either way.
+    const viewerId = await resolveViewer(ctx, args);
+    const project = viewerId ? await accessibleProject(ctx, args.projectId, viewerId) : null;
+    if (!project) return [];
     const rows = await ctx.db
       .query("annotationEdits")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
@@ -85,7 +91,11 @@ export const voiceCorpus = query({
 export const forProject = query({
   args: { projectId: v.id("projects"), ...viewerArgs },
   handler: async (ctx, args) => {
-    await requireProject(ctx, args.projectId, args);
+    // See voiceCorpus: rendered queries degrade, they don't throw.
+    const viewerId = await resolveViewer(ctx, args);
+    if (!viewerId || !(await accessibleProject(ctx, args.projectId, viewerId))) {
+      return { annotations: [], draftCount: 0, latestRun: null };
+    }
     const annotations = await ctx.db
       .query("annotations")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
