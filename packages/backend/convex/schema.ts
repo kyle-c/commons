@@ -277,6 +277,22 @@ export default defineSchema({
     .index("by_account", ["accountLogin"])
     .index("by_workspace", ["workspaceId"]),
 
+  // Which workspaces an installation feeds.
+  //
+  // Many-to-many on purpose: one GitHub account commonly owns repos that live
+  // in several workspaces (kyle-c owns both a Felix repo and a playground
+  // one). The first cut put a single workspaceId on githubInstallations, so
+  // connecting from a second workspace silently *moved* the binding and the
+  // first workspace stopped receiving deploys.
+  githubWorkspaceLinks: defineTable({
+    installationId: v.number(),
+    workspaceId: v.id("workspaces"),
+    linkedBy: v.id("users"),
+  })
+    .index("by_installation", ["installationId"])
+    .index("by_workspace", ["workspaceId"])
+    .index("by_installation_workspace", ["installationId", "workspaceId"]),
+
   // Short-lived proof that the person GitHub is about to send back to us is
   // the same person who clicked Connect, for the workspace they clicked it in.
   // Without this, anyone could POST an installation_id and adopt someone

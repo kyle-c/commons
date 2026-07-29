@@ -145,13 +145,20 @@ export const mine = query({
         );
         // GitHub accounts feeding deploys into this workspace. Carried here so
         // the popover doesn't need a query per workspace row.
-        const githubAccounts = (
-          await ctx.db
-            .query("githubInstallations")
-            .withIndex("by_workspace", (q) => q.eq("workspaceId", workspace._id))
-            .collect()
-        )
-          .filter((row) => !row.removedAt)
+        const links = await ctx.db
+          .query("githubWorkspaceLinks")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspace._id))
+          .collect();
+        const installs = await Promise.all(
+          links.map((link) =>
+            ctx.db
+              .query("githubInstallations")
+              .withIndex("by_installation", (q) => q.eq("installationId", link.installationId))
+              .first()
+          )
+        );
+        const githubAccounts = installs
+          .filter((row): row is NonNullable<typeof row> => row !== null && !row.removedAt)
           .map((row) => ({ _id: row._id, accountLogin: row.accountLogin }));
         return { ...workspace, members: profiles, githubAccounts };
       })

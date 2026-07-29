@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { resolveViewer } from "./access";
+import { requireViewer, resolveViewer } from "./access";
 
 /**
  * The GitHub App listener: Commons learns each project's preview URL and its
@@ -191,18 +191,36 @@ export const completeConnect = internalMutation({
       .query("githubInstallations")
       .withIndex("by_installation", (q) => q.eq("installationId", args.installationId))
       .first();
-    const fields = {
-      installationId: args.installationId,
-      accountLogin: args.accountLogin ?? existing?.accountLogin ?? "unknown",
-      installedBy: row.userId,
-      workspaceId: row.workspaceId,
-      removedAt: undefined,
-    };
-    if (existing) await ctx.db.patch(existing._id, fields);
-    else await ctx.db.insert("githubInstallations", fields);
+    const accountLogin = args.accountLogin ?? existing?.accountLogin ?? "unknown";
+    if (existing) {
+      await ctx.db.patch(existing._id, { accountLogin, installedBy: row.userId, removedAt: undefined });
+    } else {
+      await ctx.db.insert("githubInstallations", {
+        installationId: args.installationId,
+        accountLogin,
+        installedBy: row.userId,
+      });
+    }
+
+    // Add a link rather than moving one: the same GitHub account legitimately
+    // feeds several workspaces, and reassigning silently stopped deploys
+    // reaching whichever workspace connected first.
+    const alreadyLinked = await ctx.db
+      .query("githubWorkspaceLinks")
+      .withIndex("by_installation_workspace", (q) =>
+        q.eq("installationId", args.installationId).eq("workspaceId", row.workspaceId)
+      )
+      .first();
+    if (!alreadyLinked) {
+      await ctx.db.insert("githubWorkspaceLinks", {
+        installationId: args.installationId,
+        workspaceId: row.workspaceId,
+        linkedBy: row.userId,
+      });
+    }
 
     await ctx.db.patch(row._id, { usedAt: Date.now() });
-    return { ok: true as const, workspaceName: workspace.name, accountLogin: fields.accountLogin };
+    return { ok: true as const, workspaceName: workspace.name, accountLogin };
   },
 });
 
@@ -214,16 +232,22 @@ export const completeConnect = internalMutation({
 export const disconnect = mutation({
   args: {
     installationRowId: v.id("githubInstallations"),
+    workspaceId: v.id("workspaces"),
     userId: v.id("users"),
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const userId = await resolveViewer(ctx, args);
+    const userId = await requireViewer(ctx, args);
     const row = await ctx.db.get(args.installationRowId);
-    if (!row?.workspaceId || !userId || !(await isWorkspaceMember(ctx, row.workspaceId, userId))) {
-      throw new Error("Not allowed");
-    }
-    await ctx.db.patch(row._id, { workspaceId: undefined });
+    if (!row || !(await isWorkspaceMember(ctx, args.workspaceId, userId))) throw new Error("Not allowed");
+    // Only this workspace's link goes; other workspaces keep theirs.
+    const link = await ctx.db
+      .query("githubWorkspaceLinks")
+      .withIndex("by_installation_workspace", (q) =>
+        q.eq("installationId", row.installationId).eq("workspaceId", args.workspaceId)
+      )
+      .first();
+    if (link) await ctx.db.delete(link._id);
     return null;
   },
 });
@@ -292,13 +316,19 @@ export const handleDeployment = internalMutation({
     // Installed but never connected to a workspace: nothing to write into yet.
     // The row still exists, so the UI can offer to finish the connect.
     if (!installation || installation.removedAt) return { matched: 0, reason: "unknown_installation" };
-    if (!installation.workspaceId) return { matched: 0, reason: "unbound_installation" };
-    const workspaceId = installation.workspaceId;
+
+    // Every workspace this installation feeds, not just one.
+    const links = await ctx.db
+      .query("githubWorkspaceLinks")
+      .withIndex("by_installation", (q) => q.eq("installationId", args.installationId))
+      .collect();
+    const workspaceIds = new Set<string>(links.map((l) => l.workspaceId));
+    if (workspaceIds.size === 0) return { matched: 0, reason: "unbound_installation" };
 
     const wanted = new Set(args.repoUrls.map(normalizeRemote));
     const projects = (await ctx.db.query("projects").collect()).filter((p) => {
       if (!p.gitRemote || p.archivedAt) return false;
-      if (p.workspaceId !== workspaceId) return false;
+      if (!p.workspaceId || !workspaceIds.has(p.workspaceId)) return false;
       const mine = normalizeRemote(p.gitRemote);
       // full_name ("kyle-c/commons") matches the tail of a remote URL too.
       return [...wanted].some((w) => w === mine || mine.endsWith(`/${w}`) || w.endsWith(mine));
@@ -359,6 +389,66 @@ async function applyDeploy(
 
   if (Object.keys(patch).length > 0) await ctx.db.patch(project._id, patch);
 }
+
+/**
+ * Carry pre-many-to-many bindings into the link table.
+ *
+ * githubInstallations.workspaceId held a single binding, and re-connecting
+ * overwrote it. Anything still sitting in that field is a real link someone
+ * made, so it becomes a row here; the field is left in place, unread, rather
+ * than dropped mid-flight.
+ */
+export const migrateBindings = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const installs = await ctx.db.query("githubInstallations").collect();
+    let created = 0;
+    for (const install of installs) {
+      if (!install.workspaceId) continue;
+      const existing = await ctx.db
+        .query("githubWorkspaceLinks")
+        .withIndex("by_installation_workspace", (q) =>
+          q.eq("installationId", install.installationId).eq("workspaceId", install.workspaceId!)
+        )
+        .first();
+      if (existing) continue;
+      await ctx.db.insert("githubWorkspaceLinks", {
+        installationId: install.installationId,
+        workspaceId: install.workspaceId,
+        linkedBy: install.installedBy ?? install.workspaceId as unknown as Id<"users">,
+      });
+      created += 1;
+    }
+    return { created };
+  },
+});
+
+/**
+ * Link an installation to a workspace directly, for repair.
+ *
+ * The connect flow is how this normally happens. This exists because the
+ * single-workspaceId model silently discarded a link when the same account was
+ * connected from a second workspace, and the lost link has to be put back
+ * without asking the person to redo a step they already did correctly.
+ */
+export const linkWorkspace = internalMutation({
+  args: {
+    installationId: v.number(),
+    workspaceId: v.id("workspaces"),
+    linkedBy: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("githubWorkspaceLinks")
+      .withIndex("by_installation_workspace", (q) =>
+        q.eq("installationId", args.installationId).eq("workspaceId", args.workspaceId)
+      )
+      .first();
+    if (existing) return { created: false as const };
+    await ctx.db.insert("githubWorkspaceLinks", args);
+    return { created: true as const };
+  },
+});
 
 /** Projects whose snapshots a client should refresh, newest staleness first. */
 export const staleSnapshotProjects = internalQuery({

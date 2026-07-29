@@ -69,7 +69,12 @@ function GithubPanel({ me, workspace }: { me: Doc<"users">; workspace: Workspace
             className="btn ghost"
             title="Stop using this account's deploys here. Doesn't uninstall anything on GitHub."
             onClick={async () => {
-              await disconnect({ installationRowId: account._id, userId: me._id, sessionToken: sessionToken() });
+              await disconnect({
+                installationRowId: account._id,
+                workspaceId: workspace._id,
+                userId: me._id,
+                sessionToken: sessionToken(),
+              });
               setNotice("Disconnected.");
             }}
           >
