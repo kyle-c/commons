@@ -2576,17 +2576,40 @@ kbd {
   background: var(--bg-panel);
   color: var(--text-primary);
 }
+/* Editing the name should add an affordance, not restyle the text — so this
+   matches .project-cover span exactly: same size, weight, ink and halo.
+   It previously used --text-inverse, which is near-black in dark theme and
+   therefore invisible on the very cover it sits over, and was a size and
+   weight off besides, so the title jumped the moment you clicked the pen. */
 .cover-rename {
   width: 80%;
   text-align: center;
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--text-inverse);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: rgba(250, 248, 240, 0.95);
+  caret-color: rgba(250, 248, 240, 0.95);
+  text-shadow:
+    0 1px 2px rgba(15, 15, 10, 0.5),
+    0 1px 14px rgba(15, 15, 10, 0.45);
   background: rgba(0, 0, 0, 0.28);
   border: 1px solid rgba(255, 255, 255, 0.45);
 }
+:root[data-theme="light"] .cover-rename {
+  color: rgba(38, 37, 30, 0.92);
+  caret-color: rgba(38, 37, 30, 0.92);
+  text-shadow:
+    0 1px 2px rgba(250, 248, 240, 0.9),
+    0 0 14px rgba(250, 248, 240, 0.75);
+  /* A dark scrim under dark ink would undo the fix in light theme. */
+  background: rgba(250, 248, 240, 0.42);
+  border-color: rgba(15, 15, 10, 0.3);
+}
 .cover-rename:focus {
   border-color: rgba(255, 255, 255, 0.8);
+}
+:root[data-theme="light"] .cover-rename:focus {
+  border-color: rgba(15, 15, 10, 0.55);
 }
 
 /* Prototype: route drawer + toolbar */

@@ -458,6 +458,52 @@ export const linkWorkspace = internalMutation({
   },
 });
 
+/**
+ * What would a deploy from this installation match, and if nothing, why?
+ *
+ * Read-only. When a deploy doesn't show up, the question is always "is it us
+ * or is it GitHub", and answering it by firing a real webhook writes to
+ * someone's project. This walks the same matching logic and reports.
+ */
+export const diagnoseDeploy = internalQuery({
+  args: { installationId: v.number(), repoUrl: v.string() },
+  handler: async (ctx, args) => {
+    const installation = await ctx.db
+      .query("githubInstallations")
+      .withIndex("by_installation", (q) => q.eq("installationId", args.installationId))
+      .first();
+    if (!installation) return { ok: false as const, reason: "no such installation" };
+    if (installation.removedAt) return { ok: false as const, reason: "installation was removed" };
+
+    const links = await ctx.db
+      .query("githubWorkspaceLinks")
+      .withIndex("by_installation", (q) => q.eq("installationId", args.installationId))
+      .collect();
+    if (links.length === 0) return { ok: false as const, reason: "installation is not linked to any workspace" };
+    const workspaceIds = new Set<string>(links.map((l) => l.workspaceId));
+
+    const wanted = normalizeRemote(args.repoUrl);
+    const all = await ctx.db.query("projects").collect();
+    const sameRemote = all.filter((p) => {
+      if (!p.gitRemote) return false;
+      const mine = normalizeRemote(p.gitRemote);
+      return mine === wanted || mine.endsWith(`/${wanted}`) || wanted.endsWith(mine);
+    });
+    const matched = sameRemote.filter((p) => !p.archivedAt && p.workspaceId && workspaceIds.has(p.workspaceId));
+    return {
+      ok: matched.length > 0,
+      account: installation.accountLogin,
+      linkedWorkspaces: links.length,
+      projectsWithThisRemote: sameRemote.map((p) => ({
+        name: p.name,
+        archived: Boolean(p.archivedAt),
+        workspaceLinked: Boolean(p.workspaceId && workspaceIds.has(p.workspaceId)),
+      })),
+      wouldMatch: matched.map((p) => p.name),
+    };
+  },
+});
+
 /** Projects whose snapshots a client should refresh, newest staleness first. */
 export const staleSnapshotProjects = internalQuery({
   args: {},
