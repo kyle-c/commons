@@ -574,6 +574,14 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const selfHasRepoElsewhere = repoHolders.some((h) => h.userId === me._id);
 
   const [devStatus, setDevStatus] = useState<DevServerStatus>({ state: "stopped" });
+  /**
+   * A dev server belongs to a repo. Without a working copy on this machine
+   * there is no live server for *this* project, whatever devStatus happens to
+   * hold — so everything that resolves a frame URL reads this, not devStatus
+   * directly. The effect below also clears on project change; this makes the
+   * wrong-project case unrepresentable rather than merely handled.
+   */
+  const liveStatus: DevServerStatus = repoPath ? devStatus : { state: "stopped" };
   const [openSetting, setOpenSetting] = useState<SettingKey | null>(null);
   // The Tests panel points here instead of embedding its own editor.
   useEffect(() => {
@@ -775,7 +783,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     for (const frame of stale) snapshotAttempted.current.add(frame._id);
     void (async () => {
       for (const frame of stale) {
-        const url = resolveFrameUrl(frame.routePath, devStatus, null)?.url;
+        const url = resolveFrameUrl(frame.routePath, liveStatus, null)?.url;
         if (!url) continue;
         try {
           const png = await window.commons.captureSnapshot(url, { width: frame.width, height: frame.height });
@@ -846,7 +854,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     const routePath = session.context.routePath ?? "/";
     const frame = session.context.frameId ? frames.find((f) => f._id === session.context.frameId) : undefined;
     const size = { width: frame?.width ?? 1280, height: frame?.height ?? 800 };
-    const beforeUrl = resolveFrameUrl(routePath, devStatus, project?.previewUrl)?.url;
+    const beforeUrl = resolveFrameUrl(routePath, liveStatus, project?.previewUrl)?.url;
     if (!beforeUrl) return;
 
     const upload = async (png: Uint8Array) => {
@@ -1033,6 +1041,14 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
 
   // Start the dev server for local code projects and track its status.
   useEffect(() => {
+    // Clear first, before the early return below. devStatus describes one
+    // repo, and switching projects has to invalidate it: a project with no
+    // working copy on this machine used to inherit the previously-viewed
+    // project's running server and render *its* pages in these frames —
+    // route "/" showed the wrong app and every other route 404'd. It also
+    // held even while the chip correctly said "no live preview", because the
+    // chip reads repoPath and the frames read devStatus.
+    setDevStatus({ state: "stopped" });
     if (!repoPath || !window.commons) return;
     let cancelled = false;
     window.commons.getDevServerStatus(repoPath).then((status) => {
@@ -1506,7 +1522,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           threads={threads}
           users={users}
           mentionUsers={mentionUsers}
-          devStatus={devStatus}
+          devStatus={liveStatus}
           previewUrl={project.previewUrl}
           viewerHasRepo={!!repoPath}
           selfHasRepoElsewhere={!repoPath && selfHasRepoElsewhere}
@@ -1532,7 +1548,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
       ) : (
         <PrototypeView
           frames={frames}
-          devStatus={devStatus}
+          devStatus={liveStatus}
           previewUrl={project.previewUrl}
           viewerHasRepo={!!repoPath}
           selfHasRepoElsewhere={!repoPath && selfHasRepoElsewhere}
@@ -1587,7 +1603,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
       {compare && (
         <CompareDraft
           title={compare.title}
-          mainUrl={resolveFrameUrl(compare.routePath ?? "/", devStatus, project.previewUrl)?.url ?? null}
+          mainUrl={resolveFrameUrl(compare.routePath ?? "/", liveStatus, project.previewUrl)?.url ?? null}
           draftUrl={`${compare.draftPreviewUrl}${compare.routePath ?? ""}`}
           onClose={() => setCompare(null)}
         />
