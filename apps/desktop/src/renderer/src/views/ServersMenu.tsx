@@ -56,7 +56,16 @@ export default function ServersMenu({
   }, []);
 
   if (!window.commons) return null;
-  const online = servers.filter((s) => s.status.state === "ready").length;
+  /**
+   * One predicate for the badge, the heading and the list, because they were
+   * three answers to the same question: the count only counted "ready" while
+   * the list rendered every server the runner had ever known, so a stopped
+   * project sat under a heading that said one thing was running.
+   *
+   * "Stopped" is the only state with nothing to say — a starting server is on
+   * its way, and an errored one is exactly what you opened this menu to find.
+   */
+  const active = servers.filter((s) => s.status.state !== "stopped");
 
   return (
     <div style={{ position: "relative" }} ref={wrapRef}>
@@ -70,17 +79,17 @@ export default function ServersMenu({
         }}
       >
         <Icon name="monitor" />
-        {online > 0 && <span className="count-badge live">{online}</span>}
+        {active.length > 0 && <span className="count-badge live">{active.length}</span>}
       </button>
       {open && (
         <div className="titlebar-popover">
-          <PopSection label={`Running prototypes · ${online}`} />
-          {servers.length === 0 && (
+          <PopSection label={`Running prototypes · ${active.length}`} />
+          {active.length === 0 && (
             <div className="hint" style={{ padding: "0 14px 10px" }}>
               Nothing running — opening a project starts its server.
             </div>
           )}
-          {servers.map((server) => {
+          {active.map((server) => {
             const projectId = projectByPath.get(server.repoPath);
             const canOpen = Boolean(projectId && onOpenProject);
             return (
