@@ -55,6 +55,9 @@ const OPEN_BY_DESIGN = {
   "auth.ts:validate": "checks a token's validity — holding the token is the proof",
   "auth.ts:touch": "refreshes a token — holding the token is the proof",
   "auth.ts:signOut": "revokes the token supplied — you can only revoke one you hold",
+  "projects.ts:sharePage":
+    "guest mode (/g/<token>): the share token is the credential, exactly as for the /p/ page it replaces. " +
+    "Revoking it in Sharing cuts access instantly, and only approved annotations are returned",
 };
 
 // Files with no public API surface worth scanning.
