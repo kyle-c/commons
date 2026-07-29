@@ -1,8 +1,8 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery, mutation } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { requireViewer, resolveViewer } from "./access";
+import { accessibleProject, requireViewer, resolveViewer } from "./access";
 
 /**
  * The GitHub App listener: Commons learns each project's preview URL and its
@@ -257,6 +257,58 @@ export const disconnect = mutation({
       .first();
     if (link) await ctx.db.delete(link._id);
     return null;
+  },
+});
+
+/**
+ * What GitHub is doing for this project, in the project's own terms.
+ *
+ * A project connected to GitHub that has never had a successful deploy looks
+ * exactly like one that was never connected: an empty preview field either
+ * way. That ambiguity cost an afternoon of debugging on a repo whose Vercel
+ * deploys had been blocked for a week, so the two states are now nameable.
+ *
+ * Degrades to null rather than throwing — it is rendered.
+ */
+export const projectStatus = query({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { projectId, ...viewer }) => {
+    const viewerId = await resolveViewer(ctx, viewer);
+    const project = viewerId ? await accessibleProject(ctx, projectId, viewerId) : null;
+    if (!project?.workspaceId) return null;
+
+    const links = await ctx.db
+      .query("githubWorkspaceLinks")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", project.workspaceId!))
+      .collect();
+    const installs = await Promise.all(
+      links.map((link) =>
+        ctx.db
+          .query("githubInstallations")
+          .withIndex("by_installation", (q) => q.eq("installationId", link.installationId))
+          .first()
+      )
+    );
+    const accounts = installs
+      .filter((row): row is NonNullable<typeof row> => row !== null && !row.removedAt)
+      .map((row) => row.accountLogin);
+
+    const samples = await ctx.db
+      .query("deploymentSamples")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .take(1);
+
+    return {
+      accounts,
+      // Any deploy we have ever acted on for this project: a production one
+      // stamps lastDeployAt, a branch one leaves a sample.
+      seenDeploy: Boolean(project.lastDeployAt) || samples.length > 0,
+      lastDeployAt: project.lastDeployAt,
+    };
   },
 });
 

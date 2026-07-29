@@ -182,6 +182,7 @@ function UrlSettingBody({
   value,
   learned,
   learnedAt,
+  connection,
   validate,
   onSave,
 }: {
@@ -192,6 +193,8 @@ function UrlSettingBody({
   /** True when Commons worked this value out from a GitHub deploy, not a person. */
   learned?: boolean;
   learnedAt?: number;
+  /** Why this field is still empty, when GitHub was supposed to fill it. */
+  connection?: string | null;
   validate: (v: string) => string | null;
   onSave: (v: string) => Promise<void>;
 }) {
@@ -200,6 +203,7 @@ function UrlSettingBody({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const showField = editing || !value;
+  const connectionNote = connection ? <span className="hint">{connection}</span> : null;
 
   const save = async (next: string) => {
     const problem = next ? validate(next) : null;
@@ -225,6 +229,7 @@ function UrlSettingBody({
       {showField ? (
         <>
           <span className="hint">{hint}</span>
+          {connectionNote}
           {error && <span className="form-error">{error}</span>}
           <div className="reveal-form-row">
             <input
@@ -628,6 +633,27 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   // If the repo deploys on Vercel, use its project name to make the empty
   // draft-previews field self-explanatory. A hint for the placeholder only —
   // the team slug isn't knowable locally, so nothing is ever filled in for you.
+  /**
+   * "Connected but nothing has deployed" and "never connected" used to look
+   * identical: an empty field. Naming which one you're in is the difference
+   * between a five-second answer and an afternoon.
+   */
+  const githubStatus = useQuery(api.github.projectStatus, {
+    projectId: nav.projectId,
+    userId: me._id,
+    sessionToken: sessionToken(),
+  });
+  const previewConnectionNote = (() => {
+    if (!githubStatus) return null;
+    if (githubStatus.accounts.length === 0) {
+      return "Not connected to GitHub. Connect it from the workspaces menu and deploys fill this in for you.";
+    }
+    if (!githubStatus.seenDeploy) {
+      return `Connected to ${githubStatus.accounts.join(", ")}, but no successful deployment has arrived yet. Failed and blocked builds are ignored, so check the deploy went green.`;
+    }
+    return null;
+  })();
+
   const [vercelProject, setVercelProject] = useState<string | null>(null);
   useEffect(() => {
     if (!repoPath || !window.commons?.inspectRepo) return;
@@ -1394,6 +1420,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             value={project.previewUrl}
             learned={project.previewSource === "github"}
             learnedAt={project.lastDeployAt}
+            connection={previewConnectionNote}
             validate={(url) => (/^https?:\/\/.+/.test(url) ? null : "Needs a full https:// link.")}
             onSave={async (url) => {
               await setPreviewUrl({
@@ -1418,6 +1445,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             value={project.branchPreviewPattern}
             learned={project.branchPatternSource === "github"}
             learnedAt={project.lastDeployAt}
+            connection={previewConnectionNote}
             validate={(v) =>
               /^https?:\/\/.+/.test(v) && v.includes("{branch}") ? null : "Needs https:// and a {branch} placeholder."
             }
