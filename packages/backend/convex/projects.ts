@@ -316,6 +316,99 @@ export const catchUp = query({
 });
 
 /** Everything the read-only web share page needs, keyed by its token. */
+/**
+ * The same project data, for the real web app running in guest mode.
+ *
+ * Phase 3 replaces the hand-written share template with the actual canvas,
+ * scoped by the share token instead of a session. The token *is* the
+ * credential here: holding it is the whole authorisation story, which is why
+ * revoking it in Sharing cuts access instantly.
+ *
+ * Unlike sharePageData (which flattens messages for a static template), this
+ * keeps ids, so a guest can reply to a thread rather than only read it.
+ */
+export const sharePage = query({
+  args: { shareToken: v.string() },
+  handler: async (ctx, { shareToken }) => {
+    const project = await ctx.db
+      .query("projects")
+      .withIndex("by_share_token", (q) => q.eq("shareToken", shareToken))
+      .unique();
+    // Degrades rather than throwing: a revoked link should render an
+    // explanation, not an error boundary.
+    if (!project || project.archivedAt) return null;
+
+    const frames = await ctx.db
+      .query("frames")
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
+      .collect();
+    const framesWithSnapshots = await Promise.all(
+      frames.map(async (frame) => {
+        const snapshot = await ctx.db
+          .query("frameSnapshots")
+          .withIndex("by_frame", (q) => q.eq("frameId", frame._id))
+          .unique();
+        return {
+          ...frame,
+          snapshotUrl: snapshot ? await ctx.storage.getUrl(snapshot.storageId) : null,
+          snapshotAt: snapshot?.capturedAt ?? null,
+        };
+      })
+    );
+
+    const threads = await ctx.db
+      .query("threads")
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
+      .collect();
+    const threadsWithMessages = await Promise.all(
+      threads.map(async (thread) => {
+        const messages = await ctx.db
+          .query("messages")
+          .withIndex("by_thread", (q) => q.eq("threadId", thread._id))
+          .collect();
+        return {
+          ...thread,
+          messages: await Promise.all(
+            messages.map(async (m) => {
+              const author = m.authorId ? await ctx.db.get(m.authorId) : null;
+              return {
+                _id: m._id,
+                _creationTime: m._creationTime,
+                body: m.body,
+                guestName: m.guestName,
+                author: author
+                  ? { _id: author._id, name: author.name, avatarColor: author.avatarColor, avatarUrl: author.avatarUrl }
+                  : null,
+              };
+            })
+          ),
+        };
+      })
+    );
+
+    // Approved narration only: drafts are internal review state and a guest
+    // must never see them.
+    const annotations = (
+      await ctx.db
+        .query("annotations")
+        .withIndex("by_project", (q) => q.eq("projectId", project._id))
+        .take(500)
+    ).filter((a) => a.status === "approved");
+
+    return {
+      project: {
+        _id: project._id,
+        name: project.name,
+        previewUrl: project.previewUrl,
+        status: project.status,
+      },
+      frames: framesWithSnapshots,
+      threads: threadsWithMessages,
+      annotations,
+    };
+  },
+});
+
 export const sharePageData = internalQuery({
   args: { shareToken: v.string() },
   handler: async (ctx, { shareToken }) => {

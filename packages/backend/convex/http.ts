@@ -129,6 +129,31 @@ http.route({
   }),
 });
 
+/**
+ * Guest mode: the real web app, scoped by a share token (Phase 3).
+ *
+ * Serves the same shell as /app. The client sees /g/<token> in its own URL,
+ * reads projects.sharePage instead of the session-scoped queries, and renders
+ * the actual canvas rather than a second implementation of one.
+ *
+ * Lives alongside /p/ rather than replacing it: share links are already out
+ * in the world, and they keep working until this reaches parity. The 512-line
+ * template below is deleted at that point, not before.
+ */
+http.route({
+  pathPrefix: "/g/",
+  method: "GET",
+  handler: httpAction(async (ctx) => {
+    const bundle = await ctx.runQuery(internal.updates.latestWebApp, {});
+    if (!bundle) return page("Not published", "The Commons web app hasn't been published yet.");
+    return new Response(bundle.indexHtml, {
+      status: 200,
+      // The token is in the path, so this must never be cached as one page.
+      headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+    });
+  }),
+});
+
 // Read-only web share page (SNAP-4 / DL-3 lite): the canvas as snapshot
 // images with thread pins and conversations — for anyone with the link,
 // no install, no account. Token minted per project in Sharing.
