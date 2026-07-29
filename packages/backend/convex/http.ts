@@ -222,9 +222,26 @@ http.route({
       accountLogin: params.get("account") ?? undefined,
     });
     if (!result.ok) return setupPage("Couldn't finish connecting", SETUP_REASONS[result.reason] ?? NO_STATE_BODY);
+
+    const account = escapeHtml(result.accountLogin);
+    const workspace = escapeHtml(result.workspaceName);
+
+    // Reconnecting an account that was already linked changes nothing. Saying
+    // "Connected" here would be true and useless: it reads as success while
+    // the account you actually meant is still missing. GitHub sends you to
+    // whichever account you're signed in as, so this is easy to hit twice.
+    if (result.alreadyLinked) {
+      return setupPage(
+        "Already connected",
+        `<p><strong>${account}</strong> was already linked to <strong>${workspace}</strong>, so nothing changed.</p>
+         <p>If you meant a different GitHub account, that's the thing to fix: GitHub connected you as
+         <strong>${account}</strong> because that's the account you're signed in as. Switch accounts on GitHub,
+         then click Connect GitHub in Commons again.</p>`
+      );
+    }
     return setupPage(
       "Connected",
-      `<p><strong>${escapeHtml(result.accountLogin)}</strong> is linked to <strong>${escapeHtml(result.workspaceName)}</strong>.</p>
+      `<p><strong>${account}</strong> is now linked to <strong>${workspace}</strong>.</p>
        <p>When one of those repos deploys, Commons picks up the preview URL on its own. You can close this tab and go back to the app.</p>`
     );
   }),

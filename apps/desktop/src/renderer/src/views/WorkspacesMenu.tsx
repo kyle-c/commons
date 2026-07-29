@@ -55,7 +55,13 @@ function GithubPanel({ me, workspace }: { me: Doc<"users">; workspace: Workspace
       );
       return;
     }
-    setNotice("Finish in the browser, then come back — connected accounts show up here.");
+    setNotice(
+      accounts.length > 0
+        ? `GitHub will connect whichever account you're signed in as. Already here: ${accounts
+            .map((a) => a.accountLogin)
+            .join(", ")}.`
+        : "Finish in the browser, then come back — connected accounts show up here."
+    );
     if (window.commons) void window.commons.openExternal(result.url);
     else window.open(result.url, "_blank");
   };
@@ -87,7 +93,9 @@ function GithubPanel({ me, workspace }: { me: Doc<"users">; workspace: Workspace
       </button>
       <div className="hint">
         {notice ??
-          "Pick the repos you want. After that, every deploy tells Commons the project's preview link and its per-branch draft links."}
+          (accounts.length > 0
+            ? "Deploys from these accounts fill in this workspace's preview links. Connect another if your repos span more than one GitHub account."
+            : "Pick the repos you want. After that, every deploy tells Commons the project's preview link and its per-branch draft links.")}
       </div>
     </div>
   );

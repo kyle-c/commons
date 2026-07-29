@@ -220,7 +220,15 @@ export const completeConnect = internalMutation({
     }
 
     await ctx.db.patch(row._id, { usedAt: Date.now() });
-    return { ok: true as const, workspaceName: workspace.name, accountLogin };
+    // Whether anything actually changed. Reconnecting the same account is a
+    // no-op, and a no-op that looks identical to success is how two connects
+    // both landed on one account without anyone noticing.
+    return {
+      ok: true as const,
+      workspaceName: workspace.name,
+      accountLogin,
+      alreadyLinked: Boolean(alreadyLinked),
+    };
   },
 });
 
