@@ -167,7 +167,12 @@ writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 git("add", "-A");
 git("commit", "-m", `v${version}`);
 git("push");
-detail(`committed and pushed v${version}`);
+// The exact commit this release is built from. gh release create otherwise
+// tags whatever the remote's default branch points at when it runs, which is
+// minutes later — long enough to commit something else and have the tag claim
+// code the artifact does not contain. That happened on v0.2.74.
+const builtSha = git("rev-parse", "HEAD");
+detail(`committed and pushed v${version} (${builtSha.slice(0, 7)})`);
 
 say("Build, sign, notarize (several minutes)");
 runLoud("pnpm", ["dist"], {
@@ -213,9 +218,11 @@ say("Publish the web app to prod");
 runLoud("node", [path.join(root, "scripts/publish-webapp.mjs"), "--prod"], { cwd: root });
 
 say(`Create GitHub release v${version}`);
-runLoud("gh", ["release", "create", `v${version}`, dmg, zip, "--title", `v${version}`, "--notes", notes], {
-  cwd: root,
-});
+runLoud(
+  "gh",
+  ["release", "create", `v${version}`, dmg, zip, "--title", `v${version}`, "--notes", notes, "--target", builtSha],
+  { cwd: root }
+);
 
 say("Publish the auto-update feed");
 runLoud("node", [path.join(root, "scripts/publish-update.mjs"), "--prod"], { cwd: root });
@@ -257,6 +264,13 @@ detail(`artifact downloadable (HTTP ${status})`);
 const download = run("curl", ["-sL", "-o", "/dev/null", "-w", "%{http_code}", `${PROD_SITE}/download`]).trim();
 if (!["200", "206"].includes(download)) die(`trycommons.app/download is broken (HTTP ${download}).`);
 detail(`/download resolves (HTTP ${download})`);
+
+if (git("rev-parse", "HEAD") !== builtSha) {
+  console.log(
+    `\n  Note: commits landed during the build. v${version} is tagged at ${builtSha.slice(0, 7)},` +
+      ` which is what shipped; anything newer is still unreleased.`
+  );
+}
 
 const sizeMb = (statSync(dmg).size / 1e6).toFixed(1);
 console.log(`\n✓ v${version} shipped — ${sizeMb} MB, notarized, feed verified.`);
