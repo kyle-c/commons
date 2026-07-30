@@ -13,6 +13,7 @@ import type * as agentSessions from "../agentSessions.js";
 import type * as annotations from "../annotations.js";
 import type * as auth from "../auth.js";
 import type * as comments from "../comments.js";
+import type * as config from "../config.js";
 import type * as emails from "../emails.js";
 import type * as errors from "../errors.js";
 import type * as github from "../github.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   annotations: typeof annotations;
   auth: typeof auth;
   comments: typeof comments;
+  config: typeof config;
   emails: typeof emails;
   errors: typeof errors;
   github: typeof github;

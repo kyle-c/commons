@@ -17,6 +17,7 @@ import AgentPanel, { type PanelSession } from "../agents/AgentPanel";
 import NarrationPanel from "./NarrationPanel";
 import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessions";
 import { getConvexUrl, initials, sessionToken, timeAgo } from "../lib/session";
+import { usePublicSiteUrl } from "../lib/publicUrl";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
@@ -362,9 +363,8 @@ function SharePopover({
   );
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
-  const shareUrl = project.shareToken
-    ? `${(getConvexUrl() ?? "").replace(".convex.cloud", ".convex.site")}/p/${project.shareToken}`
-    : null;
+  const publicSite = usePublicSiteUrl();
+  const shareUrl = project.shareToken ? `${publicSite}/p/${project.shareToken}` : null;
 
   const copy = (kind: "app" | "web", text: string) => {
     void navigator.clipboard.writeText(text);
@@ -530,6 +530,8 @@ interface Props {
 }
 
 export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, onSignOut }: Props) {
+  // Branded origin for anything a teammate or stakeholder will actually open.
+  const publicSite = usePublicSiteUrl();
   const project = useQuery(api.projects.get, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
   const framesQuery = useQuery(api.projects.frames, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
   const frames = framesQuery ?? [];
@@ -1592,7 +1594,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           onSendToAgent={window.commons && (repoPath || project.gitRemote) ? sendThreadToAgent : undefined}
           webLinkBase={
             project.shareToken
-              ? `${(getConvexUrl() ?? "").replace(".convex.cloud", ".convex.site")}/p/${project.shareToken}`
+              ? `${publicSite}/p/${project.shareToken}`
               : undefined
           }
           heatmap={

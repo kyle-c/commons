@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
-import { getConvexUrl, timeAgo, sessionToken } from "../lib/session";
+import { timeAgo, sessionToken } from "../lib/session";
+import { usePublicSiteUrl } from "../lib/publicUrl";
 import Icon from "../components/icons";
 
 /**
@@ -12,10 +13,14 @@ import Icon from "../components/icons";
  * heatmaps land back on the canvas frames.
  */
 
-/** The deployment's HTTP-actions origin, where tester/report pages live. */
-function siteUrl(): string | null {
-  const url = getConvexUrl();
-  return url ? url.replace(".convex.cloud", ".convex.site") : null;
+/**
+ * Where tester and report pages live. Branded when the deployment has a custom
+ * domain: these links go to testers and stakeholders, so they should not wear
+ * the raw deployment hostname.
+ */
+function useSiteUrl(): string | null {
+  const site = usePublicSiteUrl();
+  return site || null;
 }
 
 const DEVICES = [
@@ -277,7 +282,7 @@ function TestResults({
   onClose: () => void;
 }) {
   const data = useQuery(api.userTests.results, { testId: test._id, userId: me._id, sessionToken: sessionToken() });
-  const site = siteUrl();
+  const site = useSiteUrl();
   const sessions = data?.sessions ?? [];
   const completed = sessions.filter((s) => s.completedAt);
   const anyInstrumented = sessions.some((s) => s.instrumented);
@@ -471,7 +476,7 @@ export default function UserTests({
   const setStatus = useMutation(api.userTests.setStatus);
   const [creating, setCreating] = useState(false);
   const [resultsFor, setResultsFor] = useState<Id<"tests"> | null>(null);
-  const site = siteUrl();
+  const site = useSiteUrl();
   const routes = useMemo(() => frames.filter((f) => f.kind === "route"), [frames]);
   const mobileDefault = routes.length > 0 && routes.every((f) => f.width <= 500);
   const openResults = tests?.find((t) => t._id === resultsFor);
