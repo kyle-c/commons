@@ -272,6 +272,12 @@ export default defineSchema({
     installedBy: v.optional(v.id("users")),
     workspaceId: v.optional(v.id("workspaces")),
     removedAt: v.optional(v.number()),
+    // Repos this installation can actually see ("owner/name"), cached from the
+    // API. A query cannot fetch, and this is the difference between "connected,
+    // waiting" and "connected, but not to this repo" — a distinction that cost
+    // hours to establish by hand. Absent = never synced, so say nothing.
+    repositories: v.optional(v.array(v.string())),
+    repositoriesSyncedAt: v.optional(v.number()),
   })
     .index("by_installation", ["installationId"])
     .index("by_account", ["accountLogin"])

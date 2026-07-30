@@ -648,6 +648,11 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     if (githubStatus.accounts.length === 0) {
       return "Not connected to GitHub. Connect it from the workspaces menu and deploys fill this in for you.";
     }
+    // The specific silence, not the general one: a repo outside the
+    // installation looks identical to one that has never deployed.
+    if (githubStatus.repoCovered === false) {
+      return `Connected to ${githubStatus.accounts.join(", ")}, but this repo isn't included in the installation, so GitHub sends nothing for it. Add it under Configure on github.com/settings/installations.`;
+    }
     if (!githubStatus.seenDeploy) {
       return `Connected to ${githubStatus.accounts.join(", ")}, but no successful deployment has arrived yet. Failed and blocked builds are ignored, so check the deploy went green.`;
     }

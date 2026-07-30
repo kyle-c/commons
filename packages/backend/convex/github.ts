@@ -293,9 +293,31 @@ export const projectStatus = query({
           .first()
       )
     );
-    const accounts = installs
-      .filter((row): row is NonNullable<typeof row> => row !== null && !row.removedAt)
-      .map((row) => row.accountLogin);
+    const live = installs.filter((row): row is NonNullable<typeof row> => row !== null && !row.removedAt);
+    const accounts = live.map((row) => row.accountLogin);
+
+    /**
+     * Is this project's repo actually inside one of those installations?
+     *
+     * "Only select repositories" is the default people click through, and a
+     * repo left out of it produces exactly the same silence as a repo that has
+     * never deployed. Distinguishing them by hand took an afternoon and an App
+     * token; this makes it a sentence.
+     *
+     * Null when nothing has synced yet, so a stale cache never accuses a repo
+     * of being uncovered when we simply do not know.
+     */
+    const synced = live.filter((row) => row.repositories !== undefined);
+    let repoCovered: boolean | null = null;
+    if (project.gitRemote && synced.length > 0) {
+      const wanted = normalizeRemote(project.gitRemote);
+      repoCovered = synced.some((row) =>
+        (row.repositories ?? []).some((full) => {
+          const candidate = normalizeRemote(`https://github.com/${full}`);
+          return candidate === wanted || wanted.endsWith(`/${full.toLowerCase()}`);
+        })
+      );
+    }
 
     const samples = await ctx.db
       .query("deploymentSamples")
@@ -308,6 +330,7 @@ export const projectStatus = query({
       // stamps lastDeployAt, a branch one leaves a sample.
       seenDeploy: Boolean(project.lastDeployAt) || samples.length > 0,
       lastDeployAt: project.lastDeployAt,
+      repoCovered,
     };
   },
 });

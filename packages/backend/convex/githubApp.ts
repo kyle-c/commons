@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { internalAction } from "./_generated/server";
+import { internalAction, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 /**
  * Acting *as* the GitHub App, rather than only listening to it.
@@ -149,5 +150,148 @@ export const verifyInstallation = internalAction({
     } catch (error) {
       return { ok: false as const, detail: error instanceof Error ? error.message : String(error) };
     }
+  },
+});
+
+/** Store what an installation can reach, so a query can answer without fetching. */
+export const recordRepositories = internalMutation({
+  args: { installationId: v.number(), repositories: v.array(v.string()) },
+  handler: async (ctx, { installationId, repositories }) => {
+    const row = await ctx.db
+      .query("githubInstallations")
+      .withIndex("by_installation", (q) => q.eq("installationId", installationId))
+      .first();
+    if (!row) return null;
+    await ctx.db.patch(row._id, { repositories, repositoriesSyncedAt: Date.now() });
+    return null;
+  },
+});
+
+/**
+ * Refresh the cached repo list for every live installation.
+ *
+ * Repo selection changes on GitHub without telling us — there is no webhook
+ * for "the user ticked another repo" that we subscribe to — so this is a pull,
+ * run after a connect and on demand.
+ */
+export const syncRepositories = internalAction({
+  args: {},
+  handler: async (ctx): Promise<{ installationId: number; count: number; error?: string }[]> => {
+    const installations = await ctx.runQuery(internal.github.installations, {});
+    const results: { installationId: number; count: number; error?: string }[] = [];
+    for (const installation of installations) {
+      try {
+        const token = await installationToken(installation.installationId);
+        const response = await fetch(`${GITHUB_API}/installation/repositories?per_page=100`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+        });
+        if (!response.ok) {
+          results.push({ installationId: installation.installationId, count: 0, error: `${response.status}` });
+          continue;
+        }
+        const body = await response.json();
+        const repositories: string[] = (body.repositories ?? []).map((r: { full_name: string }) => r.full_name);
+        await ctx.runMutation(internal.githubApp.recordRepositories, {
+          installationId: installation.installationId,
+          repositories,
+        });
+        results.push({ installationId: installation.installationId, count: repositories.length });
+      } catch (error) {
+        results.push({
+          installationId: installation.installationId,
+          count: 0,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return results;
+  },
+});
+
+/** owner/name from any remote form, or null if it isn't a GitHub remote. */
+function repoSlug(gitRemote: string): string | null {
+  const match = gitRemote
+    .trim()
+    .replace(/^git@github\.com:/, "https://github.com/")
+    .replace(/\.git$/, "")
+    .match(/github\.com\/([^/]+)\/([^/]+)/i);
+  return match ? `${match[1]}/${match[2]}` : null;
+}
+
+/**
+ * Open a pull request for a draft branch, server-side.
+ *
+ * Ship currently walks you to GitHub's compare page, which works only if you
+ * have the repo cloned and are signed in as someone who can push. This does it
+ * with the installation token instead, so the loop closes for a reviewer who
+ * has never cloned anything.
+ *
+ * Deliberately opens a PR rather than merging. GitHub owns merging: it knows
+ * about required reviews, branch protection, and CI, and it reports conflicts
+ * in a place engineers already look. A merge button here would have to
+ * reimplement all of that and would still be wrong the first time a repo had a
+ * rule we did not model.
+ */
+export const openPullRequest = internalAction({
+  args: {
+    installationId: v.number(),
+    gitRemote: v.string(),
+    head: v.string(),
+    base: v.string(),
+    title: v.string(),
+    body: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const slug = repoSlug(args.gitRemote);
+    if (!slug) return { ok: false as const, reason: "not_a_github_remote", detail: args.gitRemote };
+
+    let token: string;
+    try {
+      token = await installationToken(args.installationId);
+    } catch (error) {
+      return { ok: false as const, reason: "no_token", detail: error instanceof Error ? error.message : String(error) };
+    }
+
+    const response = await fetch(`${GITHUB_API}/repos/${slug}/pulls`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ title: args.title, head: args.head, base: args.base, body: args.body ?? "" }),
+    });
+
+    if (response.ok) {
+      const pr = await response.json();
+      return { ok: true as const, url: pr.html_url as string, number: pr.number as number };
+    }
+
+    const detail = await response.text();
+    // 422 covers several distinct situations that all deserve different advice,
+    // so name them rather than surfacing GitHub's raw envelope.
+    if (response.status === 422 && detail.includes("A pull request already exists")) {
+      return { ok: false as const, reason: "already_open", detail };
+    }
+    if (response.status === 422 && detail.includes("No commits between")) {
+      return { ok: false as const, reason: "nothing_to_merge", detail };
+    }
+    if (response.status === 403) {
+      // The token authenticated and was refused, which almost always means the
+      // App was never granted "Pull requests: read and write" — and note that
+      // adding a permission is not enough on its own: each installation has to
+      // accept the change before it takes effect.
+      return { ok: false as const, reason: "missing_permission", detail };
+    }
+    if (response.status === 404) {
+      // Repo selection rather than a missing repo, when permissions are fine.
+      return { ok: false as const, reason: "repo_not_in_installation", detail };
+    }
+    return { ok: false as const, reason: "github_error", detail: `${response.status}: ${detail}` };
   },
 });
