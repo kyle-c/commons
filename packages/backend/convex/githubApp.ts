@@ -117,7 +117,15 @@ export const verifyCredentials = internalAction({
         return { ok: false as const, stage: "jwt", detail: `${response.status}: ${await response.text()}` };
       }
       const app = await response.json();
-      return { ok: true as const, appSlug: app.slug as string, appName: app.name as string };
+      return {
+        ok: true as const,
+        appSlug: app.slug as string,
+        appName: app.name as string,
+        // What the App *declares*. An installation may still be running on an
+        // older set until someone accepts the change, which is the difference
+        // between "not added" and "added but not accepted".
+        declaredPermissions: app.permissions ?? {},
+      };
     } catch (error) {
       return { ok: false as const, stage: "signing", detail: error instanceof Error ? error.message : String(error) };
     }
@@ -141,11 +149,24 @@ export const verifyInstallation = internalAction({
         return { ok: false as const, detail: `${response.status}: ${await response.text()}` };
       }
       const body = await response.json();
+
+      // What this installation has actually accepted, which is what the token
+      // can do — declared permissions mean nothing until accepted.
+      const meta = await fetch(`${GITHUB_API}/app/installations/${installationId}`, {
+        headers: {
+          Authorization: `Bearer ${await appJwt()}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      });
+      const installation = meta.ok ? await meta.json() : null;
+
       return {
         ok: true as const,
         // The answer to "why didn't my deploy show up": whether this
         // installation can see the repo at all.
         repositories: (body.repositories ?? []).map((r: { full_name: string }) => r.full_name),
+        acceptedPermissions: installation?.permissions ?? null,
       };
     } catch (error) {
       return { ok: false as const, detail: error instanceof Error ? error.message : String(error) };
