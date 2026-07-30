@@ -3328,3 +3328,68 @@ kbd {
   padding-right: 0;
   color: var(--accent);
 }
+
+/* ── Publish panel ───────────────────────────────────────────────────────
+   The file list is the safeguard, so it gets real estate and a scroll of its
+   own rather than a disclosure triangle. */
+.publish-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.publish-summary {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.45;
+}
+.publish-warning {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--warning);
+}
+.publish-files {
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+}
+.publish-files li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 3px 10px;
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+}
+.publish-files .state {
+  flex: none;
+  width: 58px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+.publish-files .path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.publish-files li.risky .path {
+  color: var(--warning);
+}
+.publish-message {
+  width: 100%;
+}
+.publish-error {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--danger);
+}
+.connection-actions {
+  gap: 8px;
+}

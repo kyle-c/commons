@@ -49,6 +49,8 @@ const api: CommonsApi = {
   mergePreview: (repoPath, draftBranch, baseBranch) =>
     ipcRenderer.invoke("git-merge-preview", repoPath, draftBranch, baseBranch),
   pullRepo: (repoPath) => ipcRenderer.invoke("git-pull", repoPath),
+  pendingChanges: (repoPath) => ipcRenderer.invoke("git-pending", repoPath),
+  publishRepo: (repoPath, message) => ipcRenderer.invoke("git-publish", repoPath, message),
   cloneRepo: (gitRemote, suggestedName) => ipcRenderer.invoke("clone-repo", gitRemote, suggestedName),
   checkGitSetup: (probeRemote) => ipcRenderer.invoke("git-setup-check", probeRemote),
   setGitIdentity: (name, email) => ipcRenderer.invoke("git-set-identity", name, email),

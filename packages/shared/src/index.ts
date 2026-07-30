@@ -285,6 +285,13 @@ export interface CommonsApi {
   getGitStatus(repoPath: string): Promise<GitRepoStatus | null>;
   /** Fast-forward-only pull; refuses dirty trees. */
   pullRepo(repoPath: string): Promise<{ ok: boolean; message: string }>;
+  /** Everything a commit-everything would sweep up, so the user sees it first. */
+  pendingChanges(repoPath: string): Promise<{
+    ok: boolean;
+    files: { path: string; state: string; risky: boolean }[];
+  }>;
+  /** Commit (all of it) and push the current branch. Never merges or rebases. */
+  publishRepo(repoPath: string, message?: string): Promise<{ ok: boolean; message: string }>;
   /** Clone gitRemote into a user-chosen folder; null if the picker is cancelled. */
   cloneRepo(
     gitRemote: string,

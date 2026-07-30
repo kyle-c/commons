@@ -27,6 +27,7 @@ import { getRecents, pushRecent } from "../lib/recents";
 import Icon, { type IconName } from "../components/icons";
 import { PopSection, RevealField } from "../components/popover";
 import { ConnectionPanel } from "./ConnectionPanel";
+import { PublishPanel } from "./PublishPanel";
 
 /** "Fix savings header" → "fix-savings-header" (draft branch slugs). */
 function slugify(text: string): string {
@@ -680,6 +681,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     sessionToken: sessionToken(),
   });
   const [connectionOpen, setConnectionOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
   const previewConnectionNote = (() => {
     if (!githubStatus) return null;
     if (githubStatus.accounts.length === 0) {
@@ -1434,6 +1436,23 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                 Pull ↓{gitStatus.behind}
               </button>
             )}
+            {/* Named for the outcome, because nobody wants a push — they want
+                the link they shared to show what they just changed. */}
+            {gitStatus && (gitStatus.dirty || gitStatus.ahead > 0) && (
+              <button
+                className="btn ghost"
+                title={
+                  gitStatus.dirty
+                    ? "Commit your changes and push them, so your host rebuilds the preview"
+                    : "Push your commits, so your host rebuilds the preview"
+                }
+                onClick={() => setPublishOpen(true)}
+              >
+                {project.previewUrl ? "Update preview" : "Publish"}
+                {gitStatus.ahead > 0 ? ` ↑${gitStatus.ahead}` : ""}
+                {gitStatus.dirty ? " •" : ""}
+              </button>
+            )}
           </>
         )}
         {window.commons && (
@@ -1570,6 +1589,15 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         <SharePopover project={project} me={me} users={users} nav={nav} />
         {connectionOpen && (
           <ConnectionPanel projectId={project._id} userId={me._id} onClose={() => setConnectionOpen(false)} />
+        )}
+        {publishOpen && repoPath && gitStatus && (
+          <PublishPanel
+            repoPath={repoPath}
+            branch={gitStatus.branch}
+            ahead={gitStatus.ahead}
+            onClose={() => setPublishOpen(false)}
+            onPublished={() => setGitStatus((prev) => (prev ? { ...prev, dirty: false, ahead: 0 } : prev))}
+          />
         )}
       </div>
 

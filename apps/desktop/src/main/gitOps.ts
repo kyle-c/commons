@@ -83,6 +83,92 @@ export async function pullFastForward(repoPath: string): Promise<{ ok: boolean; 
     : { ok: false, message: pull.stderr || "Pull failed." };
 }
 
+/**
+ * What a commit-everything would actually sweep up.
+ *
+ * Commons commits all or nothing — a staging interface is a real git client's
+ * job — so the whole guard against accidentally committing an .env is that you
+ * see the list first. That makes it a decision instead of a surprise, which is
+ * the only reason committing from here is defensible at all.
+ */
+export interface PendingFile {
+  path: string;
+  state: string;
+  /** Worth a second look before it goes to a remote you may not control. */
+  risky: boolean;
+}
+
+const RISKY_PATH =
+  /(^|\/)(\.env(\.|$)|.*\.pem$|.*\.p8$|.*\.key$|.*\.pfx$|id_rsa|id_ed25519|.*\.keystore$|secrets?\.(json|ya?ml|toml))/i;
+
+function describeCode(code: string): string {
+  if (code === "??") return "new";
+  if (code.includes("D")) return "deleted";
+  if (code.includes("R")) return "renamed";
+  if (code.includes("A")) return "added";
+  return "changed";
+}
+
+export async function pendingChanges(repoPath: string): Promise<{ ok: boolean; files: PendingFile[] }> {
+  const porcelain = await git(repoPath, ["status", "--porcelain=v1", "-uall"]);
+  if (!porcelain.ok) return { ok: false, files: [] };
+  const files = porcelain.stdout
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line) => {
+      // Git quotes paths containing unusual bytes; unwrap so the list reads
+      // like filenames rather than like escaping.
+      const path = line.slice(3).replace(/^"(.*)"$/, "$1");
+      return { path, state: describeCode(line.slice(0, 2)), risky: RISKY_PATH.test(path) };
+    });
+  return { ok: true, files };
+}
+
+/**
+ * Get local work onto origin, which is the thing that actually makes a
+ * preview update.
+ *
+ * Named for its outcome rather than its plumbing, and deliberately the only
+ * write Commons performs on a repo you own: it commits (all of it, once you
+ * have seen the list), and it pushes the current branch. It will not merge,
+ * rebase, or switch branches — those need judgement Commons does not have, and
+ * anyone who wants them has better tools already.
+ */
+export async function publish(repoPath: string, message?: string): Promise<{ ok: boolean; message: string }> {
+  const current = await status(repoPath);
+  if (!current) return { ok: false, message: "Not a git repository." };
+
+  // Pushing onto a branch that has moved would be rejected anyway, and the fix
+  // is a merge or rebase decision Commons refuses to make on your behalf.
+  if (current.behind > 0 && (current.dirty || current.ahead > 0)) {
+    return {
+      ok: false,
+      message:
+        `Origin has ${current.behind} commit${current.behind === 1 ? "" : "s"} you don't have yet, so this push would be rejected. ` +
+        "Pull first, or sort it out in a git client — Commons won't merge or rebase for you.",
+    };
+  }
+
+  if (current.dirty) {
+    if (!message?.trim()) return { ok: false, message: "A commit needs a message." };
+    const staged = await git(repoPath, ["add", "-A"]);
+    if (!staged.ok) return { ok: false, message: staged.stderr || "Could not stage the changes." };
+    const commit = await git(repoPath, ["commit", "-m", message.trim()]);
+    if (!commit.ok) return { ok: false, message: commit.stderr || commit.stdout || "Commit failed." };
+  } else if (current.ahead === 0) {
+    return { ok: true, message: "Nothing to publish — origin already has everything." };
+  }
+
+  const pushed = current.hasUpstream
+    ? await git(repoPath, ["push"])
+    : await git(repoPath, ["push", "-u", "origin", "HEAD"]);
+  if (!pushed.ok) return { ok: false, message: pushed.stderr || "Push failed." };
+  return {
+    ok: true,
+    message: `Pushed to ${current.branch}. Your host builds from here, and the preview link updates once that deploy goes green.`,
+  };
+}
+
 /** The origin remote of the repo containing dir, if any (nested dirs count). */
 export async function originOf(dir: string): Promise<string | null> {
   const result = await git(dir, ["config", "--get", "remote.origin.url"]);
