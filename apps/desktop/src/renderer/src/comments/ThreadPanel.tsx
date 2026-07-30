@@ -9,7 +9,8 @@ import { initials, sessionToken, timeAgo } from "../lib/session";
 
 interface Props {
   thread: ThreadWithMessages;
-  me: Doc<"users">;
+  /** Null in guest mode: the thread still reads, it just cannot be answered. */
+  me: Doc<"users"> | null;
   users: Doc<"users">[];
   /** Who can be @mentioned — narrower than `users` on private projects. */
   mentionUsers?: Doc<"users">[];
@@ -49,13 +50,19 @@ export default function ThreadPanel({ thread, me, users, mentionUsers, onClose, 
               ⚡ Agent
             </button>
           )}
-          <button
-            className="btn ghost"
-            title={resolved ? "Reopen" : "Resolve"}
-            onClick={() => setResolved({ threadId: thread._id, resolved: !resolved, userId: me._id, sessionToken: sessionToken() })}
-          >
-            {resolved ? "Reopen" : "Resolve"}
-          </button>
+          {/* Resolving is a write, so a guest doesn't get the button at all
+              rather than one that quietly does nothing. */}
+          {me && (
+            <button
+              className="btn ghost"
+              title={resolved ? "Reopen" : "Resolve"}
+              onClick={() =>
+                setResolved({ threadId: thread._id, resolved: !resolved, userId: me._id, sessionToken: sessionToken() })
+              }
+            >
+              {resolved ? "Reopen" : "Resolve"}
+            </button>
+          )}
           <button className="btn ghost" onClick={onClose}>
             ✕
           </button>
@@ -95,15 +102,19 @@ export default function ThreadPanel({ thread, me, users, mentionUsers, onClose, 
           </div>
         ))}
       </div>
-      <Composer
-        users={mentionUsers ?? users}
-        me={me}
-        placeholder="Reply…"
-        submitLabel="Reply"
-        onSubmit={async (body, mentions) => {
-          await reply({ threadId: thread._id, authorId: me._id, body, mentions });
-        }}
-      />
+      {me ? (
+        <Composer
+          users={mentionUsers ?? users}
+          me={me}
+          placeholder="Reply…"
+          submitLabel="Reply"
+          onSubmit={async (body, mentions) => {
+            await reply({ threadId: thread._id, authorId: me._id, body, mentions });
+          }}
+        />
+      ) : (
+        <p className="thread-readonly">You're viewing a shared link, so you can read this thread but not reply.</p>
+      )}
     </div>
   );
 }

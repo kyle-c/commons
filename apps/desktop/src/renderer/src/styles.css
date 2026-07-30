@@ -3393,3 +3393,63 @@ kbd {
 .connection-actions {
   gap: 8px;
 }
+
+/* States a limit rather than hiding one: a guest who sees no reply box should
+   know the link is why, not think the thread is broken. */
+.thread-readonly {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--text-tertiary);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ── Guest mode (/g/<token>) ─────────────────────────────────────────────
+   Almost no chrome: the canvas is the page, and the one bar says whose work
+   this is and why some things are missing. */
+.guest-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-canvas);
+}
+.guest-bar {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-panel);
+}
+.guest-project {
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+.guest-note {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+.guest-canvas {
+  flex: 1;
+  /* .canvas-wrap is flex:1, so its parent has to be a flex container or it
+     collapses to zero height and the canvas renders into nothing. */
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-height: 0;
+}
+.guest-message {
+  margin: auto;
+  padding: 32px;
+  max-width: 420px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.guest-message h1 {
+  margin: 0 0 8px;
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+}

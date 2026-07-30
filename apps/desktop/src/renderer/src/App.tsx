@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Id } from "@commons/backend/convex/_generated/dataModel";
 import SignIn from "./views/SignIn";
+import GuestView from "./views/GuestView";
 import ProjectList from "./views/ProjectList";
 import ProjectView from "./views/ProjectView";
 import Welcome from "./views/Welcome";
@@ -25,7 +26,23 @@ export type Nav =
       threadId?: Id<"threads">;
     };
 
+/**
+ * A share link is served by the same bundle as the app, so the very first
+ * decision is which of the two this is. Guest mode short-circuits everything
+ * below it: no stored session is read, no tabs are restored, and no sign-in is
+ * ever shown, because the token in the path is the entire credential.
+ */
+function guestToken(): string | null {
+  const path = window.location.pathname;
+  if (!path.startsWith("/g/")) return null;
+  const token = path.slice("/g/".length).replace(/\/+$/, "");
+  return token || null;
+}
+
 export default function App() {
+  const shareToken = guestToken();
+  if (shareToken) return <GuestView shareToken={shareToken} />;
+
   const [session, setSession] = useState<StoredSession | null>(getStoredSession());
   const [nav, setNavState] = useState<Nav>(() => {
     // Browser links target app state via the hash (#p=<id>&view=…&thread=…);

@@ -372,10 +372,7 @@ export const sharePage = query({
             messages.map(async (m) => {
               const author = m.authorId ? await ctx.db.get(m.authorId) : null;
               return {
-                _id: m._id,
-                _creationTime: m._creationTime,
-                body: m.body,
-                guestName: m.guestName,
+                ...m,
                 author: author
                   ? { _id: author._id, name: author.name, avatarColor: author.avatarColor, avatarUrl: author.avatarUrl }
                   : null,

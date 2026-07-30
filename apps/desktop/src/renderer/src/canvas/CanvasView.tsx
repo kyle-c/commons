@@ -31,7 +31,16 @@ interface Draft {
 }
 
 interface Props {
-  me: Doc<"users">;
+  /**
+   * Null in guest mode (/g/<token>), where there is no session at all.
+   *
+   * Everything that needs a viewer is a write — cursors, dragging frames,
+   * starting a thread — so guest mode falls out of this one nullable rather
+   * than a parallel read-only component. A second canvas implementation is
+   * what the share page already was, and replacing it with another one would
+   * have missed the point.
+   */
+  me: Doc<"users"> | null;
   projectId: Id<"projects">;
   frames: (Doc<"frames"> & { snapshotUrl?: string | null; snapshotAt?: number | null })[];
   threads: ThreadWithMessages[];
@@ -71,7 +80,11 @@ interface Props {
  * re-rendered every frame on the canvas.
  */
 function CursorLayer({ me, projectId, scale }: { me: Doc<"users">; projectId: Id<"projects">; scale: number }) {
-  const cursors = useQuery(api.presence.cursorsInProject, { projectId, userId: me._id, sessionToken: sessionToken() }) ?? [];
+  const cursors =
+    useQuery(
+      api.presence.cursorsInProject,
+      me ? { projectId, userId: me._id, sessionToken: sessionToken() } : "skip"
+    ) ?? [];
   // Re-filter periodically so idle teammates' cursors fade even when no new
   // cursor writes arrive to re-run the query.
   const [, tick] = useState(0);
@@ -79,7 +92,7 @@ function CursorLayer({ me, projectId, scale }: { me: Doc<"users">; projectId: Id
     const interval = setInterval(() => tick((t) => t + 1), 5_000);
     return () => clearInterval(interval);
   }, []);
-  const live = cursors.filter((c) => c.userId !== me._id && Date.now() - c.updatedAt < 10_000);
+  const live = cursors.filter((c) => c.userId !== me?._id && Date.now() - c.updatedAt < 10_000);
   return (
     <>
       {live.map((cursor) => (
@@ -425,6 +438,7 @@ export default function CanvasView({
       }, 130);
     }
     const send = (clientX: number, clientY: number) => {
+      if (!me) return; // guests are present, but not broadcast
       lastCursorSend.current = Date.now();
       const p = screenToCanvas(clientX, clientY);
       void moveCursor({ userId: me._id, projectId, x: p.x, y: p.y, sessionToken: sessionToken() });
@@ -661,7 +675,10 @@ export default function CanvasView({
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-  useEffect(() => registerShortcut("c", () => setCommentMode((m) => !m), { description: "Comment mode" }), []);
+  useEffect(() => {
+    if (!me) return;
+    return registerShortcut("c", () => setCommentMode((m) => !m), { description: "Comment mode" });
+  }, [me]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -725,7 +742,7 @@ export default function CanvasView({
   };
 
   const startFrameDrag = (frame: Doc<"frames">, e: React.MouseEvent) => {
-    if (commentMode || e.button !== 0) return;
+    if (!me || commentMode || e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     if (tidyRef.current) {
@@ -735,7 +752,8 @@ export default function CanvasView({
       setLocalPos((prev) => ({ ...prev, ...commit }));
       for (const other of frames) {
         const c = commit[other._id];
-        if (c && (c.x !== other.x || c.y !== other.y)) void moveFrame({ frameId: other._id, x: c.x, y: c.y, userId: me._id, sessionToken: sessionToken() });
+        if (me && c && (c.x !== other.x || c.y !== other.y))
+          void moveFrame({ frameId: other._id, x: c.x, y: c.y, userId: me._id, sessionToken: sessionToken() });
       }
       setTidyOn(false);
       setOverviewFrom(null);
@@ -754,7 +772,7 @@ export default function CanvasView({
     const up = () => {
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
-      moveFrame({ frameId: frame._id, x: latest.x, y: latest.y, userId: me._id, sessionToken: sessionToken() });
+      moveFrame({ frameId: frame._id, x: latest.x, y: latest.y, userId: me._id!, sessionToken: sessionToken() });
     };
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
@@ -801,6 +819,7 @@ export default function CanvasView({
     setDraft(null);
     setCommentMode(false);
     try {
+      if (!me) return;
       const threadId = await createThread({ projectId, createdBy: me._id, body, mentions, ...coords });
       setPendingPin((p) => (p ? { ...p, threadId } : p));
       setSelectedThread(threadId);
@@ -1004,10 +1023,10 @@ export default function CanvasView({
                   top: pos.y,
                   transform: `scale(${1 / vp.scale}) translate(-4px, -24px)`,
                   transformOrigin: "0 100%",
-                  background: me.avatarColor,
+                  background: me?.avatarColor,
                 }}
               >
-                {initials(me.name)}
+                {me ? initials(me.name) : "?"}
               </span>
             );
           })()}
@@ -1039,10 +1058,10 @@ export default function CanvasView({
             );
           })}
 
-        <CursorLayer me={me} projectId={projectId} scale={vp.scale} />
+        {me && <CursorLayer me={me} projectId={projectId} scale={vp.scale} />}
       </div>
 
-      {draft && (
+      {draft && me && (
         <div
           style={{
             position: "absolute",
@@ -1109,14 +1128,18 @@ export default function CanvasView({
       )}
 
       <div className="canvas-toolbar" onMouseDown={(e) => e.stopPropagation()}>
-        <button
-          className={`btn ghost icon-btn ${commentMode ? "active" : ""}`}
-          aria-label="Comment"
-          title="Comment mode (C)"
-          onClick={() => setCommentMode((m) => !m)}
-        >
-          <Icon name="message" />
-        </button>
+        {/* Absent for guests rather than present-and-dead: a control that
+            opens a composer nothing can submit is worse than no control. */}
+        {me && (
+          <button
+            className={`btn ghost icon-btn ${commentMode ? "active" : ""}`}
+            aria-label="Comment"
+            title="Comment mode (C)"
+            onClick={() => setCommentMode((m) => !m)}
+          >
+            <Icon name="message" />
+          </button>
+        )}
         {(annotations?.length ?? 0) > 0 && (
           <button
             className={`btn ghost icon-btn ${notesOn ? "active" : ""}`}
