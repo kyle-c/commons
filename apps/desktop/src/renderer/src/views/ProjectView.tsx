@@ -26,6 +26,7 @@ import { useMachineId } from "../lib/machine";
 import { getRecents, pushRecent } from "../lib/recents";
 import Icon, { type IconName } from "../components/icons";
 import { PopSection, RevealField } from "../components/popover";
+import { ConnectionPanel } from "./ConnectionPanel";
 
 /** "Fix savings header" → "fix-savings-header" (draft branch slugs). */
 function slugify(text: string): string {
@@ -184,6 +185,7 @@ function UrlSettingBody({
   learned,
   learnedAt,
   connection,
+  onDiagnose,
   validate,
   onSave,
 }: {
@@ -196,6 +198,8 @@ function UrlSettingBody({
   learnedAt?: number;
   /** Why this field is still empty, when GitHub was supposed to fill it. */
   connection?: string | null;
+  /** Opens the full diagnosis, for when the one-line note isn't the answer. */
+  onDiagnose?: () => void;
   validate: (v: string) => string | null;
   onSave: (v: string) => Promise<void>;
 }) {
@@ -203,8 +207,17 @@ function UrlSettingBody({
   const [draft, setDraft] = useState(value ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
   const showField = editing || !value;
   const connectionNote = connection ? <span className="hint">{connection}</span> : null;
+  /* Offered whenever GitHub is meant to be filling this in, not only when we
+     already know something is wrong — "it says connected and still nothing
+     happens" is exactly the case the one-line note cannot cover. */
+  const diagnoseLink = onDiagnose ? (
+    <button className="btn ghost diagnose-link" onClick={onDiagnose}>
+      Check connection…
+    </button>
+  ) : null;
 
   const save = async (next: string) => {
     const problem = next ? validate(next) : null;
@@ -265,9 +278,17 @@ function UrlSettingBody({
         </>
       ) : (
         <>
-          <span className="setting-value" title={value ?? undefined}>
+          {/* The value is the point of this popover, so it acts like one: open
+              it to check it is really the right build, copy it to paste
+              somewhere. Reading a truncated URL and retyping it was the only
+              thing on offer before. */}
+          <button
+            className="setting-value linked"
+            title={`${value}\n\nOpens in your browser`}
+            onClick={() => value && (window.commons ? void window.commons.openExternal(value) : window.open(value))}
+          >
             {value}
-          </span>
+          </button>
           {learned && (
             <span className="hint">
               Filled in from your last GitHub deploy{learnedAt ? ` ${timeAgo(learnedAt)} ago` : ""}. Deploys keep it
@@ -278,6 +299,18 @@ function UrlSettingBody({
           <div className="reveal-form-row">
             <button
               className="btn ghost"
+              title="Copy to the clipboard"
+              onClick={() => {
+                if (!value) return;
+                void navigator.clipboard.writeText(value);
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1600);
+              }}
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <button
+              className="btn ghost"
               onClick={() => {
                 setDraft(value ?? "");
                 setError(null);
@@ -286,6 +319,7 @@ function UrlSettingBody({
             >
               Change…
             </button>
+            {diagnoseLink}
             <button className="btn ghost quiet-action" disabled={busy} onClick={() => void save("")}>
               Remove
             </button>
@@ -645,6 +679,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     userId: me._id,
     sessionToken: sessionToken(),
   });
+  const [connectionOpen, setConnectionOpen] = useState(false);
   const previewConnectionNote = (() => {
     if (!githubStatus) return null;
     if (githubStatus.accounts.length === 0) {
@@ -1454,6 +1489,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             learned={project.previewSource === "github"}
             learnedAt={project.lastDeployAt}
             connection={previewConnectionNote}
+            onDiagnose={() => setConnectionOpen(true)}
             validate={(url) => (/^https?:\/\/.+/.test(url) ? null : "Needs a full https:// link.")}
             onSave={async (url) => {
               await setPreviewUrl({
@@ -1479,6 +1515,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             learned={project.branchPatternSource === "github"}
             learnedAt={project.lastDeployAt}
             connection={previewConnectionNote}
+            onDiagnose={() => setConnectionOpen(true)}
             validate={(v) =>
               /^https?:\/\/.+/.test(v) && v.includes("{branch}") ? null : "Needs https:// and a {branch} placeholder."
             }
@@ -1531,6 +1568,9 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           )}
         </div>
         <SharePopover project={project} me={me} users={users} nav={nav} />
+        {connectionOpen && (
+          <ConnectionPanel projectId={project._id} userId={me._id} onClose={() => setConnectionOpen(false)} />
+        )}
       </div>
 
       {catchUp && !catchUpDismissed && (

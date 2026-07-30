@@ -1,6 +1,8 @@
 import { v } from "convex/values";
-import { internalAction, internalMutation } from "./_generated/server";
+import { action, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { accessibleProject, resolveViewer } from "./access";
+import { normalizeRemote } from "./github";
 
 /**
  * Acting *as* the GitHub App, rather than only listening to it.
@@ -167,6 +169,10 @@ export const verifyInstallation = internalAction({
         // installation can see the repo at all.
         repositories: (body.repositories ?? []).map((r: { full_name: string }) => r.full_name),
         acceptedPermissions: installation?.permissions ?? null,
+        // Where a human goes to change repo selection or accept a permission.
+        // Personal and org installations live at different URLs, so we take
+        // GitHub's own rather than assembling one and guessing wrong.
+        manageUrl: (installation?.html_url as string | undefined) ?? null,
       };
     } catch (error) {
       return { ok: false as const, detail: error instanceof Error ? error.message : String(error) };
@@ -361,5 +367,286 @@ export const recentDeliveries = internalAction({
         })
       ),
     };
+  },
+});
+
+// ── Diagnosis ──────────────────────────────────────────────────────────────
+
+export type Finding = {
+  level: "ok" | "warn" | "blocked";
+  title: string;
+  detail: string;
+  fixLabel?: string;
+  fixUrl?: string;
+};
+
+/**
+ * Project facts the diagnosis needs, behind the project's own access check.
+ *
+ * Named for the gate it applies: an action's body cannot itself resolve a
+ * viewer, so the check has to live in a query it calls, and the name is what
+ * makes that delegation visible at the call site (and to
+ * scripts/check-convex-auth.mjs, which reads bodies as text).
+ */
+export const requireProjectAccessContext = internalQuery({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { projectId, ...viewer }) => {
+    const viewerId = await resolveViewer(ctx, viewer);
+    const project = viewerId ? await accessibleProject(ctx, projectId, viewerId) : null;
+    if (!project) return null;
+
+    const links = project.workspaceId
+      ? await ctx.db
+          .query("githubWorkspaceLinks")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", project.workspaceId!))
+          .collect()
+      : [];
+    const rows = await Promise.all(
+      links.map((link) =>
+        ctx.db
+          .query("githubInstallations")
+          .withIndex("by_installation", (q) => q.eq("installationId", link.installationId))
+          .first()
+      )
+    );
+    const samples = await ctx.db
+      .query("deploymentSamples")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .take(2);
+
+    return {
+      hasWorkspace: Boolean(project.workspaceId),
+      gitRemote: project.gitRemote ?? null,
+      previewSource: project.previewSource ?? null,
+      branchPreviewPattern: project.branchPreviewPattern ?? null,
+      lastDeployAt: project.lastDeployAt ?? null,
+      sampleCount: samples.length,
+      installations: rows
+        .filter((row): row is NonNullable<typeof row> => row !== null && !row.removedAt)
+        .map((row) => ({ installationId: row.installationId, accountLogin: row.accountLogin })),
+    };
+  },
+});
+
+/** Permissions we actually depend on, and what breaks without each. */
+const NEEDED_PERMISSIONS: { key: string; accepts: string[]; blocks: boolean; why: string }[] = [
+  { key: "deployments", accepts: ["read", "write"], blocks: true, why: "hear about your deploys" },
+  { key: "contents", accepts: ["read", "write"], blocks: true, why: "read your branches" },
+  { key: "pull_requests", accepts: ["write"], blocks: false, why: "open pull requests for you" },
+];
+
+/**
+ * Everything that can break between "I connected GitHub" and "my preview
+ * updated", asked in one pass.
+ *
+ * Shipping this connection took an afternoon, and all four causes presented
+ * identically inside Commons: an empty preview field. The repo sat outside the
+ * installation. The installation had not *accepted* a permission the App
+ * declared. The App was subscribed to no events at all, so nothing was ever
+ * dispatched. The webhook URL was an apex domain that answers POST with 405.
+ * Telling those apart needed an App JWT and a terminal.
+ *
+ * Order is the product here, not coverage. Findings come back worst-first and
+ * the first blocking one is the answer: later checks usually fail *because* of
+ * an earlier one, so a list of five problems would be four lies. Each blocking
+ * finding carries the link to the page that fixes it.
+ *
+ * An action, not a query: it calls GitHub, and it is invoked by a button
+ * rather than rendered, so it is allowed to refuse.
+ */
+export const diagnose = action({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<{ findings: Finding[]; checkedAt: number }> => {
+    const context = await ctx.runQuery(internal.githubApp.requireProjectAccessContext, args);
+    if (!context) throw new Error("You do not have access to this project.");
+
+    const findings: Finding[] = [];
+    const done = (extra: Finding[] = []) => ({ findings: [...findings, ...extra], checkedAt: Date.now() });
+
+    // 1. Is there anything to receive events at all?
+    if (!context.hasWorkspace) {
+      return done([
+        {
+          level: "blocked",
+          title: "This project is not in a workspace",
+          detail: "GitHub connects to a workspace, so a project outside one has nothing to receive deploys through.",
+        },
+      ]);
+    }
+    if (context.installations.length === 0) {
+      return done([
+        {
+          level: "blocked",
+          title: "GitHub is not connected to this workspace",
+          detail: "Connect an account and pick this project's repository. Nothing arrives until then.",
+        },
+      ]);
+    }
+    const accounts = context.installations.map((i) => i.accountLogin).join(" and ");
+    findings.push({
+      level: "ok",
+      title: `Connected to ${accounts}`,
+      detail: `${context.installations.length} GitHub installation${context.installations.length === 1 ? "" : "s"} linked to this workspace.`,
+    });
+
+    // 2. Can we still act as the App, and what can each installation see?
+    const installations = await Promise.all(
+      context.installations.map(async (row) => ({
+        ...row,
+        result: await ctx.runAction(internal.githubApp.verifyInstallation, { installationId: row.installationId }),
+      }))
+    );
+    const broken = installations.filter((row) => !row.result.ok);
+    if (broken.length === installations.length) {
+      return done([
+        {
+          level: "blocked",
+          title: "Commons cannot authenticate to GitHub",
+          detail:
+            "The App credentials are rejected, so no check below can run. This is a Commons configuration problem, not something in your repo. " +
+            (broken[0]?.result.ok === false ? broken[0].result.detail : ""),
+        },
+      ]);
+    }
+
+    // 3. Is this project's repo inside one of those installations?
+    if (!context.gitRemote) {
+      findings.push({
+        level: "blocked",
+        title: "This project has no GitHub repository",
+        detail:
+          "Commons matches an incoming deploy to a project by comparing remote URLs, so with no remote set it cannot tell which deploys are yours.",
+      });
+      return done();
+    }
+    const wanted = normalizeRemote(context.gitRemote);
+    const repoName = context.gitRemote.replace(/^.*github\.com[:/]/, "").replace(/\.git$/, "");
+    const reachable = installations.flatMap((row) => (row.result.ok ? row.result.repositories : []));
+    const covered = reachable.some((full) => {
+      const candidate = normalizeRemote(`https://github.com/${full}`);
+      return candidate === wanted || wanted.endsWith(`/${full.toLowerCase()}`);
+    });
+    const manageUrl = installations.find((row) => row.result.ok && row.result.manageUrl);
+    const manage =
+      manageUrl && manageUrl.result.ok && manageUrl.result.manageUrl ? manageUrl.result.manageUrl : undefined;
+    if (!covered) {
+      return done([
+        {
+          level: "blocked",
+          title: `${repoName} is not in the GitHub installation`,
+          detail:
+            `${accounts} is connected, but this repository is not one of the ${reachable.length} it can see. ` +
+            "GitHub only sends events for selected repositories, so its deploys never leave GitHub. Add it under Configure → Repository access.",
+          fixLabel: "Configure on GitHub",
+          fixUrl: manage,
+        },
+      ]);
+    }
+    findings.push({
+      level: "ok",
+      title: `${repoName} is in the installation`,
+      detail: `One of ${reachable.length} repositories this connection can see.`,
+    });
+
+    // 4. Declared is not accepted. A permission added after someone installed
+    //    the App stays pending until they approve it, and the token simply
+    //    does not have it in the meantime.
+    const accepted = installations.find((row) => row.result.ok && row.result.acceptedPermissions);
+    const permissions: Record<string, string> =
+      (accepted && accepted.result.ok ? (accepted.result.acceptedPermissions as Record<string, string>) : null) ?? {};
+    const missing = NEEDED_PERMISSIONS.filter((need) => !need.accepts.includes(permissions[need.key] ?? ""));
+    for (const need of missing) {
+      findings.push({
+        level: need.blocks ? "blocked" : "warn",
+        title: `GitHub has not granted "${need.key}"`,
+        detail:
+          `Commons needs it to ${need.why}. A permission the App asks for stays pending until someone with access to ` +
+          `${accounts} approves it, and until then the connection behaves as though it were never requested.`,
+        fixLabel: "Review on GitHub",
+        fixUrl: manage,
+      });
+    }
+    if (missing.some((need) => need.blocks)) return done();
+
+    // 5. Is the App subscribed to the event this all depends on, and is
+    //    GitHub's delivery of it actually landing?
+    const hook = await ctx.runAction(internal.githubApp.recentDeliveries, {});
+    if (!hook.subscribedEvents.includes("deployment_status")) {
+      return done([
+        {
+          level: "blocked",
+          title: "Commons is not subscribed to deploy events",
+          detail:
+            "The App is not subscribed to deployment_status on GitHub, so no deploy is ever dispatched to Commons, no matter how the repository is set up. This is a Commons configuration problem, not something in your repo.",
+        },
+      ]);
+    }
+    const deliveries: { at: string; event: string; status: string }[] = hook.ok ? hook.deliveries : [];
+    const failures = deliveries.filter((d) => !/^2\d\d/.test(d.status));
+    if (deliveries.length > 0 && failures.length === deliveries.length) {
+      return done([
+        {
+          level: "blocked",
+          title: "GitHub cannot deliver to Commons",
+          detail:
+            `The last ${deliveries.length} deliveries all failed with ${failures[0].status}. Events are being sent and rejected, ` +
+            "which points at the webhook endpoint rather than at your repository. This is a Commons configuration problem.",
+        },
+      ]);
+    }
+    findings.push({
+      level: "ok",
+      title: "GitHub is delivering events",
+      detail:
+        deliveries.length === 0
+          ? "Subscribed to deployment_status. No deliveries recorded yet."
+          : `${deliveries.length - failures.length} of the last ${deliveries.length} deliveries succeeded.`,
+    });
+
+    // 6. Everything above is green, so the remaining question is whether a
+    //    deploy has actually happened.
+    if (context.lastDeployAt) {
+      findings.push({
+        level: "ok",
+        title: "Preview link is coming from your deploys",
+        detail: `Last production deploy arrived ${new Date(context.lastDeployAt).toISOString()}.`,
+      });
+    } else {
+      findings.push({
+        level: "warn",
+        title: "No deploy has reached Commons yet",
+        detail:
+          "The connection checks out, so the likely answer is that nothing has deployed since you connected, or your host is not reporting deploys to GitHub. " +
+          "Commons only sees what GitHub is told about: a Vercel or Netlify build that fails, or is not linked to this repository, never becomes an event. Push a commit to your default branch.",
+      });
+    }
+
+    // 7. Branch previews are learned from evidence, and two samples is the
+    //    minimum that can prove a pattern rather than fit one point.
+    if (context.branchPreviewPattern) {
+      findings.push({
+        level: "ok",
+        title: "Branch previews are understood",
+        detail: `Commons can work out the preview URL for any branch from ${context.sampleCount} observed deploys.`,
+      });
+    } else {
+      findings.push({
+        level: "warn",
+        title: "Branch previews not learned yet",
+        detail:
+          `Commons has seen ${context.sampleCount} branch deploy${context.sampleCount === 1 ? "" : "s"} for this project and needs at least 2 ` +
+          "before it will guess a per-branch URL pattern. This is expected on a new connection, and production previews work regardless.",
+      });
+    }
+
+    return done();
   },
 });

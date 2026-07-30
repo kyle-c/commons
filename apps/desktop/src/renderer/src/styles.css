@@ -2693,6 +2693,20 @@ kbd {
 }
 
 /* A setting's current value: quiet mono, truncated, full value on hover. */
+/* The value doubles as a control now, so it has to stop looking like a
+   disabled input: no button chrome, but a real hover state and a pointer. */
+.setting-value.linked {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.setting-value.linked:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
 .setting-value {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -3234,4 +3248,83 @@ kbd {
   color: var(--text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── GitHub connection panel ─────────────────────────────────────────────
+   Findings read as prose, not as a status table. The dot carries severity so
+   the sentence never has to start with "ERROR:", and the verdict sits above
+   the evidence because most people want the answer and not the audit. */
+.connection-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.connection-progress {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+}
+.connection-verdict {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1.35;
+}
+.connection-finding {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+.connection-finding .dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.connection-finding.ok .dot {
+  background: var(--success);
+}
+.connection-finding.warn .dot {
+  background: var(--warning);
+}
+.connection-finding.blocked .dot {
+  background: var(--danger);
+}
+.connection-title {
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+/* Resolved checks are context for the one that matters, so they recede. */
+.connection-finding.ok .connection-title {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+.connection-detail {
+  margin: 3px 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.connection-finding.ok .connection-detail {
+  color: var(--text-tertiary);
+}
+.connection-finding .btn {
+  margin-top: 7px;
+}
+.connection-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Reads as a link inside the popover's prose, not a third competing button. */
+.diagnose-link {
+  align-self: flex-start;
+  padding-left: 0;
+  padding-right: 0;
+  color: var(--accent);
 }
