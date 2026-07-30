@@ -302,6 +302,12 @@ export const openPullRequest = internalAction({
     if (response.status === 422 && detail.includes("No commits between")) {
       return { ok: false as const, reason: "nothing_to_merge", detail };
     }
+    if (response.status === 422 && /"field"\s*:\s*"head"/.test(detail)) {
+      // The branch is not on the remote: either the draft push failed, or it
+      // was deleted after merging. Distinct from "nothing to merge", where the
+      // branch exists but carries no new commits.
+      return { ok: false as const, reason: "branch_not_found", detail };
+    }
     if (response.status === 403) {
       // The token authenticated and was refused, which almost always means the
       // App was never granted "Pull requests: read and write" — and note that
