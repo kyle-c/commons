@@ -322,3 +322,44 @@ export const openPullRequest = internalAction({
     return { ok: false as const, reason: "github_error", detail: `${response.status}: ${detail}` };
   },
 });
+
+/**
+ * What GitHub has actually tried to send us, and what we answered.
+ *
+ * When a deploy goes green and nothing appears in Commons, there are two
+ * stories: GitHub never sent it, or it sent and we refused. Recent Deliveries
+ * in the App settings holds the answer, and the API exposes the same thing —
+ * worth having here so the question takes a command rather than a browser and
+ * a squint. Also reports which events the App is subscribed to, since an
+ * unsubscribed event produces no delivery at all.
+ */
+export const recentDeliveries = internalAction({
+  args: {},
+  handler: async () => {
+    const auth = {
+      Authorization: `Bearer ${await appJwt()}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    };
+
+    const appResponse = await fetch(`${GITHUB_API}/app`, { headers: auth });
+    const events: string[] = appResponse.ok ? ((await appResponse.json()).events ?? []) : [];
+
+    const response = await fetch(`${GITHUB_API}/app/hook/deliveries?per_page=15`, { headers: auth });
+    if (!response.ok) {
+      return { ok: false as const, subscribedEvents: events, detail: `${response.status}: ${await response.text()}` };
+    }
+    const deliveries = await response.json();
+    return {
+      ok: true as const,
+      subscribedEvents: events,
+      deliveries: (deliveries ?? []).map(
+        (d: { delivered_at: string; event: string; action: string | null; status: string; status_code: number }) => ({
+          at: d.delivered_at,
+          event: d.action ? `${d.event}.${d.action}` : d.event,
+          status: `${d.status_code} ${d.status}`,
+        })
+      ),
+    };
+  },
+});
