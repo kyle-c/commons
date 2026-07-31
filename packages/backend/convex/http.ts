@@ -210,12 +210,24 @@ http.route({
       const url = payload.deployment_status?.environment_url ?? payload.deployment_status?.target_url;
       if (state !== "success" || !url) return new Response("ignored");
       const repo = payload.repository ?? {};
+      // Vercel puts the commit SHA in deployment.ref, not the branch. One
+      // lookup recovers the real name; without it the sample would store a
+      // SHA in a column called "branch" and inference could never work.
+      let branchName = String(payload.deployment?.ref ?? "");
+      if (/^[0-9a-f]{40}$/.test(branchName) && repo.full_name && payload.installation?.id) {
+        const resolved = await ctx.runAction(internal.githubApp.resolveRefToBranch, {
+          installationId: Number(payload.installation.id),
+          repoFullName: String(repo.full_name),
+          sha: branchName,
+        });
+        if (resolved) branchName = resolved;
+      }
       const result = await ctx.runMutation(internal.github.handleDeployment, {
         installationId: Number(payload.installation?.id ?? 0),
         repoUrls: [repo.html_url, repo.clone_url, repo.ssh_url, repo.full_name].filter(
           (u: unknown): u is string => typeof u === "string" && u.length > 0
         ),
-        branch: String(payload.deployment?.ref ?? ""),
+        branch: branchName,
         defaultBranch: String(repo.default_branch ?? "main"),
         environment: payload.deployment_status?.environment ?? payload.deployment?.environment,
         environmentUrl: String(url),

@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { action, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { accessibleProject, resolveViewer } from "./access";
-import { normalizeRemote } from "./github";
+import { normalizeRemote, slugifyBranch, vercelAliasCandidates } from "./github";
 
 /**
  * Acting *as* the GitHub App, rather than only listening to it.
@@ -451,6 +451,160 @@ export const inspectDeploymentDelivery = internalAction({
   },
 });
 
+/**
+ * Turn a bare commit SHA from deployment.ref into the branch it heads.
+ *
+ * Vercel fills deployment.ref with the SHA, not the branch, so without this
+ * every sample stores junk in a column named "branch". One API call recovers
+ * it. Exactly one branch must match: two branches on the same head means the
+ * deploy's origin is ambiguous, and never-guess applies.
+ */
+export const resolveRefToBranch = internalAction({
+  args: { installationId: v.number(), repoFullName: v.string(), sha: v.string() },
+  handler: async (_ctx, { installationId, repoFullName, sha }) => {
+    try {
+      const token = await installationToken(installationId);
+      const response = await fetch(`${GITHUB_API}/repos/${repoFullName}/commits/${sha}/branches-where-head`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      });
+      if (!response.ok) return null;
+      const branches = (await response.json()) as { name: string }[];
+      return branches.length === 1 ? branches[0].name : null;
+    } catch {
+      return null;
+    }
+  },
+});
+
+/** What confirmAliasPattern needs to know, read inside the transaction. */
+export const aliasContext = internalQuery({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const project = await ctx.db.get(projectId);
+    if (!project) return null;
+    const samples = await ctx.db
+      .query("deploymentSamples")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+    return {
+      branchPreviewPattern: project.branchPreviewPattern ?? null,
+      branchPatternSource: project.branchPatternSource ?? null,
+      samples: samples
+        .sort((a, b) => b.at - a.at)
+        .filter((s) => !/^[0-9a-f]{40}$/.test(s.branch))
+        .slice(0, 6)
+        .map((s) => ({ branch: s.branch, url: s.url })),
+    };
+  },
+});
+
+/** Store a verified pattern, under the same provenance rules as applyDeploy. */
+export const recordBranchPattern = internalMutation({
+  args: { projectId: v.id("projects"), pattern: v.string() },
+  handler: async (ctx, { projectId, pattern }) => {
+    const project = await ctx.db.get(projectId);
+    if (!project) return null;
+    const canWrite = !project.branchPreviewPattern || project.branchPatternSource === "github";
+    if (canWrite && project.branchPreviewPattern !== pattern) {
+      await ctx.db.patch(projectId, { branchPreviewPattern: pattern, branchPatternSource: "github" });
+    }
+    return null;
+  },
+});
+
+/**
+ * When the deploy URLs themselves prove nothing, ask whether the host
+ * publishes a branch alias it never reports.
+ *
+ * Vercel's webhook hands over "project-kxzauj7pp-team.vercel.app": a random
+ * deploy id, no branch anywhere, so evidence inference rightly refuses. But
+ * "project-git-{branch}-team.vercel.app" exists for every branch. The rule
+ * that keeps this honest: host knowledge only generates candidates, and a
+ * candidate is stored only after the constructed URL for a real, observed
+ * branch actually resolves. A fabricated alias fails DNS, so resolution is a
+ * hard discriminator, verified against live deploys rather than assumed. If
+ * Vercel ever changes its URL shape, this degrades to refusal, never to dead
+ * links.
+ */
+export const confirmAliasPattern = internalAction({
+  args: { projectId: v.id("projects") },
+  // Annotated because this action calls same-file internals, and TS refuses
+  // to infer a type that would depend on itself.
+  handler: async (
+    ctx,
+    { projectId }
+  ): Promise<{ confirmed: string | null; reason?: string; checkedBranches?: string[] }> => {
+    const context = await ctx.runQuery(internal.githubApp.aliasContext, { projectId });
+    if (!context) return { confirmed: null, reason: "no_project" };
+    if (context.branchPreviewPattern && context.branchPatternSource !== "github") {
+      return { confirmed: null, reason: "manual_pattern" };
+    }
+    if (context.samples.length === 0) return { confirmed: null, reason: "no_samples" };
+
+    const candidates = vercelAliasCandidates(context.samples[0].url);
+    const branches = [...new Set(context.samples.map((s) => s.branch))].slice(0, 3);
+
+    for (const candidate of candidates) {
+      let allResolve = true;
+      for (const branch of branches) {
+        const url = candidate.replace("{branch}", slugifyBranch(branch));
+        try {
+          // Any HTTP answer, including a redirect to auth, proves the host
+          // exists. Only a network-level failure (no such host) refutes it.
+          await fetch(url, { redirect: "manual" });
+        } catch {
+          allResolve = false;
+          break;
+        }
+      }
+      if (allResolve) {
+        await ctx.runMutation(internal.githubApp.recordBranchPattern, { projectId, pattern: candidate });
+        return { confirmed: candidate, checkedBranches: branches };
+      }
+    }
+    return { confirmed: null, reason: "no_candidate_resolved" };
+  },
+});
+
+/**
+ * Ask GitHub to re-send past deployment_status deliveries, so a pipeline fix
+ * can be exercised against real payloads without pushing new commits.
+ */
+export const redeliverDeployments = internalAction({
+  args: { count: v.optional(v.number()) },
+  handler: async (_ctx, { count }) => {
+    const auth = {
+      Authorization: `Bearer ${await appJwt()}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    };
+    const list = await fetch(`${GITHUB_API}/app/hook/deliveries?per_page=50`, { headers: auth });
+    if (!list.ok) return { redelivered: [], detail: `${list.status}` };
+    // Ids exceed Number.MAX_SAFE_INTEGER; they only survive as strings.
+    const raw = await list.text();
+    const ids = raw
+      .split(/\{"id":/)
+      .slice(1)
+      .filter((chunk) => /"event"\s*:\s*"deployment_status"/.test(chunk))
+      .map((chunk) => chunk.match(/^\s*(\d+)/)?.[1] ?? "")
+      .filter((id) => id !== "")
+      .slice(0, count ?? 2);
+    const redelivered: string[] = [];
+    for (const id of ids) {
+      const response = await fetch(`${GITHUB_API}/app/hook/deliveries/${id}/attempts`, {
+        method: "POST",
+        headers: auth,
+      });
+      if (response.ok) redelivered.push(id);
+    }
+    return { redelivered };
+  },
+});
+
 // ── Diagnosis ──────────────────────────────────────────────────────────────
 
 export type Finding = {
@@ -734,9 +888,9 @@ export const diagnose = action({
         level: "warn",
         title: "Branch preview URLs don't contain the branch name",
         detail:
-          `Commons has ${context.sampleCount} branch deploys for this project but could not find a reliable pattern: the URLs your host reports ` +
-          "are per-deployment addresses with a random id, not the branch alias. It refuses to guess rather than store a pattern that would " +
-          "produce dead links. Paste the pattern yourself under Draft previews, using {branch} where the name goes.",
+          `Commons has ${context.sampleCount} branch deploys for this project but could not prove a pattern: the URLs your host reports ` +
+          "are per-deployment addresses with a random id, and no published alias for this host could be verified against a real deploy. " +
+          "It refuses to guess rather than store dead links. Paste the pattern yourself under Draft previews, using {branch} where the name goes.",
       });
     }
 

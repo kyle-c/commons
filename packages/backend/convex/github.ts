@@ -3,6 +3,7 @@ import { internalMutation, internalQuery, mutation, query } from "./_generated/s
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { accessibleProject, requireViewer, resolveViewer } from "./access";
+import { internal } from "./_generated/api";
 
 /**
  * The GitHub App listener: Commons learns each project's preview URL and its
@@ -79,6 +80,41 @@ export function inferBranchPattern(samples: DeploySample[]): string | null {
     if (holds) return candidate;
   }
   return null;
+}
+
+/**
+ * Candidate branch-alias patterns for a Vercel per-deployment URL.
+ *
+ * Vercel reports "project-kxzauj7pp-team.vercel.app": a random deploy id, no
+ * branch name anywhere, so evidence-based inference correctly refuses. But
+ * Vercel also publishes "project-git-{branch}-team.vercel.app" for every
+ * branch; it just never tells us about it.
+ *
+ * This proposes that shape as a hypothesis, nothing more. Every segment that
+ * could be the deploy id yields one candidate, ambiguity included, because
+ * the caller must verify a candidate resolves against a real branch before
+ * anything is stored. Host knowledge here only ever generates guesses to be
+ * checked; it is never trusted on its own.
+ */
+export function vercelAliasCandidates(sampleUrl: string): string[] {
+  const match = sampleUrl.match(/^https:\/\/([a-z0-9-]+)\.vercel\.app$/);
+  if (!match) return [];
+  const parts = match[1].split("-");
+  const candidates: { pattern: string; hashLike: boolean }[] = [];
+  for (let i = 1; i < parts.length - 1; i += 1) {
+    const segment = parts[i];
+    // Deploy ids are short alphanumeric blobs; anything else is part of the
+    // project or team name. Wrong picks die at verification, not here.
+    if (!/^[a-z0-9]{7,12}$/.test(segment)) continue;
+    candidates.push({
+      pattern: `https://${parts.slice(0, i).join("-")}-git-{branch}-${parts.slice(i + 1).join("-")}.vercel.app`,
+      hashLike: /\d/.test(segment),
+    });
+  }
+  // Segments containing digits are far more likely to be the deploy id, so
+  // try those first and waste fewer verification fetches.
+  candidates.sort((a, b) => Number(b.hashLike) - Number(a.hashLike));
+  return candidates.slice(0, 4).map((c) => c.pattern);
 }
 
 /** A deploy that represents the live product, not a branch preview. */
@@ -443,6 +479,10 @@ async function applyDeploy(
     patch.lastDeployAt = Date.now();
     // Deployed pixels moved; existing snapshots are now older than the app.
     patch.snapshotsStaleAt = Date.now();
+  } else if (/^[0-9a-f]{40}$/.test(deploy.branch)) {
+    // The webhook could not resolve this ref to a branch name, so it is a
+    // bare commit SHA. A sample whose "branch" is a SHA can never support a
+    // pattern and would poison the ones that could, so it is not stored.
   } else {
     // Branch deploy: another data point for the pattern.
     await ctx.db.insert("deploymentSamples", {
@@ -463,6 +503,12 @@ async function applyDeploy(
     if (pattern && canWrite && project.branchPreviewPattern !== pattern) {
       patch.branchPreviewPattern = pattern;
       patch.branchPatternSource = "github";
+    } else if (!pattern && canWrite) {
+      // The URLs themselves prove nothing, but the host may publish a branch
+      // alias it never reports. That check needs fetch, which a mutation does
+      // not have, so it runs as a follow-up action. Same provenance rules
+      // apply on write, and nothing is stored unless a real branch resolves.
+      await ctx.scheduler.runAfter(0, internal.githubApp.confirmAliasPattern, { projectId: project._id });
     }
     // Drop anything beyond the window so the table cannot grow without bound.
     for (const stale of samples.filter((s) => !recent.includes(s))) {
@@ -586,4 +632,19 @@ export const staleSnapshotProjects = internalQuery({
     (await ctx.db.query("projects").collect())
       .filter((p) => p.snapshotsStaleAt && p.previewUrl && !p.archivedAt)
       .map((p) => ({ projectId: p._id as Id<"projects">, staleAt: p.snapshotsStaleAt! })),
+});
+
+/**
+ * Delete samples recorded before the webhook learned to resolve refs: their
+ * "branch" is a commit SHA, which can never support a pattern and blocks the
+ * inference window from converging. One-off, run by hand.
+ */
+export const pruneShaSamples = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("deploymentSamples").collect();
+    const junk = all.filter((s) => /^[0-9a-f]{40}$/.test(s.branch));
+    for (const sample of junk) await ctx.db.delete(sample._id);
+    return { deleted: junk.length, kept: all.length - junk.length };
+  },
 });
