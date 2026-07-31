@@ -416,7 +416,7 @@ export const requireProjectAccessContext = internalQuery({
     const samples = await ctx.db
       .query("deploymentSamples")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
-      .take(2);
+      .take(20);
 
     return {
       hasWorkspace: Boolean(project.workspaceId),
@@ -637,13 +637,25 @@ export const diagnose = action({
         title: "Branch previews are understood",
         detail: `Commons can work out the preview URL for any branch from ${context.sampleCount} observed deploys.`,
       });
-    } else {
+    } else if (context.sampleCount < 2) {
       findings.push({
         level: "warn",
         title: "Branch previews not learned yet",
         detail:
           `Commons has seen ${context.sampleCount} branch deploy${context.sampleCount === 1 ? "" : "s"} for this project and needs at least 2 ` +
           "before it will guess a per-branch URL pattern. This is expected on a new connection, and production previews work regardless.",
+      });
+    } else {
+      // Samples exist and inference still refused, which is a different
+      // situation entirely: waiting longer will not help. Saying "needs at
+      // least 2" here would be a lie that never resolves.
+      findings.push({
+        level: "warn",
+        title: "Branch preview URLs don't contain the branch name",
+        detail:
+          `Commons has ${context.sampleCount} branch deploys for this project but could not find a reliable pattern: the URLs your host reports ` +
+          "are per-deployment addresses with a random id, not the branch alias. It refuses to guess rather than store a pattern that would " +
+          "produce dead links. Paste the pattern yourself under Draft previews, using {branch} where the name goes.",
       });
     }
 
