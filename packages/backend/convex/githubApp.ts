@@ -370,6 +370,87 @@ export const recentDeliveries = internalAction({
   },
 });
 
+/**
+ * The raw body GitHub sent for a deployment_status, so we can see what a host
+ * actually reports rather than what the API docs imply.
+ *
+ * Branch-preview inference is fed `deployment.ref` and
+ * `deployment_status.environment_url`, and on Vercel those turn out to be a
+ * commit SHA and a per-deployment address — neither of which contains a branch
+ * name, which is why inference correctly refuses. The question this answers is
+ * whether the branch is recoverable from somewhere else in the payload.
+ *
+ * Returns shapes and the specific fields of interest, not the whole body: the
+ * point is to learn where the branch lives, and a webhook body is not
+ * something to spray into a terminal wholesale.
+ */
+export const inspectDeploymentDelivery = internalAction({
+  args: {},
+  handler: async () => {
+    const auth = {
+      Authorization: `Bearer ${await appJwt()}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    };
+
+    const list = await fetch(`${GITHUB_API}/app/hook/deliveries?per_page=50`, { headers: auth });
+    if (!list.ok) return { ok: false as const, detail: `${list.status}: ${await list.text()}` };
+
+    /**
+     * Delivery ids are past Number.MAX_SAFE_INTEGER (3.8e18 against a 9.0e15
+     * ceiling), so JSON.parse silently rounds them and every lookup 404s on an
+     * id that never existed. They have to come out of the raw text as strings.
+     */
+    const raw = await list.text();
+    const candidates = raw
+      .split(/\{"id":/)
+      .slice(1)
+      .map((chunk) => ({ id: chunk.match(/^\s*(\d+)/)?.[1] ?? "", chunk }))
+      .filter((d) => d.id !== "" && /"event"\s*:\s*"deployment_status"/.test(d.chunk));
+    if (candidates.length === 0) return { ok: false as const, detail: "no deployment_status delivery in the last 50" };
+
+    // Try each in turn: individual deliveries expire before they drop off the
+    // list, so the newest is not always the one that can still be fetched.
+    let one: Response | null = null;
+    const attempts: string[] = [];
+    for (const candidate of candidates) {
+      const response = await fetch(`${GITHUB_API}/app/hook/deliveries/${candidate.id}`, { headers: auth });
+      attempts.push(`${candidate.id}:${response.status}`);
+      if (response.ok) {
+        one = response;
+        break;
+      }
+    }
+    if (!one) {
+      return {
+        ok: false as const,
+        detail: `no delivery body was fetchable (${candidates.length} candidates) — ${attempts.join(", ")}`,
+      };
+    }
+    const body = (await one.json()) as { request?: { payload?: Record<string, unknown> } };
+    const payload = body.request?.payload ?? {};
+    const deployment = (payload.deployment ?? {}) as Record<string, unknown>;
+    const statusObj = (payload.deployment_status ?? {}) as Record<string, unknown>;
+
+    return {
+      ok: true as const,
+      deliveryId: new URL(one.url).pathname.split("/").pop(),
+      // Where a branch name could plausibly hide.
+      deploymentKeys: Object.keys(deployment),
+      deploymentRef: deployment.ref ?? null,
+      deploymentEnvironment: deployment.environment ?? null,
+      deploymentDescription: deployment.description ?? null,
+      /** Vercel and friends stash git metadata here; free-form by design. */
+      deploymentPayload: deployment.payload ?? null,
+      statusKeys: Object.keys(statusObj),
+      environmentUrl: statusObj.environment_url ?? null,
+      targetUrl: statusObj.target_url ?? null,
+      statusEnvironment: statusObj.environment ?? null,
+      statusDescription: statusObj.description ?? null,
+    };
+  },
+});
+
 // ── Diagnosis ──────────────────────────────────────────────────────────────
 
 export type Finding = {
