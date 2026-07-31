@@ -3453,3 +3453,26 @@ kbd {
   font-size: var(--text-lg);
   color: var(--text-primary);
 }
+
+/* ── Archive send-off ────────────────────────────────────────────────────
+   Pure chrome, zero layout: the overlay sits above everything, ignores the
+   mouse, and removes itself. Particle colors are inline (the project's own
+   brand), so only the bones live here. */
+.celebrate-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 200;
+}
+.celebrate-particle {
+  position: absolute;
+  will-change: transform, opacity;
+}
+.celebrate-ring {
+  position: absolute;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--text-primary) 55%, transparent);
+  will-change: transform, opacity;
+}

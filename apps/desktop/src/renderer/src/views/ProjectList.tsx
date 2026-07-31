@@ -14,6 +14,7 @@ import Inbox from "./Inbox";
 import AccountMenu from "./AccountMenu";
 import Icon from "../components/icons";
 import RibbonCover from "../components/RibbonCover";
+import { explodeFrom } from "../lib/celebrate";
 
 /** Shared lifecycle labels: what kind of feedback a project wants right now. */
 const STATUSES = [
@@ -408,6 +409,11 @@ export default function ProjectList({
                 title="Archive (share links stay alive)"
                 onClick={(e) => {
                   e.stopPropagation();
+                  // The card explodes into its own brand colors. The overlay
+                  // outlives the card, so reactivity can unmount it whenever
+                  // the mutation lands.
+                  const card = e.currentTarget.closest(".project-card");
+                  if (card instanceof HTMLElement) explodeFrom(card, project.brandColors ?? []);
                   void setArchived({ projectId: project._id, archived: true, userId: me._id, sessionToken: sessionToken() });
                 }}
               >
