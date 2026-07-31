@@ -399,7 +399,7 @@ function SharePopover({
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setOpen(false), open);
   const publicSite = usePublicSiteUrl();
-  const shareUrl = project.shareToken ? `${publicSite}/p/${project.shareToken}` : null;
+  const shareUrl = project.shareToken ? `${publicSite}/g/${project.shareToken}` : null;
 
   const copy = (kind: "app" | "web", text: string) => {
     void navigator.clipboard.writeText(text);
@@ -1662,7 +1662,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           onSendToAgent={window.commons && (repoPath || project.gitRemote) ? sendThreadToAgent : undefined}
           webLinkBase={
             project.shareToken
-              ? `${publicSite}/p/${project.shareToken}`
+              ? `${publicSite}/g/${project.shareToken}`
               : undefined
           }
           heatmap={

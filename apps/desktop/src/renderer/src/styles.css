@@ -3476,3 +3476,38 @@ kbd {
   border: 2px solid color-mix(in srgb, var(--text-primary) 55%, transparent);
   will-change: transform, opacity;
 }
+
+/* ── Guest composer ──────────────────────────────────────────────────────
+   Two fields and a button: name once, message every time. Reuses input
+   chrome from the app so a guest's composer feels native, not bolted on. */
+.guest-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+.guest-composer input,
+.guest-composer textarea {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  padding: 7px 10px;
+  font-family: inherit;
+  resize: vertical;
+}
+.guest-composer-name {
+  max-width: 200px;
+}
+.guest-composer-error {
+  font-size: var(--text-xs);
+  color: var(--danger);
+}
+.guest-composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

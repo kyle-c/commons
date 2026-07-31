@@ -213,6 +213,11 @@ export const guestThread = internalMutation({
     frameId: v.optional(v.id("frames")),
     fx: v.optional(v.number()),
     fy: v.optional(v.number()),
+    // Canvas-anchored pins, for comments that point between frames. Added
+    // when guest mode became the real canvas; the old share page only ever
+    // pinned onto frames.
+    canvasX: v.optional(v.number()),
+    canvasY: v.optional(v.number()),
     name: v.string(),
     body: v.string(),
   },
@@ -229,6 +234,8 @@ export const guestThread = internalMutation({
       frameId: args.frameId,
       fx: args.fx,
       fy: args.fy,
+      canvasX: args.canvasX,
+      canvasY: args.canvasY,
     });
     await ctx.db.insert("messages", {
       threadId,

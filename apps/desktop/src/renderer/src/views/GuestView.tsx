@@ -47,11 +47,12 @@ export default function GuestView({ shareToken }: { shareToken: string }) {
     <div className="guest-shell">
       <header className="guest-bar">
         <span className="guest-project">{data.project.name}</span>
-        <span className="guest-note">Shared link. You can look around and read comments.</span>
+        <span className="guest-note">Shared link. Look around, read the discussion, leave comments.</span>
       </header>
       <div className="guest-canvas">
         <CanvasView
           me={null}
+          guestToken={shareToken}
           projectId={data.project._id as Id<"projects">}
           frames={data.frames}
           threads={data.threads}

@@ -5,6 +5,8 @@ import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import type { DevServerStatus } from "@commons/shared";
 import type { ThreadWithMessages } from "../comments/types";
 import Composer from "../comments/Composer";
+import GuestComposer from "../comments/GuestComposer";
+import { postGuestThread, storedGuestName } from "../lib/guestApi";
 import ThreadPanel from "../comments/ThreadPanel";
 import Minimap from "./Minimap";
 import { initials, sessionToken } from "../lib/session";
@@ -41,6 +43,8 @@ interface Props {
    * have missed the point.
    */
   me: Doc<"users"> | null;
+  /** Present in guest mode: enables commenting, with the token as credential. */
+  guestToken?: string;
   projectId: Id<"projects">;
   frames: (Doc<"frames"> & { snapshotUrl?: string | null; snapshotAt?: number | null })[];
   threads: ThreadWithMessages[];
@@ -273,6 +277,7 @@ const FrameLayer = memo(function FrameLayer({
 
 export default function CanvasView({
   me,
+  guestToken,
   projectId,
   frames,
   threads,
@@ -675,10 +680,11 @@ export default function CanvasView({
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
+  const canComment = Boolean(me || guestToken);
   useEffect(() => {
-    if (!me) return;
+    if (!canComment) return;
     return registerShortcut("c", () => setCommentMode((m) => !m), { description: "Comment mode" });
-  }, [me]);
+  }, [canComment]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -804,6 +810,33 @@ export default function CanvasView({
   useEffect(() => {
     if (pendingPin?.threadId && threads.some((t) => t._id === pendingPin.threadId)) setPendingPin(null);
   }, [threads, pendingPin]);
+
+  /**
+   * Guest thread creation goes through the token-gated HTTP endpoint instead
+   * of the members' mutation. Same optimistic pin, same retract-on-failure;
+   * the subscription on sharePage repaints the real thread when it lands.
+   */
+  const submitGuestDraft = async (name: string, body: string): Promise<boolean> => {
+    if (!draft || !guestToken) return false;
+    const coords = {
+      frameId: draft.frameId,
+      fx: draft.fx,
+      fy: draft.fy,
+      canvasX: draft.canvasX,
+      canvasY: draft.canvasY,
+    };
+    setPendingPin(coords);
+    setDraft(null);
+    setCommentMode(false);
+    const threadId = await postGuestThread(guestToken, { ...coords, name, body });
+    if (!threadId) {
+      setPendingPin(null);
+      return false;
+    }
+    setPendingPin((p) => (p ? { ...p, threadId } : p));
+    setSelectedThread(threadId as Id<"threads">);
+    return true;
+  };
 
   const submitDraft = async (body: string, mentions: Id<"users">[]) => {
     if (!draft) return;
@@ -1026,7 +1059,7 @@ export default function CanvasView({
                   background: me?.avatarColor,
                 }}
               >
-                {me ? initials(me.name) : "?"}
+                {me ? initials(me.name) : storedGuestName() ? initials(storedGuestName()) : "?"}
               </span>
             );
           })()}
@@ -1061,7 +1094,7 @@ export default function CanvasView({
         {me && <CursorLayer me={me} projectId={projectId} scale={vp.scale} />}
       </div>
 
-      {draft && me && (
+      {draft && canComment && (
         <div
           style={{
             position: "absolute",
@@ -1076,15 +1109,25 @@ export default function CanvasView({
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <Composer
-            users={mentionUsers ?? users}
-            me={me}
-            autoFocus
-            placeholder="Start a thread… @ to mention"
-            submitLabel="Comment"
-            onSubmit={submitDraft}
-            onCancel={() => setDraft(null)}
-          />
+          {me ? (
+            <Composer
+              users={mentionUsers ?? users}
+              me={me}
+              autoFocus
+              placeholder="Start a thread… @ to mention"
+              submitLabel="Comment"
+              onSubmit={submitDraft}
+              onCancel={() => setDraft(null)}
+            />
+          ) : (
+            <GuestComposer
+              autoFocus
+              placeholder="Leave a comment…"
+              submitLabel="Comment"
+              onSubmit={submitGuestDraft}
+              onCancel={() => setDraft(null)}
+            />
+          )}
         </div>
       )}
 
@@ -1093,6 +1136,7 @@ export default function CanvasView({
           <ThreadPanel
             thread={selected}
             me={me}
+            guestToken={guestToken}
             users={users}
             mentionUsers={mentionUsers ?? users}
             onClose={() => setSelectedThread(null)}
@@ -1130,7 +1174,7 @@ export default function CanvasView({
       <div className="canvas-toolbar" onMouseDown={(e) => e.stopPropagation()}>
         {/* Absent for guests rather than present-and-dead: a control that
             opens a composer nothing can submit is worse than no control. */}
-        {me && (
+        {canComment && (
           <button
             className={`btn ghost icon-btn ${commentMode ? "active" : ""}`}
             aria-label="Comment"

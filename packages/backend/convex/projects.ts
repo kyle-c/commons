@@ -324,7 +324,7 @@ export const catchUp = query({
  * credential here: holding it is the whole authorisation story, which is why
  * revoking it in Sharing cuts access instantly.
  *
- * Unlike sharePageData (which flattens messages for a static template), this
+ * Returns whole message docs (not a flattened view), so the guest canvas and
  * keeps ids, so a guest can reply to a thread rather than only read it.
  */
 export const sharePage = query({
@@ -406,76 +406,6 @@ export const sharePage = query({
   },
 });
 
-export const sharePageData = internalQuery({
-  args: { shareToken: v.string() },
-  handler: async (ctx, { shareToken }) => {
-    const project = await ctx.db
-      .query("projects")
-      .withIndex("by_share_token", (q) => q.eq("shareToken", shareToken))
-      .unique();
-    if (!project || project.archivedAt) return null;
-    const frames = await ctx.db
-      .query("frames")
-      .withIndex("by_project", (q) => q.eq("projectId", project._id))
-      .collect();
-    const framesWithSnapshots = await Promise.all(
-      frames.map(async (frame) => {
-        const snapshot = await ctx.db
-          .query("frameSnapshots")
-          .withIndex("by_frame", (q) => q.eq("frameId", frame._id))
-          .unique();
-        return { ...frame, snapshotUrl: snapshot ? await ctx.storage.getUrl(snapshot.storageId) : null };
-      })
-    );
-    const threads = await ctx.db
-      .query("threads")
-      .withIndex("by_project", (q) => q.eq("projectId", project._id))
-      .collect();
-    const threadsWithMessages = await Promise.all(
-      threads.map(async (thread) => {
-        const messages = await ctx.db
-          .query("messages")
-          .withIndex("by_thread", (q) => q.eq("threadId", thread._id))
-          .collect();
-        return {
-          ...thread,
-          messages: await Promise.all(
-            messages.map(async (m) => {
-              const author = m.authorId ? await ctx.db.get(m.authorId) : null;
-              return {
-                body: m.body,
-                at: m._creationTime,
-                authorName: author?.name ?? (m.guestName ? `${m.guestName} (guest)` : "Teammate"),
-                avatarColor: author?.avatarColor ?? "#9d9da6",
-              };
-            })
-          ),
-        };
-      })
-    );
-    // NAR-2: approved design rationale travels with the share page.
-    const approvedAnnotations = await ctx.db
-      .query("annotations")
-      .withIndex("by_project_status", (q) => q.eq("projectId", project._id).eq("status", "approved"))
-      .take(500);
-    const annotations = approvedAnnotations
-      .sort((a, b) => a.order - b.order)
-      .map((a) => ({
-        frameId: a.frameId ?? null,
-        flowTitle: a.flowTitle ?? null,
-        text: a.text,
-        inferred: a.citations.length === 0,
-      }));
-    return {
-      name: project.name,
-      projectId: project._id,
-      previewUrl: project.previewUrl ?? null,
-      frames: framesWithSnapshots,
-      threads: threadsWithMessages,
-      annotations,
-    };
-  },
-});
 
 // Creator-only controls for private projects.
 export const setVisibility = mutation({

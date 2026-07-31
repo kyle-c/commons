@@ -4,13 +4,17 @@ import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc } from "@commons/backend/convex/_generated/dataModel";
 import type { ThreadWithMessages } from "./types";
 import Composer from "./Composer";
+import GuestComposer from "./GuestComposer";
+import { postGuestReply } from "../lib/guestApi";
 import MessageText from "./MessageText";
 import { initials, sessionToken, timeAgo } from "../lib/session";
 
 interface Props {
   thread: ThreadWithMessages;
-  /** Null in guest mode: the thread still reads, it just cannot be answered. */
+  /** Null in guest mode: the viewer is whoever holds the link. */
   me: Doc<"users"> | null;
+  /** Present in guest mode: the share token, which is also the credential. */
+  guestToken?: string;
   users: Doc<"users">[];
   /** Who can be @mentioned — narrower than `users` on private projects. */
   mentionUsers?: Doc<"users">[];
@@ -21,7 +25,7 @@ interface Props {
   webLinkBase?: string;
 }
 
-export default function ThreadPanel({ thread, me, users, mentionUsers, onClose, onSendToAgent, webLinkBase }: Props) {
+export default function ThreadPanel({ thread, me, guestToken, users, mentionUsers, onClose, onSendToAgent, webLinkBase }: Props) {
   const reply = useMutation(api.comments.reply);
   const setResolved = useMutation(api.comments.setResolved);
   const resolved = !!thread.resolvedAt;
@@ -111,6 +115,12 @@ export default function ThreadPanel({ thread, me, users, mentionUsers, onClose, 
           onSubmit={async (body, mentions) => {
             await reply({ threadId: thread._id, authorId: me._id, body, mentions });
           }}
+        />
+      ) : guestToken ? (
+        <GuestComposer
+          placeholder="Reply as a guest…"
+          submitLabel="Reply"
+          onSubmit={(name, body) => postGuestReply(guestToken, { threadId: thread._id, name, body })}
         />
       ) : (
         <p className="thread-readonly">You're viewing a shared link, so you can read this thread but not reply.</p>
