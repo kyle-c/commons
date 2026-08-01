@@ -473,22 +473,38 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const url = new URL(request.url);
     const p = (k: string) => url.searchParams.get(k) ?? "";
-    if (!p("crawlId") || !p("runToken") || !p("signature")) return json({ error: "bad_request" }, 400);
+    // Credentials come from headers now; the query fallback keeps a crawler
+    // that started under the previous served script from failing mid-run.
+    const crawlId = request.headers.get("X-Commons-Crawl") ?? p("crawlId");
+    const runToken = request.headers.get("X-Commons-Token") ?? p("runToken");
+    if (!crawlId || !runToken || !p("signature")) return json({ error: "bad_request" }, 400);
+    // Authorize FIRST. Storing before the check meant a malformed id threw
+    // inside the mutation, skipping the cleanup line and leaking the blob
+    // permanently — unauthenticated, once per request.
+    const crawl = await ctx.runQuery(internal.flows.crawlTokenOk, { crawlId, runToken });
+    if (!crawl) return json({ ok: false, error: "forbidden" }, 403);
+
     const blob = await request.blob();
     if (blob.size === 0 || blob.size > 8_000_000) return json({ error: "bad_image" }, 400);
     const storageId = await ctx.storage.store(blob);
-    const result = await ctx.runMutation(internal.flows.ingestCrawlProposal, {
-      crawlId: p("crawlId") as never,
-      runToken: p("runToken"),
-      storageId,
-      routePath: p("routePath") || "/",
-      stateLabel: p("stateLabel") || "state",
-      trigger: p("trigger") || undefined,
-      fromRoutePath: p("fromRoutePath") || undefined,
-      signature: p("signature"),
-    });
-    if (!result.ok) await ctx.storage.delete(storageId); // rejected token: don't keep the blob
-    return json(result, result.ok ? 200 : 403);
+    try {
+      const result = await ctx.runMutation(internal.flows.ingestCrawlProposal, {
+        crawlId: crawl.id,
+        runToken,
+        storageId,
+        routePath: p("routePath").slice(0, 256) || "/",
+        stateLabel: p("stateLabel").slice(0, 60) || "state",
+        trigger: p("trigger").slice(0, 120) || undefined,
+        fromRoutePath: p("fromRoutePath").slice(0, 256) || undefined,
+        signature: p("signature").slice(0, 200),
+      });
+      if (!result.ok) await ctx.storage.delete(storageId).catch(() => {});
+      return json(result, result.ok ? 200 : 403);
+    } catch (error) {
+      // Any throw past this point must still free the blob.
+      await ctx.storage.delete(storageId).catch(() => {});
+      throw error;
+    }
   }),
 });
 
@@ -497,10 +513,11 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const url = new URL(request.url);
+    const finishId = request.headers.get("X-Commons-Crawl") ?? url.searchParams.get("crawlId") ?? "";
     const result = await ctx.runMutation(internal.flows.finishCrawl, {
-      crawlId: (url.searchParams.get("crawlId") ?? "") as never,
-      runToken: url.searchParams.get("runToken") ?? "",
-      error: url.searchParams.get("error") ?? undefined,
+      crawlId: finishId as never,
+      runToken: request.headers.get("X-Commons-Token") ?? url.searchParams.get("runToken") ?? "",
+      error: url.searchParams.get("error")?.slice(0, 500) || undefined,
     });
     return json(result, result.ok ? 200 : 403);
   }),

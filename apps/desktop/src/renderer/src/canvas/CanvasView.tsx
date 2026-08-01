@@ -83,7 +83,15 @@ interface Props {
    * canvas, which is the point of rendering flows with the same component.
    */
   positionOverride?: Record<string, { x: number; y: number }>;
-  flowEdges?: { _id: string; fromFrameId: string; toFrameId: string; weight: number; label?: string }[];
+  flowEdges?: {
+    _id: string;
+    fromFrameId: string;
+    toFrameId: string;
+    weight: number;
+    label?: string;
+    /** "tests" = walked by testers (weighted); "manual" = drawn by a person. */
+    source?: "tests" | "manual";
+  }[];
 }
 
 /**
@@ -153,7 +161,14 @@ function FlowEdgeLayer({
   edges,
   frames,
 }: {
-  edges: { _id: string; fromFrameId: string; toFrameId: string; weight: number; label?: string }[];
+  edges: {
+    _id: string;
+    fromFrameId: string;
+    toFrameId: string;
+    weight: number;
+    label?: string;
+    source?: "tests" | "manual";
+  }[];
   frames: { id: string; x: number; y: number; width: number; height: number }[];
 }) {
   const byId = new Map(frames.map((f) => [f.id, f]));
@@ -178,13 +193,28 @@ function FlowEdgeLayer({
           : `M ${x1} ${y1} C ${x1} ${y1 + 160}, ${x2} ${y2 + 160}, ${x2} ${y2 + 6}`;
         const midX = (x1 + x2) / 2;
         const midY = forward ? (y1 + y2) / 2 : Math.max(y1, y2) + 120;
-        const width = 1.5 + Math.log2(1 + edge.weight);
+        // Weight only means something for tester-derived edges. A hand-drawn
+        // edge is intent, not evidence: fixed width, dashed, and silent when
+        // unlabeled — "1×" would have claimed a tester walked it.
+        const manual = edge.source === "manual";
+        const width = manual ? 1.5 : 1.5 + Math.log2(1 + edge.weight);
+        const caption = edge.label ?? (manual ? null : `${edge.weight}×`);
         return (
           <g key={edge._id} className="flow-edge">
-            <path d={path} fill="none" stroke="var(--accent)" strokeOpacity="0.55" strokeWidth={width} markerEnd="url(#flow-arrow)" />
-            <text x={midX} y={midY - 8} textAnchor="middle" className="flow-edge-label">
-              {edge.label ?? `${edge.weight}×`}
-            </text>
+            <path
+              d={path}
+              fill="none"
+              stroke="var(--accent)"
+              strokeOpacity={manual ? 0.4 : 0.55}
+              strokeWidth={width}
+              strokeDasharray={manual ? "5 4" : undefined}
+              markerEnd="url(#flow-arrow)"
+            />
+            {caption && (
+              <text x={midX} y={midY - 8} textAnchor="middle" className="flow-edge-label">
+                {caption}
+              </text>
+            )}
           </g>
         );
       })}
@@ -251,6 +281,16 @@ const FrameLayer = memo(function FrameLayer({
             <div className="frame-header" onMouseDown={(e) => onFrameDrag(frame, e)}>
               <span>{frame.title}</span>
               <span className="route">{frame.routePath}</span>
+              {frame.kind === "state" && (
+                <span
+                  className="badge state"
+                  title={`A condition of ${frame.routePath ?? "this screen"}${
+                    frame.stateOrigin === "crawl" ? ", found by a crawl" : ", captured by a person"
+                  }`}
+                >
+                  state
+                </span>
+              )}
               {source && !source.live && (
                 <span className="badge" title="Rendered from the deployed preview — locate the repo for a live dev server">
                   preview
@@ -1003,7 +1043,11 @@ export default function CanvasView({
         className={`canvas-stage ${layoutAnim ? "layout-anim" : ""}`}
         style={{ transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.scale})` }}
       >
-        {[...sectionBounds.entries()].map(([section, b]) => (
+        {/* Section bands describe the tidy layout, not the frames. Under a
+            derived layout (flow view) their members scatter across BFS
+            columns, so the bands sprawl over the graph meaning nothing. */}
+        {!positionOverride &&
+          [...sectionBounds.entries()].map(([section, b]) => (
           <div key={section}>
             <div
               className="section-region"
@@ -1026,7 +1070,7 @@ export default function CanvasView({
               {section}
             </div>
           </div>
-        ))}
+          ))}
 
         {flowEdges && (
           <FlowEdgeLayer

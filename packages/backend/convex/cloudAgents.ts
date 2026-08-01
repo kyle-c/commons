@@ -356,15 +356,14 @@ const payload = JSON.parse(process.env.COMMONS_PAYLOAD);
 // only runs for ordinary agent dispatches.
 if (payload.mode === "crawl") {
   // Playwright isn't in the agent runner's deps; install it and its browser
-  // just for the crawl. Then require chromium and hand it to the fetched
-  // crawler, so the crawler never resolves a bare specifier of its own.
+  // just for the crawl. The crawler is written into /tmp/commons/ so its own
+  // playwright import resolves against the install below.
   execFileSync("npm", ["install", "--no-fund", "--no-audit", "playwright"], { cwd: "/tmp/commons", stdio: "inherit" });
   execFileSync("npx", ["playwright", "install", "--with-deps", "chromium"], { cwd: "/tmp/commons", stdio: "inherit" });
-  const { chromium } = require("playwright");
   const res = await fetch(payload.callback + "/setup/flow-crawler.mjs");
   writeFileSync("/tmp/commons/flow-crawler.mjs", await res.text());
   const { runCrawl } = await import("/tmp/commons/flow-crawler.mjs");
-  await runCrawl(payload, chromium);
+  await runCrawl(payload);
   process.exit(0);
 }
 

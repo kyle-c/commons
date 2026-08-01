@@ -569,29 +569,41 @@ export default function ProjectList({
                       <div className="meta">
                         {confirmDelete === project._id ? (
                           <>
-                            <span className="delete-warn">Delete forever? Can't be undone.</span>
+                            <span className="delete-warn">
+                              Deletes every comment, agent session, test and snapshot too. Permanent.
+                            </span>
+                            {/* Keep is the emphasised choice: in a confirm, the
+                                safe action should carry the visual weight. */}
                             <button
-                              className="btn ghost danger"
+                              className="btn"
+                              autoFocus
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setConfirmDelete(null);
-                                void deleteArchived({
-                                  projectId: project._id,
-                                  userId: me._id,
-                                  sessionToken: sessionToken(),
-                                });
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Escape") setConfirmDelete(null);
                               }}
                             >
-                              Delete
+                              Keep
                             </button>
                             <button
-                              className="btn ghost"
-                              onClick={(e) => {
+                              className="btn ghost danger"
+                              onClick={async (e) => {
                                 e.stopPropagation();
                                 setConfirmDelete(null);
+                                try {
+                                  await deleteArchived({
+                                    projectId: project._id,
+                                    userId: me._id,
+                                    sessionToken: sessionToken(),
+                                  });
+                                } catch (err) {
+                                  alert(err instanceof Error ? err.message : String(err));
+                                }
                               }}
                             >
-                              Cancel
+                              Delete forever
                             </button>
                           </>
                         ) : (

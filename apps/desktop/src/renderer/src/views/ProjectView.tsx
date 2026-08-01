@@ -304,16 +304,25 @@ function FlowReviewPanel({
 }) {
   const promote = useMutation(api.flows.promoteProposal);
   const reject = useMutation(api.flows.rejectProposal);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
     <div className="overlay-scrim" onMouseDown={onClose}>
       <div className="overlay-card flow-review" onMouseDown={(e) => e.stopPropagation()}>
         <header>
-          <span>Edge cases the crawl found</span>
+          <span>Edge cases found</span>
           <button className="btn ghost" onClick={onClose} aria-label="Close">
             ✕
           </button>
         </header>
         <div className="flow-review-body">
+          {note && <span className="form-error">{note}</span>}
           {proposals.length === 0 && (
             <p className="hint">Nothing pending. Run “Find edge cases” to send a browser through your preview.</p>
           )}
@@ -329,19 +338,37 @@ function FlowReviewPanel({
                 <div className="flow-proposal-actions">
                   <button
                     className="btn"
-                    onClick={() =>
-                      void promote({ proposalId: p._id as Id<"flowStateProposals">, userId: me._id, sessionToken: sessionToken() })
-                    }
+                    onClick={async () => {
+                      setNote(null);
+                      try {
+                        await promote({
+                          proposalId: p._id as Id<"flowStateProposals">,
+                          userId: me._id,
+                          sessionToken: sessionToken(),
+                        });
+                      } catch (err) {
+                        setNote(err instanceof Error ? err.message : String(err));
+                      }
+                    }}
                   >
-                    Add to flow
+                    Add
                   </button>
                   <button
                     className="btn ghost danger"
-                    onClick={() =>
-                      void reject({ proposalId: p._id as Id<"flowStateProposals">, userId: me._id, sessionToken: sessionToken() })
-                    }
+                    onClick={async () => {
+                      setNote(null);
+                      try {
+                        await reject({
+                          proposalId: p._id as Id<"flowStateProposals">,
+                          userId: me._id,
+                          sessionToken: sessionToken(),
+                        });
+                      } catch (err) {
+                        setNote(err instanceof Error ? err.message : String(err));
+                      }
+                    }}
                   >
-                    Reject
+                    Dismiss
                   </button>
                 </div>
               </div>
@@ -909,9 +936,13 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   // a layered left-to-right graph. Only queried while the view is open.
   // State frames (Flow v2) live only in the flow view; keep them off the
   // canvas and prototype so those stay the app's real routes.
-  const canvasFrames = frames.filter((f) => f.kind !== "state");
+  const canvasFrames = useMemo(() => frames.filter((f) => f.kind !== "state"), [frames]);
   const flowProposals = useQuery(
     api.flows.proposals,
+    nav.view === "flow" ? { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() } : "skip"
+  );
+  const crawl = useQuery(
+    api.flows.crawlStatus,
     nav.view === "flow" ? { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() } : "skip"
   );
   const startCrawl = useMutation(api.flows.startCrawl);
@@ -1592,7 +1623,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             <button
               className={nav.view === "flow" ? "on" : ""}
               aria-label="Flow"
-              title="Flow: every path through the app, drawn from real tester sessions"
+              title="Flow: how people move through the app"
               onClick={() => {
                 setDeviceMenuOpen(false);
                 setNav({ ...nav, view: "flow" });
@@ -1992,10 +2023,16 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               {flowEdges === undefined
                 ? "Loading paths…"
                 : flowEdges.length === 0
-                  ? "No paths yet. Edges come from tester sessions or you draw them; states come from a crawl."
-                  : `${flowEdges.length} path${flowEdges.length === 1 ? "" : "s"}, thickness = how many took it.`}
-              {crawlNote ? ` · ${crawlNote}` : ""}
+                  ? "No paths yet. Run a user test, or connect two screens."
+                  : `${flowEdges.length} path${flowEdges.length === 1 ? "" : "s"}`}
+              {crawl?.status === "starting" || crawl?.status === "running"
+                ? ` · Crawling your preview… ${crawl.found} found`
+                : crawl?.status === "done"
+                  ? ` · Crawl finished, ${crawl.found} found`
+                  : ""}
             </span>
+            {crawl?.status === "error" && <span className="form-error">{crawl.error ?? "The crawl failed."}</span>}
+            {crawlNote && <span className="form-error">{crawlNote}</span>}
             {(flowProposals?.length ?? 0) > 0 && (
               <button className="btn" onClick={() => setReviewOpen(true)}>
                 Review states ({flowProposals!.length})
@@ -2003,12 +2040,12 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             )}
             <button
               className="btn ghost"
+              disabled={crawl?.status === "starting" || crawl?.status === "running"}
               title="Send a browser to your deployed preview to find error, empty, and loading states"
               onClick={async () => {
                 setCrawlNote(null);
                 try {
                   await startCrawl({ projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
-                  setCrawlNote("Crawl dispatched — states appear here to review as it finds them.");
                 } catch (err) {
                   setCrawlNote(err instanceof Error ? err.message : String(err));
                 }
@@ -2021,8 +2058,20 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               disabled={deriving}
               onClick={async () => {
                 setDeriving(true);
+                setCrawlNote(null);
                 try {
-                  await deriveFlow({ projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
+                  const result = await deriveFlow({
+                    projectId: nav.projectId,
+                    userId: me._id,
+                    sessionToken: sessionToken(),
+                  });
+                  setCrawlNote(
+                    result.sessions === 0
+                      ? "No tester sessions yet — run a user test first."
+                      : `${result.edges} path${result.edges === 1 ? "" : "s"} from ${result.sessions} session${result.sessions === 1 ? "" : "s"}.`
+                  );
+                } catch (err) {
+                  setCrawlNote(err instanceof Error ? err.message : String(err));
                 } finally {
                   setDeriving(false);
                 }
@@ -2041,6 +2090,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               {frames.map((f) => (
                 <option key={f._id} value={f._id}>
                   {f.title}
+                  {f.routePath ? ` · ${f.routePath}` : ""}
                 </option>
               ))}
             </select>
@@ -2050,6 +2100,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               {frames.map((f) => (
                 <option key={f._id} value={f._id}>
                   {f.title}
+                  {f.routePath ? ` · ${f.routePath}` : ""}
                 </option>
               ))}
             </select>
@@ -2062,17 +2113,22 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               className="btn ghost"
               disabled={!connectFrom || !connectTo || connectFrom === connectTo}
               onClick={async () => {
-                await addFlowEdge({
-                  projectId: nav.projectId,
-                  fromFrameId: connectFrom as Id<"frames">,
-                  toFrameId: connectTo as Id<"frames">,
-                  label: connectLabel.trim() || undefined,
-                  userId: me._id,
-                  sessionToken: sessionToken(),
-                });
-                setConnectFrom("");
-                setConnectTo("");
-                setConnectLabel("");
+                setCrawlNote(null);
+                try {
+                  await addFlowEdge({
+                    projectId: nav.projectId,
+                    fromFrameId: connectFrom as Id<"frames">,
+                    toFrameId: connectTo as Id<"frames">,
+                    label: connectLabel.trim() || undefined,
+                    userId: me._id,
+                    sessionToken: sessionToken(),
+                  });
+                  setConnectFrom("");
+                  setConnectTo("");
+                  setConnectLabel("");
+                } catch (err) {
+                  setCrawlNote(err instanceof Error ? err.message : String(err));
+                }
               }}
             >
               Add edge

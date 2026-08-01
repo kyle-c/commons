@@ -509,7 +509,7 @@ export const deleteArchived = mutation({
     if (!project.archivedAt) {
       throw new Error("Archive the project before deleting it — deletion is only offered from the archive.");
     }
-    if (project.coverImageId) await ctx.storage.delete(project.coverImageId);
+    if (project.coverImageId) await ctx.storage.delete(project.coverImageId).catch(() => {});
     await ctx.db.delete(args.projectId);
     await ctx.scheduler.runAfter(0, internal.projects.cascadeDeleteProject, { projectId: args.projectId });
     return { ok: true };
@@ -539,7 +539,7 @@ export const cascadeDeleteProject = internalMutation({
         .withIndex("by_thread", (q) => q.eq("threadId", thread._id))
         .take(BUDGET - spent);
       for (const message of messages) {
-        for (const blob of message.images ?? []) await ctx.storage.delete(blob);
+        for (const blob of message.images ?? []) await ctx.storage.delete(blob).catch(() => {});
         await ctx.db.delete(message._id);
         spent += 1;
       }
@@ -628,7 +628,7 @@ export const cascadeDeleteProject = internalMutation({
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .take(BUDGET - spent);
     for (const snap of snaps) {
-      await ctx.storage.delete(snap.storageId);
+      await ctx.storage.delete(snap.storageId).catch(() => {});
       await ctx.db.delete(snap._id);
       spent += 1;
     }
@@ -643,7 +643,7 @@ export const cascadeDeleteProject = internalMutation({
     for (const proposal of staleProposals) {
       // An approved proposal handed its blob to a frameSnapshot, which the
       // snapshot sweep above already deleted; deleting again would throw.
-      if (proposal.status === "pending") await ctx.storage.delete(proposal.storageId);
+      if (proposal.status === "pending") await ctx.storage.delete(proposal.storageId).catch(() => {});
       await ctx.db.delete(proposal._id);
       spent += 1;
     }

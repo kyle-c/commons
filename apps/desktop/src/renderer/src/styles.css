@@ -3665,7 +3665,10 @@ kbd {
 }
 .delete-warn {
   color: var(--danger);
-  font-size: var(--text-xs);
+  /* The most consequential sentence in the app was set smaller than
+     "archived 3d ago". It reads at least as loud as what it replaced. */
+  font-size: var(--text-sm);
+  line-height: 1.35;
 }
 
 /* ── Flow v2: connect form + crawl review ────────────────────────────────── */
@@ -3718,4 +3721,10 @@ kbd {
   display: flex;
   gap: 8px;
   margin-top: 10px;
+}
+
+/* A state frame is a condition of a route, not a route — say so on the frame. */
+.badge.state {
+  background: color-mix(in srgb, var(--warning) 22%, transparent);
+  color: var(--warning);
 }
