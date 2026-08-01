@@ -3605,3 +3605,23 @@ kbd {
 .guest-reload {
   margin-left: auto;
 }
+
+/* Cloud-agent setup checklist inside the transcript. */
+.cloud-setup p { margin: 0 0 6px; }
+.cloud-setup ol { margin: 0 0 6px 18px; padding: 0; }
+.cloud-setup li { margin-bottom: 4px; }
+.cloud-setup code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--bg-input);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+}
+/* Recruit toggle reads as one control: box, label, then the rate. */
+.test-recruit {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}

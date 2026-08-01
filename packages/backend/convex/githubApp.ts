@@ -858,6 +858,20 @@ export const diagnose = action({
     const permissions: Record<string, string> =
       (accepted && accepted.result.ok ? (accepted.result.acceptedPermissions as Record<string, string>) : null) ?? {};
     const missing = NEEDED_PERMISSIONS.filter((need) => !need.accepts.includes(permissions[need.key] ?? ""));
+    // Read is enough to learn previews; write is what lets Commons dispatch
+    // cloud agent runs (repository_dispatch). A read-only grant is the state
+    // this installation naturally lands in, so it gets its own sentence.
+    if (permissions["contents"] === "read") {
+      findings.push({
+        level: "warn",
+        title: "GitHub granted \"contents\" as read-only",
+        detail:
+          "Enough for previews and branch learning, but dispatching cloud agent runs needs read and write. " +
+          "Raise the permission on the App, then approve the change on this installation.",
+        fixLabel: "Review on GitHub",
+        fixUrl: manage,
+      });
+    }
     for (const need of missing) {
       findings.push({
         level: need.blocks ? "blocked" : "warn",

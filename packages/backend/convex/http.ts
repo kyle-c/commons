@@ -1,5 +1,5 @@
 import { httpRouter } from "convex/server";
-import { googleCallbackUrl } from "./siteUrl";
+import { googleCallbackUrl, siteUrl } from "./siteUrl";
 import { landingHtml } from "./landing";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -390,6 +390,165 @@ http.route({
     }
   }),
 });
+
+// ── Cloud agent runner (AG-10) ──────────────────────────────────────────────
+// The GitHub Actions runner's write path. The runToken minted at dispatch is
+// the whole credential: it has only ever existed in the payload GitHub
+// delivered to the repo's own workflow, and it scopes to one session.
+
+http.route({
+  path: "/api/agent/event",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body || typeof body.sessionId !== "string" || typeof body.runToken !== "string" || !body.event) {
+      return json({ error: "bad_request" }, 400);
+    }
+    const result = await ctx.runMutation(internal.cloudAgents.ingestEvent, {
+      sessionId: body.sessionId as never,
+      runToken: body.runToken,
+      event: body.event,
+    });
+    return json(result, result.ok ? 200 : 403);
+  }),
+});
+
+http.route({
+  path: "/api/agent/done",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body || typeof body.sessionId !== "string" || typeof body.runToken !== "string") {
+      return json({ error: "bad_request" }, 400);
+    }
+    const result = await ctx.runMutation(internal.cloudAgents.finishRun, {
+      sessionId: body.sessionId as never,
+      runToken: body.runToken,
+      ok: body.ok === true,
+      summary: typeof body.summary === "string" ? body.summary.slice(0, 4000) : "",
+      editedFiles: Array.isArray(body.editedFiles)
+        ? body.editedFiles.filter((f): f is string => typeof f === "string").slice(0, 200)
+        : [],
+      numTurns: typeof body.numTurns === "number" ? body.numTurns : 0,
+      durationMs: typeof body.durationMs === "number" ? body.durationMs : 0,
+      totalCostUsd: typeof body.totalCostUsd === "number" ? body.totalCostUsd : undefined,
+    });
+    return json(result, result.ok ? 200 : 403);
+  }),
+});
+
+// The two files cloud-agent setup asks a human to look at. Served with the
+// product so they version with it, and so the workflow can fetch the runner
+// fresh at run time (fixes ship without touching anyone's repo).
+http.route({
+  path: "/setup/commons-agent.yml",
+  method: "GET",
+  handler: httpAction(async () => {
+    const { WORKFLOW_FILE } = await import("./cloudAgents");
+    return new Response(WORKFLOW_FILE, {
+      headers: { "Content-Type": "text/yaml; charset=utf-8", "Cache-Control": "no-cache" },
+    });
+  }),
+});
+
+http.route({
+  path: "/setup/agent-runner.mjs",
+  method: "GET",
+  handler: httpAction(async () => {
+    const { RUNNER_SCRIPT } = await import("./cloudAgents");
+    return new Response(RUNNER_SCRIPT, {
+      headers: { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" },
+    });
+  }),
+});
+
+// ── Visitor recruiting (UT intercept) ───────────────────────────────────────
+// One script tag on the team's own site invites a sampled fraction of real
+// visitors to take a live test. Config is baked in at serve time, so the
+// snippet itself stays a dumb cacheable one-liner; a paused or closed test
+// serves a no-op. Shadow DOM so the host page's CSS and ours never touch.
+
+http.route({
+  path: "/intercept.js",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const token = new URL(request.url).searchParams.get("t") ?? "";
+    const config = token ? await ctx.runQuery(internal.userTests.interceptConfig, { token }) : null;
+    const noop = "/* Commons intercept: no live test behind this token. */";
+    if (!config) {
+      return new Response(noop, {
+        headers: { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "max-age=300" },
+      });
+    }
+    const script = interceptScript(token, config.rate, config.label ?? "this site", siteUrl());
+    return new Response(script, {
+      headers: { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "max-age=300" },
+    });
+  }),
+});
+
+/** The intercept card, self-contained. Brand-voiced, dismissible, capped. */
+function interceptScript(token: string, rate: number, label: string, origin: string): string {
+  const safeLabel = label.replace(/[<>&\\]/g, "");
+  const html = `
+    <style>
+      .card { position: fixed; right: 20px; bottom: 20px; z-index: 2147483000;
+        max-width: 300px; background: #faf8f0; color: #26251e;
+        border: 1px solid rgba(38,37,30,0.14); border-radius: 12px;
+        padding: 16px 18px; box-shadow: 0 12px 40px rgba(20,20,14,0.18);
+        font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      h3 { margin: 0 0 6px; font: 600 16px/1.3 "Iowan Old Style", Palatino, Georgia, serif; }
+      p { margin: 0 0 12px; color: rgba(38,37,30,0.75); }
+      .row { display: flex; gap: 10px; align-items: center; }
+      button.go { background: #2e7d74; color: #faf8f0; border: 0; border-radius: 8px;
+        padding: 7px 14px; font: 600 13px/1 inherit; cursor: pointer; }
+      button.no { background: none; border: 0; color: rgba(38,37,30,0.55);
+        font: 13px/1 inherit; cursor: pointer; padding: 7px 4px; }
+      @media (prefers-color-scheme: dark) {
+        .card { background: #23241f; color: #ece9dd; border-color: rgba(236,233,221,0.14); }
+        p { color: rgba(236,233,221,0.7); }
+        button.no { color: rgba(236,233,221,0.55); }
+      }
+    </style>
+    <div class="card" role="dialog" aria-label="Feedback invitation">
+      <h3>Got two minutes?</h3>
+      <p>Help improve ${safeLabel} — a quick task, right here in your browser. No signup.</p>
+      <div class="row">
+        <button class="go">Try it</button>
+        <button class="no">No thanks</button>
+      </div>
+    </div>`;
+
+  // The generated code receives the markup as a JSON string literal, so no
+  // nesting of template syntax ever happens (the first draft tried, and the
+  // escaping ate itself).
+  return [
+    "(() => {",
+    `  const KEY = "commons.intercept.${token}";`,
+    "  try {",
+    '    const seen = localStorage.getItem(KEY);',
+    '    if (seen === "dismissed" || seen === "opened") return;',
+    '    let roll = localStorage.getItem(KEY + ".roll");',
+    '    if (roll === null) { roll = String(Math.random()); localStorage.setItem(KEY + ".roll", roll); }',
+    `    if (parseFloat(roll) > ${rate}) return;`,
+    "  } catch { return; }",
+    '  const host = document.createElement("div");',
+    '  const root = host.attachShadow({ mode: "closed" });',
+    `  root.innerHTML = ${JSON.stringify(html)};`,
+    '  root.querySelector(".go").addEventListener("click", () => {',
+    '    try { localStorage.setItem(KEY, "opened"); } catch {}',
+    `    window.open("${origin}/t/${token}", "_blank", "noopener");`,
+    "    host.remove();",
+    "  });",
+    '  root.querySelector(".no").addEventListener("click", () => {',
+    '    try { localStorage.setItem(KEY, "dismissed"); } catch {}',
+    "    host.remove();",
+    "  });",
+    "  const mount = () => document.body.appendChild(host);",
+    "  if (document.body) setTimeout(mount, 4000); else addEventListener(\"DOMContentLoaded\", () => setTimeout(mount, 4000));",
+    "})();",
+  ].join("\n");
+}
 
 // Crash/error ingestion from installed apps. Deliberately unauthenticated
 // (errors can happen before sign-in) but size-capped and deduped server-side.

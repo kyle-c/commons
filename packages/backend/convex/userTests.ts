@@ -52,6 +52,9 @@ export const create = mutation({
     tasks: v.array(taskValidator),
     questions: v.array(questionValidator),
     variant: v.optional(v.object({ label: v.string(), url: v.string() })),
+    intercept: v.optional(
+      v.object({ enabled: v.boolean(), rate: v.number(), label: v.optional(v.string()) })
+    ),
   },
   handler: async (ctx, args) => {
     const project = await accessibleProject(ctx, args.projectId, await resolveViewer(ctx, args));
@@ -61,6 +64,11 @@ export const create = mutation({
       projectId: args.projectId,
       createdBy: args.userId,
       title: args.title,
+      // Rate clamped here so a typo'd 90 becomes the intended 0.9 and no
+      // snippet ever intercepts everybody.
+      intercept: args.intercept
+        ? { ...args.intercept, rate: Math.min(1, Math.max(0, args.intercept.rate)) }
+        : undefined,
       token: randomToken(),
       reportToken: randomToken(),
       status: "live",
@@ -71,6 +79,41 @@ export const create = mutation({
       variant: args.variant,
     });
     return testId;
+  },
+});
+
+/** Turn visitor recruiting on or off for an existing test. */
+export const setIntercept = mutation({
+  args: {
+    testId: v.id("tests"),
+    intercept: v.optional(
+      v.object({ enabled: v.boolean(), rate: v.number(), label: v.optional(v.string()) })
+    ),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const test = await ctx.db.get(args.testId);
+    const project = test ? await accessibleProject(ctx, test.projectId, await resolveViewer(ctx, args)) : null;
+    if (!project || !test) throw new Error("Test not found");
+    await ctx.db.patch(args.testId, {
+      intercept: args.intercept
+        ? { ...args.intercept, rate: Math.min(1, Math.max(0, args.intercept.rate)) }
+        : undefined,
+    });
+  },
+});
+
+/** What the intercept snippet needs, keyed by the test's own token. */
+export const interceptConfig = internalQuery({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const test = await ctx.db
+      .query("tests")
+      .withIndex("by_token", (q) => q.eq("token", token))
+      .unique();
+    if (!test || test.status !== "live" || !test.intercept?.enabled) return null;
+    return { rate: test.intercept.rate, label: test.intercept.label ?? null, title: test.title };
   },
 });
 

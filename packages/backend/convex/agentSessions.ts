@@ -56,7 +56,14 @@ export const forProject = query({
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .collect();
     sessions.sort((a, b) => b._creationTime - a._creationTime);
-    return await Promise.all(sessions.map(async (s) => ({ ...s, host: await ctx.db.get(s.hostUserId) })));
+    return await Promise.all(
+      sessions.map(async (s) => {
+        // runToken is the cloud runner's write credential; it must never
+        // reach a client, member or not.
+        const { runToken: _stripped, ...safe } = s;
+        return { ...safe, host: await ctx.db.get(s.hostUserId) };
+      })
+    );
   },
 });
 

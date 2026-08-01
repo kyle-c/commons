@@ -10,6 +10,11 @@ export interface PanelSession {
   hostName?: string;
   /** True when this app instance hosts the session and can steer it. */
   canControl: boolean;
+  /** "actions" = a GitHub Actions run; nobody local can steer it. */
+  runner?: "actions";
+  /** The commons/* branch a cloud run pushes to. */
+  branch?: string;
+  startedAt?: number;
 }
 
 interface Props {
@@ -179,6 +184,47 @@ function DraftActions({
   );
 }
 
+/**
+ * Shown while a cloud session waits for its run to phone home. GitHub's
+ * dispatch API answers 204 whether or not any workflow is listening, so "it
+ * never started" is indistinguishable from "it is booting" — the honest UI
+ * for that ambiguity is the setup checklist, which is also the fix.
+ */
+function CloudSetupHint({ branch }: { branch?: string }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const site = window.location.origin.includes("convex.site")
+    ? window.location.origin
+    : "https://rapid-anteater-106.convex.site";
+  const copy = (key: string, text: string) => {
+    void navigator.clipboard.writeText(text);
+    setCopied(key);
+    window.setTimeout(() => setCopied(null), 1600);
+  };
+  const curl = `mkdir -p .github/workflows && curl -fsSL ${site}/setup/commons-agent.yml -o .github/workflows/commons-agent.yml`;
+  return (
+    <div className="agent-item tool cloud-setup">
+      <p>
+        Dispatched to GitHub. If nothing appears in a minute, the repo likely needs its one-time cloud-agent setup:
+      </p>
+      <ol>
+        <li>
+          Add the workflow file{" "}
+          <button className="btn ghost" onClick={() => copy("wf", curl)}>
+            {copied === "wf" ? "Copied" : "Copy command"}
+          </button>
+        </li>
+        <li>
+          Add an <code>ANTHROPIC_API_KEY</code> secret under the repo's Settings → Secrets → Actions.
+        </li>
+      </ol>
+      <p>
+        Then send the thread to the agent again. Runs are visible in the repo's Actions tab
+        {branch ? <> and push to <code>{branch}</code></> : null}.
+      </p>
+    </div>
+  );
+}
+
 export default function AgentPanel({
   sessions,
   transcript,
@@ -219,6 +265,11 @@ export default function AgentPanel({
       <header>
         <span>
           Agent {active && <span className={`agent-status ${active.status}`}>{active.status}</span>}
+          {active?.runner === "actions" && (
+            <span className="agent-status" title="Runs on GitHub Actions in the project's own repo — no Mac required">
+              ☁ Actions
+            </span>
+          )}
           {spentUsd > 0 && (
             <span
               className="agent-status"
@@ -264,6 +315,9 @@ export default function AgentPanel({
             {active.routePath && <span className="route">{active.routePath}</span>}
           </div>
           <div className="agent-transcript" ref={scrollRef}>
+            {active.runner === "actions" && active.status === "starting" && (
+              <CloudSetupHint branch={active.branch} />
+            )}
             {transcript.length === 0 && <div className="agent-item tool">Starting session…</div>}
             {transcript.map((event, i) => (
               <TranscriptItem
@@ -296,7 +350,9 @@ export default function AgentPanel({
             </div>
           ) : (
             <div className="agent-spectator hint">
-              Running on {active.hostName ?? "a teammate"}’s machine — you’re watching along.
+              {active.runner === "actions"
+                ? "Running on GitHub Actions in the project's repo — the whole team is watching along."
+                : `Running on ${active.hostName ?? "a teammate"}'s machine — you're watching along.`}
             </div>
           )}
         </>

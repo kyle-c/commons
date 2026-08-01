@@ -230,7 +230,7 @@ const FrameLayer = memo(function FrameLayer({
               ) : (
                 <div className="frame-placeholder">
                   {frame.kind === "figma"
-                    ? "Figma frames coming soon"
+                    ? "Render arriving from Figma…"
                     : devStatus.state === "starting"
                       ? "Dev server starting…"
                       : devStatus.state === "error"

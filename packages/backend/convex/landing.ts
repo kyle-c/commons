@@ -383,6 +383,8 @@ export function landingHtml(version?: string): string {
           <li>Threads, replies, and @mentions with your teammates</li>
           <li>Live cursors and presence while you review together</li>
           <li>Anyone can comment from a link, with no account</li>
+          <li>Share links open the same canvas — guests browse, read, and comment with just a name</li>
+          <li>Figma frames land beside live screens, commentable like everything else</li>
         </ul>
       </div>
       <div class="shot">
@@ -415,7 +417,7 @@ export function landingHtml(version?: string): string {
           stays a conversation instead of a ticket handoff.
         </p>
         <ul>
-          <li>Runs on your machine with your own credentials</li>
+          <li>Runs on your machine, or in your repo's own GitHub Actions with nobody's laptop awake</li>
           <li>Drafts live on a branch, never on a dirty tree</li>
           <li>Every draft gets a preview link the whole team can open</li>
         </ul>
@@ -489,6 +491,7 @@ export function landingHtml(version?: string): string {
         <ul>
           <li>Click heatmaps drawn straight onto the screens</li>
           <li>A and B variants against two preview links</li>
+          <li>Recruit real visitors with one script tag on your site</li>
           <li>Failed tasks can go to an agent as a fix request</li>
         </ul>
       </div>

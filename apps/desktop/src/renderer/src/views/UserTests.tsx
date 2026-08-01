@@ -77,6 +77,10 @@ function NewTestForm({
   ]);
   const [variantLabel, setVariantLabel] = useState("");
   const [variantUrl, setVariantUrl] = useState("");
+  // Visitor recruiting (opt-in): the deployed site invites a sampled
+  // fraction of real visitors to take this test via the intercept snippet.
+  const [recruit, setRecruit] = useState(false);
+  const [recruitRate, setRecruitRate] = useState(0.25);
   const [saving, setSaving] = useState(false);
 
   const variantOn = variantUrl.trim() !== "";
@@ -106,6 +110,7 @@ function NewTestForm({
         variant: variantOn
           ? { label: variantLabel.trim() || "variant B", url: variantUrl.trim().replace(/\/+$/, "") }
           : undefined,
+        intercept: recruit ? { enabled: true, rate: recruitRate } : undefined,
       });
       onDone();
     } catch (err) {
@@ -198,6 +203,21 @@ function NewTestForm({
         + Question
       </button>
 
+      <div className="test-form-row">
+        <label className="test-recruit">
+          <input type="checkbox" checked={recruit} onChange={(e) => setRecruit(e.target.checked)} />
+          Recruit visitors
+        </label>
+        {recruit && (
+          <select value={recruitRate} onChange={(e) => setRecruitRate(Number(e.target.value))}>
+            <option value={0.1}>10% of visitors</option>
+            <option value={0.25}>25% of visitors</option>
+            <option value={0.5}>50% of visitors</option>
+            <option value={1}>every visitor</option>
+          </select>
+        )}
+        {recruit && <span className="hint">You get a one-line snippet for your site after creating.</span>}
+      </div>
       <strong title="Testers alternate between the current preview (A) and this URL (B) — paste an agent draft's branch preview to A/B a change before merging">
         Variant B <span className="hint">(optional — A/B against a draft preview)</span>
       </strong>
@@ -552,6 +572,12 @@ export default function UserTests({
           </div>
           <span className={`badge ${test.status === "live" ? "live" : ""}`}>{test.status}</span>
           {site && test.status === "live" && <CopyButton text={`${site}/t/${test.token}`} label="Copy test link" />}
+          {site && test.status === "live" && test.intercept?.enabled && (
+            <CopyButton
+              text={`<script src="${site}/intercept.js?t=${test.token}" defer></script>`}
+              label="Copy recruit snippet"
+            />
+          )}
           <button className="btn ghost" onClick={() => setResultsFor(resultsFor === test._id ? null : test._id)}>
             Results
           </button>

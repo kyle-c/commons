@@ -79,6 +79,10 @@ export default defineSchema({
     // Corporate domain for auto-join ("felixpago.com"). Consumer domains
     // (gmail etc.) are rejected at create — strangers must never share a team.
     domain: v.optional(v.string()),
+    // Figma REST access for this workspace's projects: a personal access
+    // token pasted by an admin, used only for read endpoints (file nodes,
+    // image renders). Same trust posture as the Slack webhook below.
+    figmaToken: v.optional(v.string()),
     // Per-workspace Slack channel (incoming webhook) for thread/agent posts.
     slackWebhookUrl: v.optional(v.string()),
     createdBy: v.id("users"),
@@ -184,6 +188,16 @@ export default defineSchema({
     routePath: v.optional(v.string()),
     editedFiles: v.array(v.string()),
     error: v.optional(v.string()),
+    // Where the session executes. Absent = the host's machine (the original
+    // mode). "actions" = a GitHub Actions run with no host: steering is
+    // disabled and everyone is a spectator, which the mirroring model
+    // (AG-9) already supports without changes.
+    runner: v.optional(v.literal("actions")),
+    // Bearer for the remote runner's event callbacks. Proves "I am the run
+    // this session dispatched", nothing else; single session scope.
+    runToken: v.optional(v.string()),
+    // The commons/<slug> branch a cloud run works on.
+    branch: v.optional(v.string()),
   })
     .index("by_project", ["projectId"])
     .index("by_host", ["hostUserId"]),
@@ -458,6 +472,11 @@ export default defineSchema({
     token: v.string(),
     reportToken: v.string(),
     status: v.union(v.literal("live"), v.literal("closed")),
+    // Visitor recruiting: when enabled, the site's intercept snippet invites
+    // a sampled fraction of real visitors to take this test.
+    intercept: v.optional(
+      v.object({ enabled: v.boolean(), rate: v.number(), label: v.optional(v.string()) })
+    ),
     startRoute: v.string(),
     // Tester-side frame size; height 0 = fill the browser (desktop apps).
     device: v.object({ width: v.number(), height: v.number() }),

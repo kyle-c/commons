@@ -64,7 +64,7 @@ function buildThreadPrompt(thread: ThreadWithMessages, frame: Doc<"frames"> | un
  * the deployed preview URLs. An attention dot on the icon replaces the old
  * always-visible "Get this project / Locate / Preview URL ⚠" button row.
  */
-type SettingKey = "repo" | "preview" | "drafts" | "history";
+type SettingKey = "repo" | "preview" | "drafts" | "history" | "figma";
 
 /** One toolbar icon, one concern: a small anchored popover per setting. */
 function SettingPopover({
@@ -178,6 +178,99 @@ function ExternalServerRow({
  * A URL-valued setting: first open shows the explainer and the field;
  * once set, shows the current value with Change/Remove.
  */
+/**
+ * Figma on the canvas (CAN-6): paste a frame link, get a frame. The token is
+ * a workspace credential (one paste covers every project in it), and the
+ * frame renders through the same snapshot path as everything else, so the
+ * rest of the app never learns the word Figma.
+ */
+function FigmaSettingBody({ project, me }: { project: Doc<"projects">; me: Doc<"users"> }) {
+  const figmaStatus = useQuery(api.figma.status, {
+    projectId: project._id,
+    userId: me._id,
+    sessionToken: sessionToken(),
+  });
+  const saveToken = useMutation(api.figma.setToken);
+  const addFrame = useMutation(api.figma.addFrame);
+  const [token, setToken] = useState("");
+  const [frameUrl, setFrameUrl] = useState("");
+  const [note, setNote] = useState<string | null>(null);
+
+  if (!figmaStatus) return <span className="hint">Loading…</span>;
+  if (!figmaStatus.workspaceId) return <span className="hint">Figma frames need this project in a workspace.</span>;
+
+  if (!figmaStatus.connected) {
+    return (
+      <>
+        <span className="hint">
+          Paste a Figma personal access token (Figma → Settings → Security). It covers this whole workspace and
+          Commons only ever reads with it.
+        </span>
+        <div className="reveal-form-row">
+          <input
+            placeholder="figd_…"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+          />
+          <button
+            className="btn"
+            disabled={!token.trim()}
+            onClick={async () => {
+              await saveToken({
+                workspaceId: figmaStatus.workspaceId!,
+                userId: me._id,
+                sessionToken: sessionToken(),
+                figmaToken: token.trim(),
+              });
+              setToken("");
+            }}
+          >
+            Connect
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <span className="hint">
+        Figma is connected. Paste a frame link (Share → Copy link on a frame) and it lands on the canvas, rendered
+        crisp, commentable like any other screen.
+      </span>
+      <div className="reveal-form-row">
+        <input
+          placeholder="https://www.figma.com/design/…?node-id=…"
+          value={frameUrl}
+          onChange={(e) => setFrameUrl(e.target.value)}
+        />
+        <button
+          className="btn"
+          disabled={!frameUrl.trim()}
+          onClick={async () => {
+            setNote(null);
+            try {
+              await addFrame({
+                projectId: project._id,
+                userId: me._id,
+                sessionToken: sessionToken(),
+                figmaUrl: frameUrl.trim(),
+              });
+              setFrameUrl("");
+              setNote("Frame added — the render arrives in a few seconds.");
+            } catch (err) {
+              setNote(err instanceof Error ? err.message : String(err));
+            }
+          }}
+        >
+          Add frame
+        </button>
+      </div>
+      {note && <span className="hint">{note}</span>}
+    </>
+  );
+}
+
 /**
  * The deploy log as a version history. On hosts with immutable per-deploy
  * URLs every row is an openable old version of the app, so each entry is a
@@ -1151,17 +1244,51 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     });
   };
 
+  const dispatchCloudAgent = useMutation(api.cloudAgents.dispatch);
+
+  /**
+   * Cloud sessions (AG-10): same thread-to-prompt assembly, but execution is
+   * a GitHub Actions run dispatched by the backend instead of this machine.
+   * The session mirrors into the same tables, so the panel transcript below
+   * is already watching it the moment it exists.
+   */
+  const startCloudSession = async (opts: {
+    title: string;
+    prompt: string;
+    threadId?: Id<"threads">;
+    frameId?: Id<"frames">;
+    routePath?: string;
+  }) => {
+    const { sessionId } = await dispatchCloudAgent({
+      projectId: nav.projectId,
+      userId: me._id,
+      sessionToken: sessionToken(),
+      title: opts.title,
+      prompt: opts.prompt,
+      threadId: opts.threadId,
+      frameId: opts.frameId,
+      routePath: opts.routePath,
+    });
+    setActiveAgentSessionId(sessionId as Id<"agentSessions">);
+    setSidePanel("agents");
+  };
+
   const sendThreadToAgent = async (thread: ThreadWithMessages) => {
     const frame = thread.frameId ? frames.find((f) => f._id === thread.frameId) : undefined;
     const firstBody = thread.messages[0]?.body ?? "Comment thread";
     const title = firstBody.length > 60 ? `${firstBody.slice(0, 57)}…` : firstBody;
-    await startAgentSession({
+    const opts = {
       title,
       prompt: buildThreadPrompt(thread, frame),
       threadId: thread._id,
       frameId: thread.frameId,
       routePath: frame?.routePath,
-    });
+    };
+    // Local execution when this machine can host it (the original mode);
+    // otherwise the cloud carries it. The web app always lands here, which
+    // is the point: agents no longer require anyone's Mac to be awake.
+    if (window.commons && (repoPath || project?.gitRemote)) await startAgentSession(opts);
+    else await startCloudSession(opts);
   };
 
   const panelSessions: PanelSession[] = convexSessions.map((s) => ({
@@ -1171,6 +1298,9 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     routePath: s.routePath,
     hostName: s.host?.name,
     canControl: s.hostUserId === me._id && !!mirrorMap[s._id],
+    runner: s.runner ?? undefined,
+    branch: s.branch ?? undefined,
+    startedAt: s._creationTime,
   }));
   const activePanelId = activeAgentSessionId ?? convexSessions[0]?._id ?? null;
   const transcript = (useQuery(
@@ -1622,6 +1752,14 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         >
           <DeployHistoryBody projectId={project._id} me={me} />
         </SettingPopover>
+        <SettingPopover
+          icon="frames"
+          label="Figma"
+          open={openSetting === "figma"}
+          onOpenChange={(o) => setOpenSetting(o ? "figma" : null)}
+        >
+          <FigmaSettingBody project={project} me={me} />
+        </SettingPopover>
         <span className="tb-divider" />
         {(repoPath || project.gitRemote || convexSessions.length > 0) && (
           <button
@@ -1739,7 +1877,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           initialThreadId={nav.threadId}
           initialFrameId={nav.frameId}
           frameReloadTokens={frameReloadTokens}
-          onSendToAgent={window.commons && (repoPath || project.gitRemote) ? sendThreadToAgent : undefined}
+          onSendToAgent={repoPath || project.gitRemote ? sendThreadToAgent : undefined}
           webLinkBase={
             project.shareToken
               ? `${publicSite}/g/${project.shareToken}`
@@ -1769,8 +1907,11 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             setNav({ ...nav, view: "canvas" });
           }}
           onSendToAgent={
-            window.commons && (repoPath || project.gitRemote)
-              ? (title, prompt, routePath) => void startAgentSession({ title, prompt, routePath })
+            repoPath || project.gitRemote
+              ? (title, prompt, routePath) =>
+                  void (window.commons && (repoPath || project.gitRemote)
+                    ? startAgentSession({ title, prompt, routePath })
+                    : startCloudSession({ title, prompt, routePath }))
               : undefined
           }
           device={protoDevice}
