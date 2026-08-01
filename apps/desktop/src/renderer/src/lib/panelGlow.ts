@@ -1,11 +1,12 @@
 /**
- * A warm point of light under the cursor on panels and popovers, which swells
- * while the pointer rests and settles back the moment it moves.
+ * A warm point of light that appears only once the cursor comes to rest on a
+ * panel, then grows slowly outward from where it stopped.
  *
- * The intent is presence rather than decoration: a panel you're reading should
- * feel gently lit where you're looking, and the slow swell rewards stillness —
- * you notice it only if you stop, which is exactly when a surface should feel
- * alive rather than inert.
+ * Deliberately not a hover effect. Lighting up under a moving cursor made the
+ * glow a constant companion — it chased the pointer around and became part of
+ * the furniture. Requiring stillness first means it only ever shows up when
+ * someone has actually settled on something to read, which is the moment worth
+ * marking. Move again and it's gone at once.
  *
  * ONE orb, parented to <body> and positioned in viewport coordinates, rather
  * than one per panel. Living inside a panel meant `overflow-y: auto` clipped
@@ -25,11 +26,13 @@
 
 const PANEL_SELECTOR = ".titlebar-popover, .overlay-card, .agent-panel, .flow-review";
 
-/** Resting size multiplier, and the cap it swells to while the cursor rests. */
-const BASE_SCALE = 1;
+/** Stillness required before the light appears at all. */
+const DWELL_MS = 420;
+/** It emerges from a point at the cursor and opens out to the cap. */
+const START_SCALE = 0.2;
 const MAX_SCALE = 1.7;
-/** How long a still cursor takes to reach the cap. */
-const SWELL_MS = 2800;
+/** How long the growth takes once it has appeared. */
+const SWELL_MS = 2600;
 
 let orb: HTMLElement | null = null;
 let restingSince = 0;
@@ -54,11 +57,20 @@ function ensureOrb(): HTMLElement {
 
 function paint(now: number): void {
   if (!orb) return;
-  const rested = Math.min(1, (now - restingSince) / SWELL_MS);
-  // Ease-out: most of the growth lands early, then it creeps to the cap, so
-  // the swell reads as settling rather than inflating.
-  const eased = 1 - (1 - rested) ** 3;
-  const scale = BASE_SCALE + (MAX_SCALE - BASE_SCALE) * eased;
+  const still = now - restingSince;
+  if (still < DWELL_MS) {
+    // Not settled yet: stay dark, but sit at the cursor so the growth begins
+    // exactly where the pointer stopped rather than sliding into place.
+    orb.classList.remove("on");
+    orb.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${START_SCALE})`;
+    return;
+  }
+  const grown = Math.min(1, (still - DWELL_MS) / SWELL_MS);
+  // Ease-out: it opens quickly at first, then creeps to the cap, which reads
+  // as settling rather than inflating.
+  const eased = 1 - (1 - grown) ** 3;
+  const scale = START_SCALE + (MAX_SCALE - START_SCALE) * eased;
+  orb.classList.add("on");
   orb.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale.toFixed(3)})`;
 }
 
@@ -67,8 +79,9 @@ function tick(): void {
   if (!over) return;
   const now = performance.now();
   paint(now);
-  // Once capped, a resting cursor should cost nothing.
-  if (now - restingSince < SWELL_MS) frame = requestAnimationFrame(tick);
+  // Keep ticking through the dwell wait and the growth; once fully open, a
+  // resting cursor costs nothing.
+  if (now - restingSince < DWELL_MS + SWELL_MS) frame = requestAnimationFrame(tick);
 }
 
 function onPointerMove(event: PointerEvent): void {
@@ -89,7 +102,9 @@ function onPointerMove(event: PointerEvent): void {
   y = event.clientY;
   restingSince = performance.now();
   over = true;
-  ensureOrb().classList.add("on");
+  // Any movement puts it out immediately — the whole point is that it marks
+  // stillness, so it must never trail a moving pointer.
+  ensureOrb().classList.remove("on");
 
   paint(restingSince);
   if (!frame) frame = requestAnimationFrame(tick);

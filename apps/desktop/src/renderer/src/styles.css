@@ -3832,8 +3832,11 @@ kbd {
     color-mix(in srgb, var(--accent) 4%, transparent) 40%,
     transparent 72%
   );
-  transition: opacity 320ms var(--ease-out);
+  /* Quick out, slow in: movement should extinguish it at once, while its
+     arrival is gradual enough to feel like light rather than a popup. */
+  transition: opacity 120ms var(--ease-out);
 }
 .panel-glow.on {
   opacity: 1;
+  transition: opacity 900ms var(--ease-out);
 }
