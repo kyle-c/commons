@@ -367,7 +367,7 @@ function DeployHistoryBody({ projectId, me }: { projectId: Id<"projects">; me: D
   if (!history || history.length === 0) {
     return (
       <span className="hint">
-        Deploys land here once GitHub is connected: what shipped, when, and a link to each version as it was.
+        Deploys land here once GitHub is connected — each one a link to that version.
       </span>
     );
   }
@@ -507,8 +507,7 @@ function UrlSettingBody({
           </button>
           {learned && (
             <span className="hint">
-              Filled in from your last GitHub deploy{learnedAt ? ` ${timeAgo(learnedAt)} ago` : ""}. Deploys keep it
-              current; type your own and it stops changing.
+              From your last deploy{learnedAt ? ` ${timeAgo(learnedAt)} ago` : ""}. Type your own to pin it.
             </span>
           )}
           {error && <span className="form-error">{error}</span>}
@@ -942,15 +941,15 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const previewConnectionNote = (() => {
     if (!githubStatus) return null;
     if (githubStatus.accounts.length === 0) {
-      return "Not connected to GitHub. Connect it from the workspaces menu and deploys fill this in for you.";
+      return "Connect GitHub and deploys fill this in.";
     }
     // The specific silence, not the general one: a repo outside the
     // installation looks identical to one that has never deployed.
     if (githubStatus.repoCovered === false) {
-      return `Connected to ${githubStatus.accounts.join(", ")}, but this repo isn't included in the installation, so GitHub sends nothing for it. Add it under Configure on github.com/settings/installations.`;
+      return `${githubStatus.accounts.join(", ")} connected, but this repo isn't in the installation. Add it under Configure.`;
     }
     if (!githubStatus.seenDeploy) {
-      return `Connected to ${githubStatus.accounts.join(", ")}, but no successful deployment has arrived yet. Failed and blocked builds are ignored, so check the deploy went green.`;
+      return `${githubStatus.accounts.join(", ")} connected. No successful deploy yet — check it went green.`;
     }
     return null;
   })();
@@ -1821,7 +1820,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         >
           <UrlSettingBody
             label="Preview link"
-            hint="Paste your app's deployed URL. Screens and user tests fall back to it."
+            hint="Your deployed URL. Screens and tests fall back to it."
             placeholder="https://myapp.vercel.app"
             value={project.previewUrl}
             learned={project.previewSource === "github"}
@@ -1847,7 +1846,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         >
           <UrlSettingBody
             label="Draft previews"
-            hint={"Gives every agent draft its own live link anyone can open before it ships. Paste your host's pattern, with {branch} where the draft name goes."}
+            hint="A live link per agent draft. Paste your host's pattern, {branch} for the name."
             placeholder={`https://${vercelProject ?? "myapp"}-git-{branch}-team.vercel.app`}
             value={project.branchPreviewPattern}
             learned={project.branchPatternSource === "github"}
