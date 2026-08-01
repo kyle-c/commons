@@ -362,14 +362,20 @@ export default defineSchema({
   // A frame on the canvas: a route of the code project or a Figma frame.
   frames: defineTable({
     projectId: v.id("projects"),
-    kind: v.union(v.literal("route"), v.literal("figma")),
+    // "state" (Flow v2): a screen in a particular condition — an error, an
+    // empty state, a loading moment — rather than a route or a Figma node.
+    kind: v.union(v.literal("route"), v.literal("figma"), v.literal("state")),
     title: v.string(),
     // IA grouping derived from route structure; drawn as a labeled region.
     section: v.optional(v.string()),
-    // kind=route: URL path within the dev server (e.g. "/settings").
+    // kind=route or state: URL path within the app (e.g. "/settings").
     routePath: v.optional(v.string()),
     // kind=figma: node id within the project's Figma file.
     figmaNodeId: v.optional(v.string()),
+    // kind=state: the human-readable condition, e.g. "empty inbox".
+    stateLabel: v.optional(v.string()),
+    // kind=state: where it came from — a browser crawl or a person.
+    stateOrigin: v.optional(v.union(v.literal("crawl"), v.literal("manual"))),
     // Canvas placement.
     x: v.number(),
     y: v.number(),
@@ -513,7 +519,38 @@ export default defineSchema({
   // One tester's run through a test. Task summaries are computed in the
   // harness page and posted at each task boundary; raw events land in
   // testEvents. instrumented flips true once the in-app snippet phones home.
-  // Flow view (v1): a directed edge between two frames, earned from evidence.
+  // Flow v2: one browser-crawl run. The runToken is its write credential for
+  // the proposal-ingest HTTP endpoint, exactly like a cloud agent's.
+  flowCrawls: defineTable({
+    projectId: v.id("projects"),
+    runToken: v.string(),
+    status: v.union(v.literal("starting"), v.literal("running"), v.literal("done"), v.literal("error")),
+    found: v.number(),
+    error: v.optional(v.string()),
+  }).index("by_project", ["projectId"]),
+
+  // Flow v2: the browser crawl stages its finds HERE, never in frames. Every
+  // proposal is a real screenshot of a really-reached state; a human promotes
+  // it to a frame + edge or rejects it. This is the "never invent" firewall —
+  // the agent cannot put anything on the graph on its own.
+  flowStateProposals: defineTable({
+    projectId: v.id("projects"),
+    // Screenshot of the reached state (Convex storage).
+    storageId: v.id("_storage"),
+    routePath: v.string(),
+    stateLabel: v.string(),
+    // How the crawl says it got here, shown to the reviewer as context.
+    trigger: v.optional(v.string()),
+    // The happy-path route frame this state hangs off, if the crawl matched one.
+    fromRoutePath: v.optional(v.string()),
+    // Dedup key (route + a signature of the rendered page) so the same state
+    // isn't proposed twice within a crawl.
+    signature: v.string(),
+    status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected")),
+    createdAt: v.number(),
+  }).index("by_project", ["projectId"]),
+
+  // Flow view (v1): a directed edge between two frames, earned from evidence.  // Flow view (v1): a directed edge between two frames, earned from evidence.
   // source records where an edge came from ("tests" = derived from recorded
   // tester navigation; "manual" reserved for hand-drawn edges later), so
   // provenance survives mixing and re-derivation can replace only its own.

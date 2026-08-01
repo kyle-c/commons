@@ -273,6 +273,79 @@ function FigmaSettingBody({ project, me }: { project: Doc<"projects">; me: Doc<"
 }
 
 /**
+ * Review the browser crawl's proposed states (Flow v2). Each is a real
+ * screenshot of a really-reached state; approving promotes it to a state frame
+ * on the flow graph with an edge from its origin route, rejecting frees the
+ * blob. Nothing the crawl found reaches the graph without passing through here.
+ */
+function FlowReviewPanel({
+  proposals,
+  me,
+  onClose,
+}: {
+  proposals: {
+    _id: string;
+    routePath: string;
+    stateLabel: string;
+    trigger: string | null;
+    fromRoutePath: string | null;
+    imageUrl: string | null;
+  }[];
+  me: Doc<"users">;
+  onClose: () => void;
+}) {
+  const promote = useMutation(api.flows.promoteProposal);
+  const reject = useMutation(api.flows.rejectProposal);
+  return (
+    <div className="overlay-scrim" onMouseDown={onClose}>
+      <div className="overlay-card flow-review" onMouseDown={(e) => e.stopPropagation()}>
+        <header>
+          <span>Edge cases the crawl found</span>
+          <button className="btn ghost" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </header>
+        <div className="flow-review-body">
+          {proposals.length === 0 && (
+            <p className="hint">Nothing pending. Run “Find edge cases” to send a browser through your preview.</p>
+          )}
+          {proposals.map((p) => (
+            <div key={p._id} className="flow-proposal">
+              {p.imageUrl && <img src={p.imageUrl} alt={p.stateLabel} />}
+              <div className="flow-proposal-meta">
+                <div className="flow-proposal-title">{p.stateLabel}</div>
+                <div className="hint">
+                  {p.routePath}
+                  {p.trigger ? ` · ${p.trigger}` : ""}
+                </div>
+                <div className="flow-proposal-actions">
+                  <button
+                    className="btn"
+                    onClick={() =>
+                      void promote({ proposalId: p._id as Id<"flowStateProposals">, userId: me._id, sessionToken: sessionToken() })
+                    }
+                  >
+                    Add to flow
+                  </button>
+                  <button
+                    className="btn ghost danger"
+                    onClick={() =>
+                      void reject({ proposalId: p._id as Id<"flowStateProposals">, userId: me._id, sessionToken: sessionToken() })
+                    }
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * The deploy log as a version history. On hosts with immutable per-deploy
  * URLs every row is an openable old version of the app, so each entry is a
  * link, not a line item. previewUrl says "now"; this is "and before that".
@@ -827,6 +900,20 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const [connectionOpen, setConnectionOpen] = useState(false);
   // Flow view: edges from recorded tester navigation; positions computed as
   // a layered left-to-right graph. Only queried while the view is open.
+  // State frames (Flow v2) live only in the flow view; keep them off the
+  // canvas and prototype so those stay the app's real routes.
+  const canvasFrames = frames.filter((f) => f.kind !== "state");
+  const flowProposals = useQuery(
+    api.flows.proposals,
+    nav.view === "flow" ? { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() } : "skip"
+  );
+  const startCrawl = useMutation(api.flows.startCrawl);
+  const addFlowEdge = useMutation(api.flows.addEdge);
+  const [crawlNote, setCrawlNote] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [connectFrom, setConnectFrom] = useState<string>("");
+  const [connectTo, setConnectTo] = useState<string>("");
+  const [connectLabel, setConnectLabel] = useState("");
   const flowEdges = useQuery(
     api.flows.edges,
     nav.view === "flow" ? { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() } : "skip"
@@ -1898,9 +1985,30 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               {flowEdges === undefined
                 ? "Loading paths…"
                 : flowEdges.length === 0
-                  ? "No paths yet. Edges are derived from recorded tester sessions, never guessed."
-                  : `${flowEdges.length} path${flowEdges.length === 1 ? "" : "s"} from tester sessions, thickness = how many took it.`}
+                  ? "No paths yet. Edges come from tester sessions or you draw them; states come from a crawl."
+                  : `${flowEdges.length} path${flowEdges.length === 1 ? "" : "s"}, thickness = how many took it.`}
+              {crawlNote ? ` · ${crawlNote}` : ""}
             </span>
+            {(flowProposals?.length ?? 0) > 0 && (
+              <button className="btn" onClick={() => setReviewOpen(true)}>
+                Review states ({flowProposals!.length})
+              </button>
+            )}
+            <button
+              className="btn ghost"
+              title="Send a browser to your deployed preview to find error, empty, and loading states"
+              onClick={async () => {
+                setCrawlNote(null);
+                try {
+                  await startCrawl({ projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
+                  setCrawlNote("Crawl dispatched — states appear here to review as it finds them.");
+                } catch (err) {
+                  setCrawlNote(err instanceof Error ? err.message : String(err));
+                }
+              }}
+            >
+              Find edge cases
+            </button>
             <button
               className="btn ghost"
               disabled={deriving}
@@ -1916,6 +2024,60 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               {deriving ? "Deriving…" : "Derive from tests"}
             </button>
           </div>
+          {/* Manual edges: connect two screens, name the trigger. Kept a simple
+              two-select form rather than canvas drag — no CanvasView surgery,
+              and it reads clearly. */}
+          <div className="flow-connect">
+            <span className="hint">Connect</span>
+            <select value={connectFrom} onChange={(e) => setConnectFrom(e.target.value)}>
+              <option value="">from…</option>
+              {frames.map((f) => (
+                <option key={f._id} value={f._id}>
+                  {f.title}
+                </option>
+              ))}
+            </select>
+            <span className="hint">→</span>
+            <select value={connectTo} onChange={(e) => setConnectTo(e.target.value)}>
+              <option value="">to…</option>
+              {frames.map((f) => (
+                <option key={f._id} value={f._id}>
+                  {f.title}
+                </option>
+              ))}
+            </select>
+            <input
+              placeholder="trigger, e.g. “tap Buy”"
+              value={connectLabel}
+              onChange={(e) => setConnectLabel(e.target.value)}
+            />
+            <button
+              className="btn ghost"
+              disabled={!connectFrom || !connectTo || connectFrom === connectTo}
+              onClick={async () => {
+                await addFlowEdge({
+                  projectId: nav.projectId,
+                  fromFrameId: connectFrom as Id<"frames">,
+                  toFrameId: connectTo as Id<"frames">,
+                  label: connectLabel.trim() || undefined,
+                  userId: me._id,
+                  sessionToken: sessionToken(),
+                });
+                setConnectFrom("");
+                setConnectTo("");
+                setConnectLabel("");
+              }}
+            >
+              Add edge
+            </button>
+          </div>
+          {reviewOpen && (
+            <FlowReviewPanel
+              proposals={flowProposals ?? []}
+              me={me}
+              onClose={() => setReviewOpen(false)}
+            />
+          )}
           <CanvasView
             me={me}
             projectId={nav.projectId}
@@ -1934,7 +2096,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         <CanvasView
           me={me}
           projectId={nav.projectId}
-          frames={frames}
+          frames={canvasFrames}
           threads={threads}
           users={users}
           mentionUsers={mentionUsers}
@@ -1963,7 +2125,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         />
       ) : (
         <PrototypeView
-          frames={frames}
+          frames={canvasFrames}
           devStatus={liveStatus}
           previewUrl={project.previewUrl}
           viewerHasRepo={!!repoPath}
@@ -1991,7 +2153,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         <NarrationPanel
           me={me}
           project={project}
-          frames={frames}
+          frames={canvasFrames}
           threads={threads}
           repoPath={repoPath}
           onClose={() => setSidePanel(null)}

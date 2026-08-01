@@ -344,11 +344,30 @@ export const RUNNER_SCRIPT = `// Commons cloud agent runner. Fetched fresh from 
 // fixes ship without touching your repo. Everything it does is visible in
 // the Actions log; everything it pushes lands on a commons/* branch.
 import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 const require = createRequire("/tmp/commons/");
 const { query } = require("@anthropic-ai/claude-agent-sdk");
 
 const payload = JSON.parse(process.env.COMMONS_PAYLOAD);
+
+// Flow v2: a crawl reuses this same workflow/event. Hand off to the browser
+// crawler (fetched fresh from Commons) and exit; the code-agent path below
+// only runs for ordinary agent dispatches.
+if (payload.mode === "crawl") {
+  // Playwright isn't in the agent runner's deps; install it and its browser
+  // just for the crawl. Then require chromium and hand it to the fetched
+  // crawler, so the crawler never resolves a bare specifier of its own.
+  execFileSync("npm", ["install", "--no-fund", "--no-audit", "playwright"], { cwd: "/tmp/commons", stdio: "inherit" });
+  execFileSync("npx", ["playwright", "install", "--with-deps", "chromium"], { cwd: "/tmp/commons", stdio: "inherit" });
+  const { chromium } = require("playwright");
+  const res = await fetch(payload.callback + "/setup/flow-crawler.mjs");
+  writeFileSync("/tmp/commons/flow-crawler.mjs", await res.text());
+  const { runCrawl } = await import("/tmp/commons/flow-crawler.mjs");
+  await runCrawl(payload, chromium);
+  process.exit(0);
+}
+
 const { sessionId, runToken, prompt, branch, callback } = payload;
 const COST_CEILING_USD = 5; // same guardrail as the desktop (AG-7)
 

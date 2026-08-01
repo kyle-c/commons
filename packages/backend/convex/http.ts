@@ -454,6 +454,59 @@ http.route({
 });
 
 http.route({
+  path: "/setup/flow-crawler.mjs",
+  method: "GET",
+  handler: httpAction(async () => {
+    const { FLOW_CRAWLER } = await import("./flows");
+    return new Response(FLOW_CRAWLER, {
+      headers: { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" },
+    });
+  }),
+});
+
+// The crawl's write path: PNG body + metadata in the query. The runToken is
+// the credential (same model as the agent callbacks); it only ever existed in
+// the dispatch payload GitHub delivered to the repo's own workflow.
+http.route({
+  path: "/api/flow/proposal",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const url = new URL(request.url);
+    const p = (k: string) => url.searchParams.get(k) ?? "";
+    if (!p("crawlId") || !p("runToken") || !p("signature")) return json({ error: "bad_request" }, 400);
+    const blob = await request.blob();
+    if (blob.size === 0 || blob.size > 8_000_000) return json({ error: "bad_image" }, 400);
+    const storageId = await ctx.storage.store(blob);
+    const result = await ctx.runMutation(internal.flows.ingestCrawlProposal, {
+      crawlId: p("crawlId") as never,
+      runToken: p("runToken"),
+      storageId,
+      routePath: p("routePath") || "/",
+      stateLabel: p("stateLabel") || "state",
+      trigger: p("trigger") || undefined,
+      fromRoutePath: p("fromRoutePath") || undefined,
+      signature: p("signature"),
+    });
+    if (!result.ok) await ctx.storage.delete(storageId); // rejected token: don't keep the blob
+    return json(result, result.ok ? 200 : 403);
+  }),
+});
+
+http.route({
+  path: "/api/flow/done",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const url = new URL(request.url);
+    const result = await ctx.runMutation(internal.flows.finishCrawl, {
+      crawlId: (url.searchParams.get("crawlId") ?? "") as never,
+      runToken: url.searchParams.get("runToken") ?? "",
+      error: url.searchParams.get("error") ?? undefined,
+    });
+    return json(result, result.ok ? 200 : 403);
+  }),
+});
+
+http.route({
   path: "/setup/agent-runner.mjs",
   method: "GET",
   handler: httpAction(async () => {
