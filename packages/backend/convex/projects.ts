@@ -81,23 +81,14 @@ export const listWithActivity = query({
           .collect()
       : [];
     const pinned = new Set(pins.map((p) => p.projectId as string));
-    const cutoff = Date.now() - 60_000;
     return await Promise.all(
       active.map(async (project) => {
         const creator = await ctx.db.get(project.createdBy);
-        // Live avatars come from presence.activeByProject — a separate
-        // subscription, so heartbeat churn never re-runs this query.
-        // COMPAT (remove once ≤0.2.37 clients age out via auto-update):
-        // shipped renderers map over activeUsers; dropping the field mid-skew
-        // crashed them at the error boundary. This read re-couples the query
-        // to presence until then — the isolation win lands with 0.2.38.
-        const present = await ctx.db
-          .query("presence")
-          .withIndex("by_project", (q) => q.eq("projectId", project._id))
-          .collect();
-        const activeUsers = (
-          await Promise.all(present.filter((p) => p.lastSeenAt > cutoff).map((p) => ctx.db.get(p.userId)))
-        ).filter(Boolean);
+        // Live avatars come from presence.activeByProject, a separate
+        // subscription, so heartbeat churn never re-runs this query. The
+        // activeUsers COMPAT field that used to re-couple it here (for
+        // ≤0.2.37 renderers) is gone — every shipped client reads the
+        // dedicated subscription now, so the isolation is finally real.
         // Bounded reads: the home needs counts and recency, not full
         // histories. (A dead `thumbnail` payload used to force full thread +
         // frame collects here on every invalidation — removed.)
@@ -141,7 +132,6 @@ export const listWithActivity = query({
           workspaceName: project.workspaceId ? workspaceNames.get(project.workspaceId) : undefined,
           lastActivityAt,
           creator,
-          activeUsers,
           frameCount: frames.length,
           openThreadCount: threads.filter((t) => !t.resolvedAt).length,
           pinned: pinned.has(project._id),

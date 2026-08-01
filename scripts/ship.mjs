@@ -143,6 +143,10 @@ if (dryRun) {
   detail("(skipped in dry run)");
 } else {
   runLoud("pnpm", ["typecheck"], { cwd: root });
+  // The unit suite gates the release. The cloud-agent runner in particular
+  // executes in every connected repo's CI, so a red test must stop a ship
+  // before it reaches anyone's machine.
+  runLoud("pnpm", ["test"], { cwd: root });
 }
 
 if (dryRun) {

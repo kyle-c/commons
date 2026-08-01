@@ -2,8 +2,10 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { accessibleProject, requireViewer, resolveViewer, randomToken } from "./access";
+import { accessibleProject, requireViewer, resolveViewer, randomToken, isWorkspaceMember } from "./access";
 import { internal } from "./_generated/api";
+import { normalizeRemote, slugifyBranch, inferBranchPattern, vercelAliasCandidates, isProductionDeploy } from "./previewLogic";
+import type { DeploySample } from "./previewLogic";
 
 /**
  * The GitHub App listener: Commons learns each project's preview URL and its
@@ -16,113 +18,17 @@ import { internal } from "./_generated/api";
  * branchPatternSource) so the two can always be told apart.
  */
 
-// ── Pure helpers (no db access, so they stay easy to reason about) ──────────
-
-/** Compare git remotes across ssh/https, .git suffixes, and case. */
-export function normalizeRemote(remote: string): string {
-  return remote
-    .trim()
-    .replace(/^git@([^:]+):/, "https://$1/")
-    .replace(/\.git$/, "")
-    .replace(/\/+$/, "")
-    .toLowerCase();
-}
-
-/**
- * How hosts render a branch name inside a hostname. Vercel and Netlify both
- * lowercase and replace anything outside [a-z0-9] with a hyphen.
- */
-export function slugifyBranch(branch: string): string {
-  return branch
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-export interface DeploySample {
-  branch: string;
-  url: string;
-}
-
-/**
- * Infer a "{branch}"-templated preview URL from observed deploys.
- *
- * The pattern is accepted only when filling it with each sample's own branch
- * reproduces that sample's URL exactly, for every sample we hold. One
- * disagreeing observation is enough to reject, which is what keeps a wrong
- * pattern from ever reaching a project. Returns null when unprovable.
- */
-export function inferBranchPattern(samples: DeploySample[]): string | null {
-  const distinct = new Map<string, DeploySample>();
-  for (const s of samples) {
-    if (!s.branch || !s.url) continue;
-    if (!distinct.has(s.branch)) distinct.set(s.branch, s);
-  }
-  const unique = [...distinct.values()];
-  if (unique.length < 2) return null; // one deploy proves nothing
-
-  // Anchor on the first sample: wherever its slug appears is a candidate
-  // split. Multiple occurrences means multiple candidates, so try each.
-  const anchor = unique[0];
-  const anchorSlug = slugifyBranch(anchor.branch);
-  if (!anchorSlug) return null;
-
-  for (let from = 0; ; ) {
-    const at = anchor.url.indexOf(anchorSlug, from);
-    if (at === -1) break;
-    from = at + 1;
-    const prefix = anchor.url.slice(0, at);
-    const suffix = anchor.url.slice(at + anchorSlug.length);
-    const candidate = `${prefix}{branch}${suffix}`;
-    const holds = unique.every(
-      (s) => candidate.replace("{branch}", slugifyBranch(s.branch)) === s.url
-    );
-    if (holds) return candidate;
-  }
-  return null;
-}
-
-/**
- * Candidate branch-alias patterns for a Vercel per-deployment URL.
- *
- * Vercel reports "project-kxzauj7pp-team.vercel.app": a random deploy id, no
- * branch name anywhere, so evidence-based inference correctly refuses. But
- * Vercel also publishes "project-git-{branch}-team.vercel.app" for every
- * branch; it just never tells us about it.
- *
- * This proposes that shape as a hypothesis, nothing more. Every segment that
- * could be the deploy id yields one candidate, ambiguity included, because
- * the caller must verify a candidate resolves against a real branch before
- * anything is stored. Host knowledge here only ever generates guesses to be
- * checked; it is never trusted on its own.
- */
-export function vercelAliasCandidates(sampleUrl: string): string[] {
-  const match = sampleUrl.match(/^https:\/\/([a-z0-9-]+)\.vercel\.app$/);
-  if (!match) return [];
-  const parts = match[1].split("-");
-  const candidates: { pattern: string; hashLike: boolean }[] = [];
-  for (let i = 1; i < parts.length - 1; i += 1) {
-    const segment = parts[i];
-    // Deploy ids are short alphanumeric blobs; anything else is part of the
-    // project or team name. Wrong picks die at verification, not here.
-    if (!/^[a-z0-9]{7,12}$/.test(segment)) continue;
-    candidates.push({
-      pattern: `https://${parts.slice(0, i).join("-")}-git-{branch}-${parts.slice(i + 1).join("-")}.vercel.app`,
-      hashLike: /\d/.test(segment),
-    });
-  }
-  // Segments containing digits are far more likely to be the deploy id, so
-  // try those first and waste fewer verification fetches.
-  candidates.sort((a, b) => Number(b.hashLike) - Number(a.hashLike));
-  return candidates.slice(0, 4).map((c) => c.pattern);
-}
-
-/** A deploy that represents the live product, not a branch preview. */
-export function isProductionDeploy(environment: string | undefined, ref: string, defaultBranch: string): boolean {
-  const env = (environment ?? "").toLowerCase();
-  if (env.includes("preview") || env.includes("staging")) return false;
-  return env.includes("production") || ref === defaultBranch;
-}
+// ── Pure helpers ───────────────────────────────────────────────────────────
+// Extracted to previewLogic.ts (dependency-free, unit-tested). Re-exported
+// here so existing importers of "./github" are unaffected.
+export {
+  normalizeRemote,
+  slugifyBranch,
+  inferBranchPattern,
+  vercelAliasCandidates,
+  isProductionDeploy,
+  type DeploySample,
+} from "./previewLogic";
 
 // ── Connecting an installation to a workspace ──────────────────────────────
 
@@ -146,17 +52,6 @@ function newStateToken(): string {
   return randomToken(24);
 }
 
-async function isWorkspaceMember(
-  ctx: QueryCtx,
-  workspaceId: Id<"workspaces">,
-  userId: Id<"users">
-): Promise<boolean> {
-  const membership = await ctx.db
-    .query("workspaceMembers")
-    .withIndex("by_user_workspace", (q) => q.eq("userId", userId).eq("workspaceId", workspaceId))
-    .unique();
-  return membership !== null;
-}
 
 /**
  * Step 1 of the connect: hand back the URL to send the person to. The state

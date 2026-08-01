@@ -7,7 +7,9 @@
     "typecheck": "pnpm -r typecheck && node scripts/check-convex-auth.mjs",
     "build": "pnpm -C apps/desktop build",
     "check:auth": "node scripts/check-convex-auth.mjs",
-    "ship": "node scripts/ship.mjs"
+    "ship": "node scripts/ship.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "packageManager": "pnpm@10.12.4",
   "pnpm": {
@@ -15,5 +17,8 @@
       "electron",
       "esbuild"
     ]
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
   }
 }

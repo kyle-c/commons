@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { agentEventValidator } from "./agentSessions";
 import { accessibleProject, resolveViewer } from "./access";
 import { normalizeRemote, slugifyBranch } from "./github";
 import { installationToken } from "./githubApp";
@@ -215,7 +216,7 @@ export const installationForProject = internalQuery({
  * one session and nothing else.
  */
 export const ingestEvent = internalMutation({
-  args: { sessionId: v.id("agentSessions"), runToken: v.string(), event: v.any() },
+  args: { sessionId: v.id("agentSessions"), runToken: v.string(), event: agentEventValidator },
   handler: async (ctx, { sessionId, runToken, event }) => {
     const session = await ctx.db.get(sessionId);
     if (!session || session.runner !== "actions" || session.runToken !== runToken) return { ok: false };

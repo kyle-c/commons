@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { resolveViewer, accessibleProject } from "./access";
+import { resolveViewer, accessibleProject, isWorkspaceMember as isMember } from "./access";
 
 /**
  * Workspaces: the isolation boundary. Team workspaces are created explicitly
@@ -27,17 +27,9 @@ const CONSUMER_DOMAINS = new Set([
   "hey.com",
 ]);
 
-export async function isMember(
-  ctx: { db: MutationCtx["db"] },
-  workspaceId: Id<"workspaces">,
-  userId: Id<"users">
-): Promise<boolean> {
-  const row = await ctx.db
-    .query("workspaceMembers")
-    .withIndex("by_user_workspace", (q) => q.eq("userId", userId).eq("workspaceId", workspaceId))
-    .unique();
-  return row !== null;
-}
+// Re-exported under the historical name: figma.ts and projects.ts import
+// { isMember } from "./workspaces". The implementation lives in access.ts.
+export { isMember };
 
 async function addMembership(ctx: MutationCtx, workspaceId: Id<"workspaces">, userId: Id<"users">): Promise<void> {
   if (!(await isMember(ctx, workspaceId, userId))) {

@@ -24,10 +24,61 @@ export const create = mutation({
 
 // Append one transcript event. Status and result events also fold their
 // payload into the session document so lists stay live without reading events.
+/**
+ * The agent-event contract, as both write paths actually emit it. Applied to
+ * mutation ARGS (not the schema field): new writes are validated, while
+ * historical agentEvents rows — stored under v.any() — keep reading. That is
+ * the widen-safe way to tighten a hot boundary without a data migration.
+ */
+export const agentEventValidator = v.union(
+  v.object({
+    type: v.literal("status"),
+    status: v.union(
+      v.literal("starting"),
+      v.literal("running"),
+      v.literal("idle"),
+      v.literal("error"),
+      v.literal("stopped")
+    ),
+    error: v.optional(v.string()),
+  }),
+  v.object({ type: v.literal("prompt"), text: v.string() }),
+  v.object({ type: v.literal("text"), text: v.string() }),
+  v.object({
+    type: v.literal("tool"),
+    toolUseId: v.string(),
+    name: v.string(),
+    summary: v.string(),
+    filePath: v.optional(v.string()),
+  }),
+  v.object({ type: v.literal("tool-result"), toolUseId: v.string(), isError: v.boolean() }),
+  v.object({
+    type: v.literal("result"),
+    ok: v.boolean(),
+    summary: v.string(),
+    durationMs: v.number(),
+    numTurns: v.number(),
+    totalCostUsd: v.optional(v.number()),
+    editedFiles: v.array(v.string()),
+    // Optional throughout: the cloud runner emits only { branch }.
+    draft: v.optional(
+      v.object({
+        branch: v.string(),
+        baseBranch: v.optional(v.string()),
+        committed: v.optional(v.boolean()),
+        pushed: v.optional(v.boolean()),
+        compareUrl: v.optional(v.string()),
+        previewUrl: v.optional(v.string()),
+        pushError: v.optional(v.string()),
+      })
+    ),
+  })
+);
+
 export const appendEvent = mutation({
   args: {
     sessionId: v.id("agentSessions"),
-    event: v.any(),
+    event: agentEventValidator,
     userId: v.optional(v.id("users")),
     sessionToken: v.optional(v.string()),
   },
@@ -102,10 +153,14 @@ export const events = query({
   handler: async (ctx, { sessionId, ...viewer }) => {
     const session = await ctx.db.get(sessionId);
     if (!session || !(await accessibleProject(ctx, session.projectId, await resolveViewer(ctx, viewer)))) return [];
+    // Bounded: a transcript is unbounded in principle, but the panel only
+    // ever renders the tail. Take the most recent 400 (far past any real
+    // session) newest-first, then restore chronological order for rendering.
     const rows = await ctx.db
       .query("agentEvents")
       .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
-      .collect();
-    return rows.map((row) => row.event);
+      .order("desc")
+      .take(400);
+    return rows.reverse().map((row) => row.event);
   },
 });

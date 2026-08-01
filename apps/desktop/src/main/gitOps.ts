@@ -1,4 +1,5 @@
 import { execFile } from "child_process";
+import type { GitRepoStatus, GitSetupStatus, PendingFile } from "@commons/shared";
 import { promises as fs } from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -27,13 +28,6 @@ function git(
   });
 }
 
-export interface GitRepoStatus {
-  branch: string;
-  dirty: boolean;
-  hasUpstream: boolean;
-  ahead: number;
-  behind: number;
-}
 
 // Fetch at most once a minute per repo — status polls shouldn't hammer the remote.
 const lastFetch = new Map<string, number>();
@@ -83,20 +77,6 @@ export async function pullFastForward(repoPath: string): Promise<{ ok: boolean; 
     : { ok: false, message: pull.stderr || "Pull failed." };
 }
 
-/**
- * What a commit-everything would actually sweep up.
- *
- * Commons commits all or nothing — a staging interface is a real git client's
- * job — so the whole guard against accidentally committing an .env is that you
- * see the list first. That makes it a decision instead of a surprise, which is
- * the only reason committing from here is defensible at all.
- */
-export interface PendingFile {
-  path: string;
-  state: string;
-  /** Worth a second look before it goes to a remote you may not control. */
-  risky: boolean;
-}
 
 const RISKY_PATH =
   /(^|\/)(\.env(\.|$)|.*\.pem$|.*\.p8$|.*\.key$|.*\.pfx$|id_rsa|id_ed25519|.*\.keystore$|secrets?\.(json|ya?ml|toml))/i;
@@ -271,13 +251,6 @@ export async function commitAndPushDraft(
     : { committed: true, pushed: false, error: push.stderr || "Push failed (check git credentials)." };
 }
 
-export interface GitSetupStatus {
-  gitInstalled: boolean;
-  identityName?: string;
-  identityEmail?: string;
-  /** Can we actually reach + authenticate against a team remote? */
-  remoteAccess: "ok" | "auth_failed" | "unreachable" | "skipped";
-}
 
 /**
  * Onboarding preflight: checks the three things that make clone/draft/push

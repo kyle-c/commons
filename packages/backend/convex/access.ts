@@ -116,3 +116,20 @@ export function randomToken(bytes = 24): string {
   crypto.getRandomValues(buf);
   return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+/**
+ * Workspace membership — the one implementation. `isMember` (workspaces.ts)
+ * and a former local copy in github.ts both were this exact query; they now
+ * route here so "member of a workspace" means one thing in one place.
+ */
+export async function isWorkspaceMember(
+  ctx: { db: QueryCtx["db"] },
+  workspaceId: Id<"workspaces">,
+  userId: Id<"users">
+): Promise<boolean> {
+  const row = await ctx.db
+    .query("workspaceMembers")
+    .withIndex("by_user_workspace", (q) => q.eq("userId", userId).eq("workspaceId", workspaceId))
+    .unique();
+  return row !== null;
+}

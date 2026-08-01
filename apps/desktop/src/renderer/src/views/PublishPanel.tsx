@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { PendingFile } from "@commons/shared";
 
 /**
  * The one git write Commons offers, named for what it achieves.
@@ -18,8 +19,6 @@ import { useEffect, useState } from "react";
  * a conflict. Those need judgement, engineers have better tools for them, and
  * non-engineers have no working copy to apply them to.
  */
-
-type PendingFile = { path: string; state: string; risky: boolean };
 
 export function PublishPanel({
   repoPath,

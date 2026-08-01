@@ -407,7 +407,9 @@ http.route({
     const result = await ctx.runMutation(internal.cloudAgents.ingestEvent, {
       sessionId: body.sessionId as never,
       runToken: body.runToken,
-      event: body.event,
+      // Validated by agentEventValidator inside the mutation; untyped here
+      // because it arrived as raw JSON from the Actions runner.
+      event: body.event as never,
     });
     return json(result, result.ok ? 200 : 403);
   }),

@@ -190,6 +190,14 @@ export interface AnnotationGenerateResult {
   error?: string;
 }
 
+/** A file that a commit-everything would sweep up (the Publish panel's list). */
+export interface PendingFile {
+  path: string;
+  state: string;
+  /** Worth a second look before it goes to a remote you may not control. */
+  risky: boolean;
+}
+
 /** Local git state of a linked working copy (drift visibility). */
 export interface GitRepoStatus {
   branch: string;
@@ -288,7 +296,7 @@ export interface CommonsApi {
   /** Everything a commit-everything would sweep up, so the user sees it first. */
   pendingChanges(repoPath: string): Promise<{
     ok: boolean;
-    files: { path: string; state: string; risky: boolean }[];
+    files: PendingFile[];
   }>;
   /** Commit (all of it) and push the current branch. Never merges or rebases. */
   publishRepo(repoPath: string, message?: string): Promise<{ ok: boolean; message: string }>;
@@ -369,7 +377,7 @@ export function parseDeepLink(raw: string): DeepLink | null {
     // commons://project/<id>/<view> — "project" lands in host, rest in pathname.
     if (url.host !== "project") return null;
     const [, projectId, view] = url.pathname.split("/");
-    if (!projectId || (view !== "canvas" && view !== "prototype")) return null;
+    if (!projectId || (view !== "canvas" && view !== "prototype" && view !== "flow")) return null;
     return {
       projectId,
       view,
