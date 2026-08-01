@@ -65,7 +65,7 @@ function buildThreadPrompt(thread: ThreadWithMessages, frame: Doc<"frames"> | un
  * the deployed preview URLs. An attention dot on the icon replaces the old
  * always-visible "Get this project / Locate / Preview URL ⚠" button row.
  */
-type SettingKey = "repo" | "preview" | "drafts" | "history" | "figma";
+type SettingKey = "repo" | "preview" | "drafts" | "history" | "figma" | "share";
 
 /** One toolbar icon, one concern: a small anchored popover per setting. */
 function SettingPopover({
@@ -647,13 +647,18 @@ function SharePopover({
   me,
   users,
   nav,
+  open,
+  onOpenChange,
 }: {
   project: Doc<"projects">;
   me: Doc<"users">;
   users: Doc<"users">[];
   nav: Extract<Nav, { screen: "project" }>;
+  /** Controlled by ProjectView so it shares the one-surface-at-a-time slot. */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const setOpen = onOpenChange;
   const setVisibility = useMutation(api.projects.setVisibility);
   const setMembers = useMutation(api.projects.setMembers);
   const moveProject = useMutation(api.workspaces.moveProject);
@@ -892,7 +897,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
    * wrong-project case unrepresentable rather than merely handled.
    */
   const liveStatus: DevServerStatus = repoPath ? devStatus : { state: "stopped" };
-  const [openSetting, setOpenSetting] = useState<SettingKey | null>(null);
+  const [openSetting, setOpenSettingRaw] = useState<SettingKey | null>(null);
   /**
    * Freshness marker: everything Convex-backed is live, so the only thing
    * that can go stale mid-session is the pixels inside the frames. The
@@ -913,7 +918,14 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   // selects it: the Prototype segment shows the current device's icon and,
   // when already active, opens a small menu of the presets.
   const [chosenDevice, setChosenDevice] = useState<ProtoDevice | null>(null);
-  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
+  const [deviceMenuOpen, setDeviceMenuOpenRaw] = useState(false);
+  const setDeviceMenuOpen = (open: boolean) => {
+    setDeviceMenuOpenRaw(open);
+    if (open) {
+      setOpenSettingRaw(null);
+      setSidePanelRaw(null);
+    }
+  };
   const deviceMenuRef = useRef<HTMLDivElement>(null);
   useClickOutside(deviceMenuRef, () => setDeviceMenuOpen(false), deviceMenuOpen);
   // Project switcher: name + dev status as one element, recents in the menu.
@@ -1159,7 +1171,33 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
 
   // One side-panel slot: Agent and Narrate are exclusive — opening one
   // closes the other, and both slide in under their titlebar buttons.
-  const [sidePanel, setSidePanel] = useState<"agents" | "narrate" | "inbox" | null>(null);
+  const [sidePanel, setSidePanelRaw] = useState<"agents" | "narrate" | "inbox" | null>(null);
+  type SidePanel = "agents" | "narrate" | "inbox";
+  // One surface at a time. Popovers, side panels and the device menu each used
+  // to own their state and knew nothing of the others, so a popover could open
+  // on top of a live panel. Every opener now goes through these, which close
+  // whatever else is showing. Refs so the shortcut handlers, registered once,
+  // can still read current values without a stale closure.
+  const sidePanelRef = useRef<SidePanel | null>(sidePanel);
+  sidePanelRef.current = sidePanel;
+  const openSettingRef = useRef<SettingKey | null>(openSetting);
+  openSettingRef.current = openSetting;
+  const setOpenSetting = (key: SettingKey | null) => {
+    setOpenSettingRaw(key);
+    if (key) {
+      setSidePanelRaw(null);
+      setDeviceMenuOpen(false);
+    }
+  };
+  const setSidePanel = (panel: SidePanel | null) => {
+    setSidePanelRaw(panel);
+    if (panel) {
+      setOpenSettingRaw(null);
+      setDeviceMenuOpen(false);
+    }
+  };
+  const toggleSidePanel = (panel: SidePanel) =>
+    setSidePanel(sidePanelRef.current === panel ? null : panel);
   // Approved annotations back the canvas Notes layer; drafts stay in the panel.
   const annotationData = useQuery(api.annotations.forProject, {
     projectId: nav.projectId,
@@ -1399,11 +1437,11 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const runningCount = convexSessions.filter((s) => s.status === "running" || s.status === "starting").length;
 
   useEffect(
-    () => registerShortcut("a", () => setSidePanel((p) => (p === "agents" ? null : "agents")), { description: "Agent sessions" }),
+    () => registerShortcut("a", () => toggleSidePanel("agents"), { description: "Agent sessions" }),
     []
   );
   useEffect(
-    () => registerShortcut("n", () => setSidePanel((p) => (p === "narrate" ? null : "narrate")), { description: "Narrate (design notes)" }),
+    () => registerShortcut("n", () => toggleSidePanel("narrate"), { description: "Narrate (design notes)" }),
     []
   );
 
@@ -1703,7 +1741,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                   : "Prototype: the running app, full size"
               }
               onClick={() => {
-                if (nav.view === "prototype") setDeviceMenuOpen((o) => !o);
+                if (nav.view === "prototype") setDeviceMenuOpen(!deviceMenuOpen);
                 else setNav({ ...nav, view: "prototype" });
               }}
             >
@@ -1718,7 +1756,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                 setNav({ ...nav, view: "flow" });
               }}
             >
-              <Icon name="branch" />
+              <Icon name="flow" />
             </button>
           </div>
           {deviceMenuOpen && (
@@ -2050,7 +2088,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             className={`btn ghost icon-btn ${sidePanel === "agents" ? "active" : ""}`}
             aria-label="Agent sessions"
             title="Agent sessions (A)"
-            onClick={() => setSidePanel((p) => (p === "agents" ? null : "agents"))}
+            onClick={() => toggleSidePanel("agents")}
           >
             <Icon name="zap" />
             {runningCount > 0 && <span className="count-badge live">{runningCount}</span>}
@@ -2060,7 +2098,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           className={`btn ghost icon-btn ${sidePanel === "narrate" ? "active" : ""}`}
           aria-label="Narrate"
           title="Narrate: design rationale annotations (N)"
-          onClick={() => setSidePanel((p) => (p === "narrate" ? null : "narrate"))}
+          onClick={() => toggleSidePanel("narrate")}
         >
           <Icon name="pen" />
           {(annotationData?.draftCount ?? 0) > 0 && (
@@ -2080,7 +2118,14 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               )
           )}
         </div>
-        <SharePopover project={project} me={me} users={users} nav={nav} />
+        <SharePopover
+          project={project}
+          me={me}
+          users={users}
+          nav={nav}
+          open={openSetting === "share"}
+          onOpenChange={(o) => setOpenSetting(o ? "share" : null)}
+        />
         {connectionOpen && (
           <ConnectionPanel projectId={project._id} userId={me._id} onClose={() => setConnectionOpen(false)} />
         )}

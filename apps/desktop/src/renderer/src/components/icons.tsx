@@ -125,6 +125,14 @@ const PATHS: Record<string, React.ReactNode> = {
   maximize: <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />,
   list: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
   chevron: <path d="M6 9l6 6 6-6" />,
+  flow: (
+    <>
+      <rect x="2.5" y="8.5" width="7" height="7" rx="1.6" />
+      <rect x="14.5" y="3" width="7" height="6" rx="1.6" />
+      <rect x="14.5" y="15" width="7" height="6" rx="1.6" />
+      <path d="M9.5 11 14.5 7M9.5 13l5 4" />
+    </>
+  ),
   branch: (
     <>
       <circle cx="6" cy="6" r="2.6" />

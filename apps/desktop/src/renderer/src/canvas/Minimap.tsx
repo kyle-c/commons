@@ -21,10 +21,14 @@ export default function Minimap({ frames, pins, viewRect, onJump }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   if (frames.length === 0) return null;
 
-  const minX = Math.min(...frames.map((f) => f.x));
-  const minY = Math.min(...frames.map((f) => f.y));
-  const maxX = Math.max(...frames.map((f) => f.x + f.width));
-  const maxY = Math.max(...frames.map((f) => f.y + f.height));
+  // The viewport is part of what the map has to show. Bounding only the
+  // frames meant that whenever the visible region reached past the content —
+  // zoomed out, or panned to an edge — the viewport rectangle ran outside the
+  // viewBox and its far edge was clipped away by the panel's overflow.
+  const minX = Math.min(...frames.map((f) => f.x), viewRect.x);
+  const minY = Math.min(...frames.map((f) => f.y), viewRect.y);
+  const maxX = Math.max(...frames.map((f) => f.x + f.width), viewRect.x + viewRect.width);
+  const maxY = Math.max(...frames.map((f) => f.y + f.height), viewRect.y + viewRect.height);
   const span = Math.max(maxX - minX, maxY - minY);
   const pad = span * 0.08;
   const vb = { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 };
@@ -79,7 +83,7 @@ export default function Minimap({ frames, pins, viewRect, onJump }: Props) {
           y={viewRect.y}
           width={viewRect.width}
           height={viewRect.height}
-          fill="rgba(90, 162, 255, 0.08)"
+          fill="var(--accent-muted)"
           stroke="var(--accent)"
           vectorEffect="non-scaling-stroke"
         />
