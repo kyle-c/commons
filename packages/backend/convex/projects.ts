@@ -634,6 +634,21 @@ export const cascadeDeleteProject = internalMutation({
     }
     if (exhausted()) return void (await reschedule(ctx, projectId));
 
+    // Crawl proposals hold screenshot blobs — delete the blob with the row, or
+    // deleting a project leaks every state screenshot its crawls ever took.
+    const staleProposals = await ctx.db
+      .query("flowStateProposals")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .take(BUDGET - spent);
+    for (const proposal of staleProposals) {
+      // An approved proposal handed its blob to a frameSnapshot, which the
+      // snapshot sweep above already deleted; deleting again would throw.
+      if (proposal.status === "pending") await ctx.storage.delete(proposal.storageId);
+      await ctx.db.delete(proposal._id);
+      spent += 1;
+    }
+    if (exhausted()) return void (await reschedule(ctx, projectId));
+
     // Each thunk carries a literal table name so Convex resolves its by_project
     // index; a dynamic string would erase that typing.
     const directQueries = [
@@ -647,6 +662,7 @@ export const cascadeDeleteProject = internalMutation({
       () => ctx.db.query("projectPins").withIndex("by_project", (q) => q.eq("projectId", projectId)),
       () => ctx.db.query("presence").withIndex("by_project", (q) => q.eq("projectId", projectId)),
       () => ctx.db.query("flowEdges").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+      () => ctx.db.query("flowCrawls").withIndex("by_project", (q) => q.eq("projectId", projectId)),
       () => ctx.db.query("cursors").withIndex("by_project", (q) => q.eq("projectId", projectId)),
     ];
     for (const build of directQueries) {
