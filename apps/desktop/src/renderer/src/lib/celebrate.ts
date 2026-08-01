@@ -35,65 +35,109 @@ function cssColor(name: string, fallback: string): string {
 }
 
 /**
- * A vacuum, in three parts: air rushing in (noise swept downward), the pull
- * (a sine gliding low), and the void snapping shut (a soft thup). ~0.5s,
- * deliberately quiet.
+ * One AudioContext for the app's lifetime, created on first use.
+ *
+ * Not a style choice: macOS takes 100-300ms to spin up audio hardware for a
+ * fresh context, and sounds scheduled at "now" on a brand-new one are
+ * swallowed before the speakers are live. A per-call context made the whole
+ * whoosh inaudible on first (often only) use, which is why the vacuum
+ * appeared to have no sound at all. Persistent context, and everything is
+ * scheduled a breath after currentTime.
+ */
+let audio: AudioContext | null = null;
+function audioCtx(): AudioContext | null {
+  try {
+    if (!audio) audio = new AudioContext();
+    if (audio.state === "suspended") void audio.resume();
+    return audio;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The cartoon vacuum, in four parts: the slurp (a rising glide with a little
+ * vibrato, the recognizable "sucked up"), air rushing in behind it, the void
+ * closing with a low thup, and one high blip as a wink. ~0.5s, sized to the
+ * animation.
  */
 function playVacuum(): void {
   try {
-    const ctx = new AudioContext();
+    const ctx = audioCtx();
+    if (!ctx) return;
     const master = ctx.createGain();
-    master.gain.value = 0.16;
+    master.gain.value = 0.32;
     master.connect(ctx.destination);
-    const now = ctx.currentTime;
+    const t0 = ctx.currentTime + 0.04;
 
-    // Air: filtered noise whose center falls fast, swelling then cut off.
-    const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.42, ctx.sampleRate);
+    // The slurp: triangle gliding up an octave and a half, with vibrato.
+    const slurp = ctx.createOscillator();
+    slurp.type = "triangle";
+    slurp.frequency.setValueAtTime(210 + Math.random() * 40, t0);
+    slurp.frequency.exponentialRampToValueAtTime(1150, t0 + 0.3);
+    const vibrato = ctx.createOscillator();
+    vibrato.frequency.value = 26;
+    const vibratoDepth = ctx.createGain();
+    vibratoDepth.gain.value = 22;
+    vibrato.connect(vibratoDepth).connect(slurp.frequency);
+    const slurpTone = ctx.createBiquadFilter();
+    slurpTone.type = "lowpass";
+    slurpTone.frequency.value = 2400;
+    const slurpGain = ctx.createGain();
+    slurpGain.gain.setValueAtTime(0.0001, t0);
+    slurpGain.gain.exponentialRampToValueAtTime(0.42, t0 + 0.16);
+    slurpGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.34);
+    slurp.connect(slurpTone).connect(slurpGain).connect(master);
+    slurp.start(t0);
+    slurp.stop(t0 + 0.36);
+    vibrato.start(t0);
+    vibrato.stop(t0 + 0.36);
+
+    // Air rushing in with it.
+    const noiseBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.34), ctx.sampleRate);
     const channel = noiseBuffer.getChannelData(0);
     for (let i = 0; i < channel.length; i += 1) channel[i] = Math.random() * 2 - 1;
     const noise = ctx.createBufferSource();
     noise.buffer = noiseBuffer;
-    const filter = ctx.createBiquadFilter();
-    filter.type = "bandpass";
-    filter.Q.value = 1.1;
-    filter.frequency.setValueAtTime(2400 + Math.random() * 400, now);
-    filter.frequency.exponentialRampToValueAtTime(220, now + 0.4);
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.0001, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.7, now + 0.3);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.44);
-    noise.connect(filter).connect(noiseGain).connect(master);
-    noise.start(now);
+    const airFilter = ctx.createBiquadFilter();
+    airFilter.type = "bandpass";
+    airFilter.Q.value = 1.2;
+    airFilter.frequency.setValueAtTime(500, t0);
+    airFilter.frequency.exponentialRampToValueAtTime(2600, t0 + 0.3);
+    const airGain = ctx.createGain();
+    airGain.gain.setValueAtTime(0.0001, t0);
+    airGain.gain.exponentialRampToValueAtTime(0.5, t0 + 0.22);
+    airGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35);
+    noise.connect(airFilter).connect(airGain).connect(master);
+    noise.start(t0);
 
-    // Pull: a sine sliding from mid to low, the body being drawn in.
-    const pull = ctx.createOscillator();
-    pull.type = "sine";
-    pull.frequency.setValueAtTime(440 + Math.random() * 60, now);
-    pull.frequency.exponentialRampToValueAtTime(52, now + 0.38);
-    const pullGain = ctx.createGain();
-    pullGain.gain.setValueAtTime(0.0001, now);
-    pullGain.gain.exponentialRampToValueAtTime(0.35, now + 0.25);
-    pullGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
-    pull.connect(pullGain).connect(master);
-    pull.start(now);
-    pull.stop(now + 0.44);
-
-    // Thup: the void closing behind it.
+    // The void closes: a deep thup with a soft knock inside it.
     const thup = ctx.createOscillator();
     thup.type = "sine";
-    thup.frequency.setValueAtTime(110, now + 0.4);
-    thup.frequency.exponentialRampToValueAtTime(60, now + 0.5);
+    thup.frequency.setValueAtTime(135, t0 + 0.36);
+    thup.frequency.exponentialRampToValueAtTime(52, t0 + 0.47);
     const thupGain = ctx.createGain();
-    thupGain.gain.setValueAtTime(0.0001, now + 0.4);
-    thupGain.gain.exponentialRampToValueAtTime(0.5, now + 0.415);
-    thupGain.gain.exponentialRampToValueAtTime(0.001, now + 0.52);
+    thupGain.gain.setValueAtTime(0.0001, t0 + 0.36);
+    thupGain.gain.exponentialRampToValueAtTime(0.7, t0 + 0.375);
+    thupGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.5);
     thup.connect(thupGain).connect(master);
-    thup.start(now + 0.4);
-    thup.stop(now + 0.54);
+    thup.start(t0 + 0.36);
+    thup.stop(t0 + 0.52);
 
-    // Closing the context releases the hardware; some browsers cap how many
-    // can exist, and a leak here would eventually silence the whole app.
-    window.setTimeout(() => void ctx.close().catch(() => {}), 800);
+    // A wink on the way out.
+    const blip = ctx.createOscillator();
+    blip.type = "sine";
+    blip.frequency.value = 1860 + Math.random() * 120;
+    const blipGain = ctx.createGain();
+    blipGain.gain.setValueAtTime(0.0001, t0 + 0.46);
+    blipGain.gain.exponentialRampToValueAtTime(0.09, t0 + 0.47);
+    blipGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.54);
+    blip.connect(blipGain).connect(master);
+    blip.start(t0 + 0.46);
+    blip.stop(t0 + 0.56);
+
+    // Release the master chain once the tail is done; the context stays.
+    window.setTimeout(() => master.disconnect(), 900);
   } catch {
     // No audio is an acceptable outcome; a thrown error here is not.
   }
