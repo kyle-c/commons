@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
+import type { AppCandidate, RepoInspection } from "@commons/shared";
 import type { Nav } from "../App";
 import { initials, timeAgo, sessionToken } from "../lib/session";
 import { layoutFrames } from "../lib/frameLayout";
@@ -14,6 +15,7 @@ import Inbox from "./Inbox";
 import AccountMenu from "./AccountMenu";
 import Icon from "../components/icons";
 import RibbonCover from "../components/RibbonCover";
+import { AppChoice } from "./AppChoice";
 import { vacuumFrom } from "../lib/celebrate";
 
 /** Shared lifecycle labels: what kind of feedback a project wants right now. */
@@ -127,6 +129,32 @@ export default function ProjectList({
     await renameProject({ projectId: id, name, userId: me._id, sessionToken: sessionToken() }).catch(() => {});
   };
 
+  // A monorepo picked at creation time: the apps found, and the workspace the
+  // project is destined for. Held here rather than resolved silently, because
+  // one repo with a web app and a mobile app is two projects, not one.
+  const [appChoice, setAppChoice] = useState<{
+    workspaceId: Id<"workspaces">;
+    apps: AppCandidate[];
+    suggested: string;
+  } | null>(null);
+
+  const createFrom = async (inspection: RepoInspection, workspaceId: Id<"workspaces">) => {
+    const projectId = await create({
+      name: inspection.name,
+      createdBy: me._id,
+      workspaceId,
+      visibility: "team",
+      gitRemote: inspection.gitRemote,
+      framework: inspection.framework,
+      brandColors: inspection.brandColors,
+      frames: layoutFrames(inspection),
+    });
+    // The creator's working copy is the one we just inspected.
+    await linkRepo({ projectId, userId: me._id, repoPath: inspection.repoPath, machineId: machineId ?? undefined, sessionToken: sessionToken() });
+    setAppChoice(null);
+    setNav({ screen: "project", projectId, view: "canvas" });
+  };
+
   const addProject = async (workspaceId: Id<"workspaces">) => {
     if (adding) return;
     if (!window.commons) {
@@ -137,19 +165,15 @@ export default function ProjectList({
     try {
       const inspection = await window.commons.pickRepo();
       if (!inspection) return;
-      const projectId = await create({
-        name: inspection.name,
-        createdBy: me._id,
-        workspaceId,
-        visibility: "team",
-        gitRemote: inspection.gitRemote,
-        framework: inspection.framework,
-        brandColors: inspection.brandColors,
-        frames: layoutFrames(inspection),
-      });
-      // The creator's working copy is the one we just inspected.
-      await linkRepo({ projectId, userId: me._id, repoPath: inspection.repoPath, machineId: machineId ?? undefined, sessionToken: sessionToken() });
-      setNav({ screen: "project", projectId, view: "canvas" });
+      // inspectRepo already descends into a monorepo and adopts its best guess.
+      // Ask before that guess becomes the project: the alternative is someone
+      // expecting a phone app and getting six web pages with no explanation.
+      const apps = await window.commons.listRepoApps(inspection.repoPath).catch(() => []);
+      if (apps.length > 1) {
+        setAppChoice({ workspaceId, apps, suggested: inspection.repoPath });
+        return;
+      }
+      await createFrom(inspection, workspaceId);
     } finally {
       setAdding(false);
     }
@@ -648,6 +672,14 @@ export default function ProjectList({
         );
       })}
       </div>
+      {appChoice && (
+        <AppChoice
+          apps={appChoice.apps}
+          suggested={appChoice.suggested}
+          onChoose={(inspection) => createFrom(inspection, appChoice.workspaceId)}
+          onCancel={() => setAppChoice(null)}
+        />
+      )}
     </div>
   );
 }

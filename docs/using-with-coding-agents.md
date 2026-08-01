@@ -8,7 +8,7 @@ Commons lives at [trycommons.app](https://www.trycommons.app). The Mac app is wh
 
 1. Open Commons, pick your workspace section, click **+ New project**, and choose the repo folder your agent works in.
 2. Next.js, Expo, and Vite projects are auto-discovered: every route lands as a live frame on the shared canvas, clustered into sections derived from your router.
-   - **Monorepos work**: pick the repo root and Commons descends into the app folder (`frontend/`, `web/`, whatever holds the app) and runs the dev server there. Web frameworks win over mobile when a repo has both.
+   - **Monorepos work**: pick the repo root and Commons descends into the app folder (`frontend/`, `web/`, whatever holds the app) and runs the dev server there. If the repo holds more than one app, it asks which one this project is rather than choosing for you — a web app and a mobile app are two projects, so add the repo twice and pick a different app each time.
    - **Fresh clone?** If `node_modules` is missing when a server first starts, Commons installs dependencies with your detected package manager before starting, so a teammate who just cloned does not hit a half-running server.
 3. Anything else that serves HTTP: drop a `commons.json` in the repo root and it becomes a first-class project:
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
-import type { AppCandidate, AgentSessionEvent, AgentSessionInfo, DevServerStatus, GitRepoStatus } from "@commons/shared";
+import type { AgentSessionEvent, AgentSessionInfo, DevServerStatus, GitRepoStatus } from "@commons/shared";
 import { buildDeepLink } from "@commons/shared";
 import type { Nav } from "../App";
 import type { ThreadWithMessages } from "../comments/types";
@@ -381,29 +381,6 @@ function FlowReviewPanel({
 }
 
 /**
- * The `linking` config a classic React Navigation app needs before its screens
- * have web addresses. Generated from the screens actually found, kebab-cased,
- * so it can be pasted onto the NavigationContainer as-is.
- */
-function buildLinkingSnippet(screens: string[]): string {
-  const entries = screens
-    .map((name) => `      ${name}: "${name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()}",`)
-    .join("\n");
-  return [
-    "<NavigationContainer",
-    "  linking={{",
-    '    prefixes: ["myapp://"],',
-    "    config: {",
-    "      screens: {",
-    entries,
-    "      },",
-    "    },",
-    "  }}",
-    ">",
-  ].join("\n");
-}
-
-/**
  * The deploy log as a version history. On hosts with immutable per-deploy
  * URLs every row is an openable old version of the app, so each entry is a
  * link, not a line item. previewUrl says "now"; this is "and before that".
@@ -456,6 +433,7 @@ function UrlSettingBody({
   learnedAt,
   connection,
   onDiagnose,
+  onSignIn,
   validate,
   onSave,
 }: {
@@ -470,6 +448,8 @@ function UrlSettingBody({
   connection?: string | null;
   /** Opens the full diagnosis, for when the one-line note isn't the answer. */
   onDiagnose?: () => void;
+  /** Opens the app full-size so a person can sign in once for every frame. */
+  onSignIn?: () => void;
   validate: (v: string) => string | null;
   onSave: (v: string) => Promise<void>;
 }) {
@@ -486,6 +466,17 @@ function UrlSettingBody({
   const diagnoseLink = onDiagnose ? (
     <button className="btn ghost diagnose-link" onClick={onDiagnose}>
       Check connection…
+    </button>
+  ) : null;
+  /**
+   * Screens behind a login all render the login screen, which reads as a
+   * broken canvas rather than a working app doing what it should. Every frame
+   * and the prototype share one browser session, so signing in once anywhere
+   * fixes all of them — but nothing said so, and there was no path to it.
+   */
+  const signInLink = onSignIn ? (
+    <button className="btn ghost diagnose-link" onClick={onSignIn}>
+      Sign in to previews…
     </button>
   ) : null;
 
@@ -971,6 +962,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     sessionToken: sessionToken(),
   });
   const [connectionOpen, setConnectionOpen] = useState(false);
+  // Shown after "Sign in to previews…" sends someone to the full-size app.
+  const [signInHint, setSignInHint] = useState(false);
   // Flow view: edges from recorded tester navigation; positions computed as
   // a layered left-to-right graph. Only queried while the view is open.
   // State frames (Flow v2) live only in the flow view; keep them off the
@@ -1024,67 +1017,11 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     return null;
   })();
 
-  // Every runnable app in this repo. A monorepo has more than one, and the
-  // picker below is how the user learns which one they're looking at.
-  const [repoApps, setRepoApps] = useState<AppCandidate[]>([]);
-  const [repoNote, setRepoNote] = useState<string | null>(null);
-  const [linkingSnippet, setLinkingSnippet] = useState<string | null>(null);
-  useEffect(() => {
-    if (!repoPath || !window.commons?.listRepoApps) {
-      setRepoApps([]);
-      return;
-    }
-    let cancelled = false;
-    void window.commons
-      .listRepoApps(repoPath)
-      .then((apps) => {
-        if (!cancelled) setRepoApps(apps);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [repoPath]);
-
-  /** Point this project at a different app in the same repo, and re-discover. */
-  const switchToApp = async (appPath: string) => {
-    if (!window.commons) return;
-    const inspection = await window.commons.inspectRepo(appPath);
-    await linkRepo({
-      projectId: nav.projectId,
-      userId: me._id,
-      repoPath: inspection.repoPath,
-      machineId: machineId ?? undefined,
-      sessionToken: sessionToken(),
-    });
-    // Only replace the canvas when the new app actually yielded screens.
-    // Expo apps without expo-router (classic React Navigation) define screens
-    // in JS, which cannot be enumerated from the filesystem — switching to one
-    // must not blank the project.
-    if (inspection.routes.length > 0) {
-      await rediscover({
-        projectId: nav.projectId,
-        framework: inspection.framework,
-        brandColors: inspection.brandColors,
-        frames: layoutFrames(inspection),
-        userId: me._id,
-        sessionToken: sessionToken(),
-      });
-      setRepoNote(null);
-      setOpenSetting(null);
-    } else if (inspection.navigatorScreens && inspection.navigatorScreens.length > 0) {
-      // The screens were found; they just have no web addresses. Name them, so
-      // it's clear discovery worked and only the linking config is missing.
-      setRepoNote(
-        `Found ${inspection.navigatorScreens.length} screens (${inspection.navigatorScreens.slice(0, 3).join(", ")}…), but this app has no linking config, so they share one web address. Add one and Commons can draw them separately.`
-      );
-      setLinkingSnippet(buildLinkingSnippet(inspection.navigatorScreens));
-    } else {
-      setRepoNote(
-        "Linked, but Commons can't read this app's screens — it doesn't use file-based routing. List them in commons.json to put them on the canvas."
-      );
-    }
-  };
+  // Which app in a monorepo a project points at is decided once, when the
+  // project is created (see AppChoice). An open project deliberately has no
+  // switcher: repointing live code swapped one app's screens for another's
+  // and left frames from both drawn over each other. One repo, many apps
+  // means many projects.
 
   const [vercelProject, setVercelProject] = useState<string | null>(null);
   useEffect(() => {
@@ -1946,46 +1883,6 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                   <span className="setting-value" title={repoPath}>
                     {repoPath}
                   </span>
-                  {repoApps.length > 1 && (
-                    <>
-                      <span className="hint">
-                        This repo has {repoApps.length} apps. You're looking at{" "}
-                        {repoApps.find((a) => a.path === repoPath)?.label ?? "one of them"}.
-                      </span>
-                      <div className="repo-apps">
-                        {repoApps.map((app) => {
-                          const current = app.path === repoPath;
-                          return (
-                            <button
-                              key={app.path}
-                              className={`repo-app ${current ? "on" : ""}`}
-                              disabled={current}
-                              title={app.path}
-                              onClick={() => void switchToApp(app.path)}
-                            >
-                              <span className="repo-app-name">{app.label}</span>
-                              <span className="repo-app-kind">
-                                {app.framework === "expo" ? "mobile" : app.framework}
-                              </span>
-                              {current && <span className="repo-app-current">showing</span>}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </>
-                  )}
-                  {repoNote && <span className="form-error">{repoNote}</span>}
-                  {linkingSnippet && (
-                    <>
-                      <pre className="linking-snippet">{linkingSnippet}</pre>
-                      <button
-                        className="btn ghost"
-                        onClick={() => void navigator.clipboard.writeText(linkingSnippet)}
-                      >
-                        Copy linking config
-                      </button>
-                    </>
-                  )}
                   <div className="reveal-form-row">
                     <button className="btn ghost" onClick={() => void locateRepo()}>
                       Change folder…
@@ -2025,6 +1922,15 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             learnedAt={project.lastDeployAt}
             connection={previewConnectionNote}
             onDiagnose={() => setConnectionOpen(true)}
+            onSignIn={
+              project.previewUrl
+                ? () => {
+                    setOpenSetting(null);
+                    setNav({ ...nav, view: "prototype" });
+                    setSignInHint(true);
+                  }
+                : undefined
+            }
             validate={(url) => (/^https?:\/\/.+/.test(url) ? null : "Needs a full https:// link.")}
             onSave={async (url) => {
               await setPreviewUrl({
@@ -2145,6 +2051,26 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           <span>A newer version of the app just deployed — these frames are showing the previous one.</span>
           <button className="btn" onClick={reloadFrames}>
             Reload (R)
+          </button>
+        </div>
+      )}
+      {signInHint && (
+        <div className="nudge-banner">
+          <span>
+            Sign in here once. Every screen on the canvas shares this session, so they'll all load signed in.
+          </span>
+          <button
+            className="btn"
+            onClick={() => {
+              setSignInHint(false);
+              setNav({ ...nav, view: "canvas" });
+              reloadFrames();
+            }}
+          >
+            Done — reload screens
+          </button>
+          <button className="btn ghost" onClick={() => setSignInHint(false)}>
+            ✕
           </button>
         </div>
       )}

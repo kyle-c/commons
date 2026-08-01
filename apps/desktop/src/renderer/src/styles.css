@@ -3744,9 +3744,16 @@ kbd {
 }
 
 /* ── Monorepo app picker ─────────────────────────────────────────────────
-   Which app in this repo am I looking at? A repo with a web app and a
-   mobile app has two right answers; the list names them and marks the one
-   in view rather than choosing silently. */
+   Which app in this repo is this project? Asked once, at creation, when a
+   repo turns out to hold more than one app — a web app and a mobile app are
+   two right answers, and picking silently is how you end up looking at web
+   pages when you expected a phone. */
+/* In a dialog the form sits under a header, so it takes the card's gutters
+   rather than the popover's tighter ones. */
+.overlay-card .reveal-form {
+  padding: 12px 16px 16px;
+  gap: 8px;
+}
 .repo-apps {
   display: flex;
   flex-direction: column;
@@ -3780,10 +3787,12 @@ kbd {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
+/* "suggested" / "reading…" — a recommendation and a progress note, not a
+   success, so they take the app's accent rather than the green. */
 .repo-app-current {
   margin-left: auto;
   font-size: var(--text-xs);
-  color: var(--success);
+  color: var(--accent);
 }
 
 /* The linking config a classic navigator needs — shown to be copied, so it
