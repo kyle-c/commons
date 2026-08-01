@@ -17,7 +17,19 @@ export interface PanelSession {
   startedAt?: number;
 }
 
+/** The last failure text in a transcript, for matching setup problems. */
+function transcriptError(events: AgentSessionEvent[]): string {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const event = events[i];
+    if (event.type === "status" && event.error) return event.error;
+    if (event.type === "result" && !event.ok) return event.summary;
+  }
+  return "";
+}
+
 interface Props {
+  /** The project's GitHub remote, for the setup deep links. */
+  gitRemote?: string;
   sessions: PanelSession[];
   /** Ordered transcript of the active session. */
   transcript: AgentSessionEvent[];
@@ -190,35 +202,91 @@ function DraftActions({
  * never started" is indistinguishable from "it is booting" — the honest UI
  * for that ambiguity is the setup checklist, which is also the fix.
  */
-function CloudSetupHint({ branch }: { branch?: string }) {
-  const [copied, setCopied] = useState<string | null>(null);
+function openUrl(url: string) {
+  if (window.commons) void window.commons.openExternal(url);
+  else window.open(url, "_blank", "noopener");
+}
+
+/**
+ * One-time cloud-agent setup, without a terminal.
+ *
+ * The two steps are a file and a secret, and GitHub can prefill the form for
+ * both: /new/<branch>?filename=&value= opens its editor with the workflow
+ * already written, and /settings/secrets/actions/new opens the secret form.
+ * So this is three clicks and a paste — no shell, no file manipulation, and
+ * the API key goes straight from Anthropic to the repo without passing
+ * through Commons, which is the reason we don't just collect it here.
+ */
+function CloudSetupHint({ branch, gitRemote }: { branch?: string; gitRemote?: string }) {
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
   const site = window.location.origin.includes("convex.site")
     ? window.location.origin
     : "https://rapid-anteater-106.convex.site";
-  const copy = (key: string, text: string) => {
-    void navigator.clipboard.writeText(text);
-    setCopied(key);
-    window.setTimeout(() => setCopied(null), 1600);
+  const repo = gitRemote
+    ?.replace(/\.git$/, "")
+    .replace(/^git@github\.com:/, "")
+    .replace(/^https?:\/\/github\.com\//, "")
+    .replace(/\/+$/, "");
+
+  const addWorkflow = async () => {
+    if (!repo) return;
+    setBusy(true);
+    try {
+      // Prefill GitHub's new-file editor with the workflow itself, so the
+      // whole step is "click Commit".
+      const yaml = await fetch(`${site}/setup/commons-agent.yml`).then((r) => r.text());
+      const url =
+        `https://github.com/${repo}/new/main?filename=.github/workflows/commons-agent.yml` +
+        `&value=${encodeURIComponent(yaml)}`;
+      openUrl(url);
+    } catch {
+      openUrl(`https://github.com/${repo}/new/main?filename=.github/workflows/commons-agent.yml`);
+    } finally {
+      setBusy(false);
+    }
   };
-  const curl = `mkdir -p .github/workflows && curl -fsSL ${site}/setup/commons-agent.yml -o .github/workflows/commons-agent.yml`;
+
   return (
     <div className="agent-item tool cloud-setup">
-      <p>
-        Dispatched to GitHub. If nothing appears in a minute, the repo likely needs its one-time cloud-agent setup:
-      </p>
+      <p>This repo needs its one-time cloud-agent setup. Two steps, both in the browser:</p>
       <ol>
         <li>
-          Add the workflow file{" "}
-          <button className="btn ghost" onClick={() => copy("wf", curl)}>
-            {copied === "wf" ? "Copied" : "Copy command"}
+          <button className="btn ghost" disabled={!repo || busy} onClick={() => void addWorkflow()}>
+            {busy ? "Opening…" : "Add the workflow file ↗"}
           </button>
+          <span className="hint"> opens GitHub with it written for you — just commit.</span>
         </li>
         <li>
-          Add an <code>ANTHROPIC_API_KEY</code> secret under the repo's Settings → Secrets → Actions.
+          <button className="btn ghost" onClick={() => openUrl("https://console.anthropic.com/settings/keys")}>
+            Get an API key ↗
+          </button>
+          <span className="hint"> then </span>
+          <button
+            className="btn ghost"
+            disabled={!repo}
+            onClick={() => openUrl(`https://github.com/${repo}/settings/secrets/actions/new`)}
+          >
+            add it to the repo ↗
+          </button>
+          <span className="hint">
+            {" "}
+            naming it{" "}
+            <button
+              className="btn ghost"
+              onClick={() => {
+                void navigator.clipboard.writeText("ANTHROPIC_API_KEY");
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1600);
+              }}
+            >
+              {copied ? "Copied" : "ANTHROPIC_API_KEY"}
+            </button>
+          </span>
         </li>
       </ol>
       <p>
-        Then send the thread to the agent again. Runs are visible in the repo's Actions tab
+        Then send the thread to the agent again. Runs appear in the repo's Actions tab
         {branch ? <> and push to <code>{branch}</code></> : null}.
       </p>
     </div>
@@ -236,6 +304,7 @@ export default function AgentPanel({
   onCompareDraft,
   repoPath,
   onReconcile,
+  gitRemote,
 }: Props) {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -315,9 +384,10 @@ export default function AgentPanel({
             {active.routePath && <span className="route">{active.routePath}</span>}
           </div>
           <div className="agent-transcript" ref={scrollRef}>
-            {active.runner === "actions" && active.status === "starting" && (
-              <CloudSetupHint branch={active.branch} />
-            )}
+            {active.runner === "actions" &&
+              (active.status === "starting" || /api[- ]?key/i.test(transcriptError(transcript))) && (
+                <CloudSetupHint branch={active.branch} gitRemote={gitRemote} />
+              )}
             {transcript.length === 0 && <div className="agent-item tool">Starting session…</div>}
             {transcript.map((event, i) => (
               <TranscriptItem
