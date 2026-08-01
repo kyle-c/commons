@@ -3625,3 +3625,33 @@ kbd {
   cursor: pointer;
   white-space: nowrap;
 }
+
+/* ── Flow view ───────────────────────────────────────────────────────────
+   The edge layer lives in stage coordinates; overflow must stay visible or
+   pan clips every path at the origin tile. */
+.flow-edges {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.flow-edge-label {
+  fill: var(--text-secondary);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  paint-order: stroke;
+  stroke: var(--bg-canvas);
+  stroke-width: 4px;
+}
+.flow-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-panel);
+}
+.flow-bar .hint {
+  flex: 1;
+}

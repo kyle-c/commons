@@ -76,6 +76,14 @@ interface Props {
   };
   /** Approved design-rationale annotations (NAR-2) — the Notes layer. */
   annotations?: { _id: string; frameId?: string | null; text: string; inferred: boolean }[];
+  /**
+   * Flow view: when set, frames sit at these computed positions (drags are
+   * disabled; the layout is derived, not owned) and flowEdges draw beneath
+   * them. Everything else — pins, threads, zoom, guests — behaves as on the
+   * canvas, which is the point of rendering flows with the same component.
+   */
+  positionOverride?: Record<string, { x: number; y: number }>;
+  flowEdges?: { _id: string; fromFrameId: string; toFrameId: string; weight: number; label?: string }[];
 }
 
 /**
@@ -133,6 +141,56 @@ function routeMatches(pattern: string, path: string): boolean {
 }
 
 type CanvasFrame = Props["frames"][number];
+
+/**
+ * Flow edges: SVG in stage coordinates, so pan and zoom carry them with the
+ * frames for free. Forward edges leave the source's right side and enter the
+ * target's left; back edges (returns, cycles) sag underneath so the two
+ * directions never overprint. Stroke width grows with the log of how many
+ * tester sessions took the path — the trunk routes read as trunks.
+ */
+function FlowEdgeLayer({
+  edges,
+  frames,
+}: {
+  edges: { _id: string; fromFrameId: string; toFrameId: string; weight: number; label?: string }[];
+  frames: { id: string; x: number; y: number; width: number; height: number }[];
+}) {
+  const byId = new Map(frames.map((f) => [f.id, f]));
+  return (
+    <svg className="flow-edges" width="1" height="1">
+      <defs>
+        <marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 1 L 9 5 L 0 9 z" fill="var(--accent)" />
+        </marker>
+      </defs>
+      {edges.map((edge) => {
+        const from = byId.get(edge.fromFrameId);
+        const to = byId.get(edge.toFrameId);
+        if (!from || !to) return null;
+        const forward = to.x >= from.x + from.width * 0.5;
+        const x1 = forward ? from.x + from.width : from.x + from.width * 0.5;
+        const y1 = forward ? from.y + from.height / 2 : from.y + from.height;
+        const x2 = forward ? to.x : to.x + to.width * 0.5;
+        const y2 = forward ? to.y + to.height / 2 : to.y + to.height;
+        const path = forward
+          ? `M ${x1} ${y1} C ${x1 + (x2 - x1) / 2} ${y1}, ${x1 + (x2 - x1) / 2} ${y2}, ${x2} ${y2}`
+          : `M ${x1} ${y1} C ${x1} ${y1 + 160}, ${x2} ${y2 + 160}, ${x2} ${y2 + 6}`;
+        const midX = (x1 + x2) / 2;
+        const midY = forward ? (y1 + y2) / 2 : Math.max(y1, y2) + 120;
+        const width = 1.5 + Math.log2(1 + edge.weight);
+        return (
+          <g key={edge._id} className="flow-edge">
+            <path d={path} fill="none" stroke="var(--accent)" strokeOpacity="0.55" strokeWidth={width} markerEnd="url(#flow-arrow)" />
+            <text x={midX} y={midY - 8} textAnchor="middle" className="flow-edge-label">
+              {edge.label ?? `${edge.weight}×`}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
 
 /**
  * The frames themselves, memoized: nothing in here reads the viewport, so
@@ -278,6 +336,8 @@ const FrameLayer = memo(function FrameLayer({
 export default function CanvasView({
   me,
   guestToken,
+  positionOverride,
+  flowEdges,
   projectId,
   frames,
   threads,
@@ -463,7 +523,7 @@ export default function CanvasView({
   }, []);
 
   const framePos = (frame: Doc<"frames">) =>
-    (tidyOn ? tidyPos[frame._id] : localPos[frame._id]) ?? { x: frame.x, y: frame.y };
+    positionOverride?.[frame._id] ?? (tidyOn ? tidyPos[frame._id] : localPos[frame._id]) ?? { x: frame.x, y: frame.y };
 
   /**
    * Commanded viewport moves (⌘±, Fit) glide instead of snapping — a short
@@ -748,7 +808,7 @@ export default function CanvasView({
   };
 
   const startFrameDrag = (frame: Doc<"frames">, e: React.MouseEvent) => {
-    if (!me || commentMode || e.button !== 0) return;
+    if (!me || commentMode || e.button !== 0 || positionOverride) return;
     e.preventDefault();
     e.stopPropagation();
     if (tidyRef.current) {
@@ -968,9 +1028,20 @@ export default function CanvasView({
           </div>
         ))}
 
+        {flowEdges && (
+          <FlowEdgeLayer
+            edges={flowEdges}
+            frames={frames.map((f) => ({
+              id: f._id,
+              width: f.width,
+              height: f.height,
+              ...(positionOverride?.[f._id] ?? { x: f.x, y: f.y }),
+            }))}
+          />
+        )}
         <FrameLayer
           frames={frames}
-          localPos={tidyOn ? tidyPos : localPos}
+          localPos={positionOverride ?? (tidyOn ? tidyPos : localPos)}
           focusedFrame={focusedFrame}
           openCounts={openCounts}
           devStatus={devStatus}

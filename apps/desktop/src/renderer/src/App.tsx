@@ -21,7 +21,7 @@ export type Nav =
   | {
       screen: "project";
       projectId: Id<"projects">;
-      view: "canvas" | "prototype";
+      view: "canvas" | "prototype" | "flow";
       frameId?: Id<"frames">;
       threadId?: Id<"threads">;
     };
@@ -53,7 +53,7 @@ export default function App() {
       return {
         screen: "project",
         projectId: projectId as Id<"projects">,
-        view: params.get("view") === "prototype" ? "prototype" : "canvas",
+        view: params.get("view") === "prototype" ? "prototype" : params.get("view") === "flow" ? "flow" : "canvas",
         threadId: (params.get("thread") as Id<"threads">) ?? undefined,
         frameId: (params.get("frame") as Id<"frames">) ?? undefined,
       };

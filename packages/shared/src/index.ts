@@ -48,7 +48,7 @@ export type DevServerStatus =
 /** Payload of a parsed commons:// deep link. */
 export interface DeepLink {
   projectId: string;
-  view: "canvas" | "prototype";
+  view: "canvas" | "prototype" | "flow";
   frameId?: string;
   threadId?: string;
 }
@@ -234,7 +234,7 @@ export interface AuthCallback {
 export type MenuAction =
   | { type: "new-project" }
   | { type: "open-project"; projectId: string }
-  | { type: "set-view"; view: "canvas" | "prototype" }
+  | { type: "set-view"; view: "canvas" | "prototype" | "flow" }
   | { type: "cycle-tab"; dir: 1 | -1 }
   | { type: "zoom"; dir: "in" | "out" | "fit" }
   | { type: "shortcuts" }

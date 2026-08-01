@@ -508,6 +508,20 @@ export default defineSchema({
   // One tester's run through a test. Task summaries are computed in the
   // harness page and posted at each task boundary; raw events land in
   // testEvents. instrumented flips true once the in-app snippet phones home.
+  // Flow view (v1): a directed edge between two frames, earned from evidence.
+  // source records where an edge came from ("tests" = derived from recorded
+  // tester navigation; "manual" reserved for hand-drawn edges later), so
+  // provenance survives mixing and re-derivation can replace only its own.
+  flowEdges: defineTable({
+    projectId: v.id("projects"),
+    fromFrameId: v.id("frames"),
+    toFrameId: v.id("frames"),
+    label: v.optional(v.string()),
+    source: v.union(v.literal("tests"), v.literal("manual")),
+    weight: v.number(),
+    updatedAt: v.number(),
+  }).index("by_project", ["projectId"]),
+
   testSessions: defineTable({
     testId: v.id("tests"),
     startedAt: v.number(),

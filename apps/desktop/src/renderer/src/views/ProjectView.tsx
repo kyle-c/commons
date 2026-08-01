@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
@@ -21,6 +21,7 @@ import { usePublicSiteUrl } from "../lib/publicUrl";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
+import { flowPositions } from "../lib/flowLayout";
 import { useClickOutside } from "../lib/useClickOutside";
 import { useMachineId } from "../lib/machine";
 import { getRecents, pushRecent } from "../lib/recents";
@@ -824,6 +825,24 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     sessionToken: sessionToken(),
   });
   const [connectionOpen, setConnectionOpen] = useState(false);
+  // Flow view: edges from recorded tester navigation; positions computed as
+  // a layered left-to-right graph. Only queried while the view is open.
+  const flowEdges = useQuery(
+    api.flows.edges,
+    nav.view === "flow" ? { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() } : "skip"
+  );
+  const deriveFlow = useMutation(api.flows.deriveFromTests);
+  const [deriving, setDeriving] = useState(false);
+  const flowPos = useMemo(
+    () =>
+      nav.view === "flow" && flowEdges
+        ? flowPositions(
+            frames.map((f) => ({ id: f._id, width: f.width, height: f.height, routePath: f.routePath ?? undefined })),
+            flowEdges
+          )
+        : undefined,
+    [nav.view, flowEdges, frames]
+  );
   const [publishOpen, setPublishOpen] = useState(false);
   const previewConnectionNote = (() => {
     if (!githubStatus) return null;
@@ -1476,6 +1495,17 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             >
               <Icon name={nav.view === "prototype" ? protoDevice.icon : "play"} />
             </button>
+            <button
+              className={nav.view === "flow" ? "on" : ""}
+              aria-label="Flow"
+              title="Flow: every path through the app, drawn from real tester sessions"
+              onClick={() => {
+                setDeviceMenuOpen(false);
+                setNav({ ...nav, view: "flow" });
+              }}
+            >
+              <Icon name="branch" />
+            </button>
           </div>
           {deviceMenuOpen && (
             <div className="device-menu">
@@ -1861,7 +1891,46 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         </div>
       )}
 
-      {nav.view === "canvas" ? (
+      {nav.view === "flow" ? (
+        <>
+          <div className="flow-bar">
+            <span className="hint">
+              {flowEdges === undefined
+                ? "Loading paths…"
+                : flowEdges.length === 0
+                  ? "No paths yet. Edges are derived from recorded tester sessions, never guessed."
+                  : `${flowEdges.length} path${flowEdges.length === 1 ? "" : "s"} from tester sessions, thickness = how many took it.`}
+            </span>
+            <button
+              className="btn ghost"
+              disabled={deriving}
+              onClick={async () => {
+                setDeriving(true);
+                try {
+                  await deriveFlow({ projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
+                } finally {
+                  setDeriving(false);
+                }
+              }}
+            >
+              {deriving ? "Deriving…" : "Derive from tests"}
+            </button>
+          </div>
+          <CanvasView
+            me={me}
+            projectId={nav.projectId}
+            frames={frames}
+            threads={threads}
+            users={users}
+            mentionUsers={mentionUsers}
+            devStatus={{ state: "stopped" }}
+            previewUrl={null}
+            positionOverride={flowPos}
+            flowEdges={flowEdges ?? []}
+            onSendToAgent={repoPath || project.gitRemote ? sendThreadToAgent : undefined}
+          />
+        </>
+      ) : nav.view === "canvas" ? (
         <CanvasView
           me={me}
           projectId={nav.projectId}

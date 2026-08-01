@@ -100,6 +100,11 @@ function template(): MenuItemConstructorOptions[] {
           accelerator: "CmdOrCtrl+2",
           click: () => send({ type: "set-view", view: "prototype" }),
         },
+        {
+          label: "Flow",
+          accelerator: "CmdOrCtrl+3",
+          click: () => send({ type: "set-view", view: "flow" }),
+        },
         { type: "separator" },
         {
           label: "Zoom In",

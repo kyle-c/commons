@@ -18,6 +18,7 @@ import type * as config from "../config.js";
 import type * as emails from "../emails.js";
 import type * as errors from "../errors.js";
 import type * as figma from "../figma.js";
+import type * as flows from "../flows.js";
 import type * as github from "../github.js";
 import type * as githubApp from "../githubApp.js";
 import type * as http from "../http.js";
@@ -52,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   emails: typeof emails;
   errors: typeof errors;
   figma: typeof figma;
+  flows: typeof flows;
   github: typeof github;
   githubApp: typeof githubApp;
   http: typeof http;
