@@ -1,25 +1,29 @@
 /**
- * The send-off: a project card bursts into its own brand colors on archive.
+ * The send-off: an archived project card gets pulled into a small void.
  *
  * Archiving is the quiet death of the grid, a card just stops being there, so
- * this gives it a moment instead. The particles take the project's colors,
- * because it should feel like THIS project going out, not a generic effect.
+ * this gives it a moment instead: a point of nothing opens behind the card,
+ * the card is drawn in, a few flecks of its own brand colors follow, and it
+ * closes with a soft thup. Vacuum rather than explosion, because archiving is
+ * a putting-away, not a destruction; the project still exists, share links
+ * stay alive, and the animation should say "tidied into somewhere" rather
+ * than "blown to bits".
  *
  * Design constraints that shaped it:
- * - The overlay is independent of the card's DOM life. Convex reactivity
- *   unmounts the card as soon as the mutation lands, and the burst must not
- *   care. Rect in, pixels out.
- * - No assets. The sound is synthesized in Web Audio, so nothing is added to
- *   the bundle and there is no license to track. It also means the pop varies
- *   slightly every time, which samples never do.
- * - prefers-reduced-motion skips the whole thing. A vestibular trigger is a
+ * - The card is CLONED into a fixed overlay and the original hidden. Convex
+ *   reactivity unmounts the real card whenever the mutation lands, and the
+ *   clone must not care. The original's visibility is restored afterwards, so
+ *   a failed archive never leaves an invisible card.
+ * - No assets. The whoosh is synthesized in Web Audio: nothing in the bundle,
+ *   no license, and it varies slightly every time the way samples never do.
+ * - prefers-reduced-motion skips the theatrics. A vestibular trigger is a
  *   high price for a joke.
  * - Everything is fire-and-forget and wrapped against failure: a broken
  *   AudioContext must never break archiving.
  */
 
-const PARTICLES = 26;
-const DURATION_MS = 850;
+const DURATION_MS = 560;
+const FLECKS = 14;
 
 function reducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -30,71 +34,78 @@ function cssColor(name: string, fallback: string): string {
   return value || fallback;
 }
 
-/** A short pop with a little glitter after it. Roughly 0.4s, deliberately quiet. */
-function playPop(): void {
+/**
+ * A vacuum, in three parts: air rushing in (noise swept downward), the pull
+ * (a sine gliding low), and the void snapping shut (a soft thup). ~0.5s,
+ * deliberately quiet.
+ */
+function playVacuum(): void {
   try {
     const ctx = new AudioContext();
     const master = ctx.createGain();
-    master.gain.value = 0.14;
+    master.gain.value = 0.16;
     master.connect(ctx.destination);
     const now = ctx.currentTime;
 
-    // The body of the pop: a sine dropping fast, like a cork.
-    const body = ctx.createOscillator();
-    body.type = "sine";
-    body.frequency.setValueAtTime(320 + Math.random() * 60, now);
-    body.frequency.exponentialRampToValueAtTime(70, now + 0.13);
-    const bodyGain = ctx.createGain();
-    bodyGain.gain.setValueAtTime(1, now);
-    bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
-    body.connect(bodyGain).connect(master);
-    body.start(now);
-    body.stop(now + 0.18);
-
-    // A breath of filtered noise for the burst itself.
-    const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.09, ctx.sampleRate);
+    // Air: filtered noise whose center falls fast, swelling then cut off.
+    const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.42, ctx.sampleRate);
     const channel = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < channel.length; i += 1) channel[i] = (Math.random() * 2 - 1) * (1 - i / channel.length);
+    for (let i = 0; i < channel.length; i += 1) channel[i] = Math.random() * 2 - 1;
     const noise = ctx.createBufferSource();
     noise.buffer = noiseBuffer;
-    const noiseFilter = ctx.createBiquadFilter();
-    noiseFilter.type = "bandpass";
-    noiseFilter.frequency.value = 1800;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.Q.value = 1.1;
+    filter.frequency.setValueAtTime(2400 + Math.random() * 400, now);
+    filter.frequency.exponentialRampToValueAtTime(220, now + 0.4);
     const noiseGain = ctx.createGain();
-    noiseGain.gain.value = 0.5;
-    noise.connect(noiseFilter).connect(noiseGain).connect(master);
+    noiseGain.gain.setValueAtTime(0.0001, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.7, now + 0.3);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.44);
+    noise.connect(filter).connect(noiseGain).connect(master);
     noise.start(now);
 
-    // Three tiny blips, staggered, slightly random: the glitter falling.
-    [1240, 1660, 2080].forEach((freq, i) => {
-      const blip = ctx.createOscillator();
-      blip.type = "triangle";
-      blip.frequency.value = freq * (0.96 + Math.random() * 0.08);
-      const blipGain = ctx.createGain();
-      const at = now + 0.08 + i * 0.06;
-      blipGain.gain.setValueAtTime(0.0001, at);
-      blipGain.gain.exponentialRampToValueAtTime(0.25, at + 0.012);
-      blipGain.gain.exponentialRampToValueAtTime(0.001, at + 0.09);
-      blip.connect(blipGain).connect(master);
-      blip.start(at);
-      blip.stop(at + 0.1);
-    });
+    // Pull: a sine sliding from mid to low, the body being drawn in.
+    const pull = ctx.createOscillator();
+    pull.type = "sine";
+    pull.frequency.setValueAtTime(440 + Math.random() * 60, now);
+    pull.frequency.exponentialRampToValueAtTime(52, now + 0.38);
+    const pullGain = ctx.createGain();
+    pullGain.gain.setValueAtTime(0.0001, now);
+    pullGain.gain.exponentialRampToValueAtTime(0.35, now + 0.25);
+    pullGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+    pull.connect(pullGain).connect(master);
+    pull.start(now);
+    pull.stop(now + 0.44);
+
+    // Thup: the void closing behind it.
+    const thup = ctx.createOscillator();
+    thup.type = "sine";
+    thup.frequency.setValueAtTime(110, now + 0.4);
+    thup.frequency.exponentialRampToValueAtTime(60, now + 0.5);
+    const thupGain = ctx.createGain();
+    thupGain.gain.setValueAtTime(0.0001, now + 0.4);
+    thupGain.gain.exponentialRampToValueAtTime(0.5, now + 0.415);
+    thupGain.gain.exponentialRampToValueAtTime(0.001, now + 0.52);
+    thup.connect(thupGain).connect(master);
+    thup.start(now + 0.4);
+    thup.stop(now + 0.54);
 
     // Closing the context releases the hardware; some browsers cap how many
     // can exist, and a leak here would eventually silence the whole app.
-    window.setTimeout(() => void ctx.close().catch(() => {}), 600);
+    window.setTimeout(() => void ctx.close().catch(() => {}), 800);
   } catch {
     // No audio is an acceptable outcome; a thrown error here is not.
   }
 }
 
 /**
- * Burst from the element's rect. Safe to call as the element is unmounting.
- * `colors` should be the project's brand colors; theme tokens fill in when a
- * project has none.
+ * Pull the element into a void at its center. Safe to call as the element is
+ * unmounting. `colors` should be the project's brand colors; theme tokens
+ * fill in when a project has none.
  */
-export function explodeFrom(el: HTMLElement, colors: string[] = []): void {
-  playPop();
+export function vacuumFrom(el: HTMLElement, colors: string[] = []): void {
+  playVacuum();
   if (reducedMotion()) return;
 
   const rect = el.getBoundingClientRect();
@@ -103,60 +114,82 @@ export function explodeFrom(el: HTMLElement, colors: string[] = []): void {
   const palette = [
     ...colors.filter((c) => typeof c === "string" && c.length > 0),
     cssColor("--accent", "#7c9c7c"),
-    cssColor("--warning", "#d9a03f"),
-    cssColor("--success", "#58a86b"),
+    cssColor("--text-tertiary", "#8f8d80"),
   ];
 
   const overlay = document.createElement("div");
   overlay.className = "celebrate-overlay";
   document.body.appendChild(overlay);
 
-  // The ring: a fast expanding circle, the classic "something happened here".
-  const ring = document.createElement("div");
-  ring.className = "celebrate-ring";
-  ring.style.left = `${cx}px`;
-  ring.style.top = `${cy}px`;
-  overlay.appendChild(ring);
-  ring.animate(
+  // The void: opens fast, waits for the card, snaps shut.
+  const voidDot = document.createElement("div");
+  voidDot.className = "vacuum-void";
+  voidDot.style.left = `${cx}px`;
+  voidDot.style.top = `${cy}px`;
+  overlay.appendChild(voidDot);
+  voidDot.animate(
     [
-      { transform: "translate(-50%, -50%) scale(0.2)", opacity: 0.9 },
-      { transform: "translate(-50%, -50%) scale(1)", opacity: 0 },
+      { transform: "translate(-50%, -50%) scale(0)", opacity: 0 },
+      { transform: "translate(-50%, -50%) scale(1)", opacity: 1, offset: 0.25 },
+      { transform: "translate(-50%, -50%) scale(1)", opacity: 1, offset: 0.82 },
+      { transform: "translate(-50%, -50%) scale(0)", opacity: 0 },
     ],
-    { duration: 420, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }
+    { duration: DURATION_MS + 140, easing: "cubic-bezier(0.4, 0, 0.2, 1)" }
   );
 
-  for (let i = 0; i < PARTICLES; i += 1) {
-    const particle = document.createElement("div");
-    particle.className = "celebrate-particle";
-    const size = 4 + Math.random() * 7;
-    particle.style.width = `${size}px`;
-    particle.style.height = `${size}px`;
-    particle.style.background = palette[i % palette.length];
-    if (Math.random() < 0.5) particle.style.borderRadius = "50%";
-    particle.style.left = `${cx + (Math.random() - 0.5) * rect.width * 0.5}px`;
-    particle.style.top = `${cy + (Math.random() - 0.5) * rect.height * 0.5}px`;
-    overlay.appendChild(particle);
+  // The card itself: a clone in the overlay, so reactivity can unmount the
+  // original mid-animation without the visual caring.
+  const ghost = el.cloneNode(true) as HTMLElement;
+  ghost.className = `${el.className} vacuum-ghost`;
+  ghost.style.left = `${rect.left}px`;
+  ghost.style.top = `${rect.top}px`;
+  ghost.style.width = `${rect.width}px`;
+  ghost.style.height = `${rect.height}px`;
+  overlay.appendChild(ghost);
+  el.style.visibility = "hidden";
 
-    // Radial burst, biased upward, then gravity wins. Keyframes sample the
-    // arc p(t) = v·t + ½g·t², which reads as physics at this duration.
+  const spin = (Math.random() < 0.5 ? -1 : 1) * (14 + Math.random() * 14);
+  ghost.animate(
+    [
+      { transform: "scale(1) rotate(0deg)", opacity: 1, easing: "cubic-bezier(0.5, 0, 0.9, 0.4)" },
+      { transform: `scale(0.82) rotate(${spin * 0.3}deg)`, opacity: 1, offset: 0.4 },
+      { transform: `scale(0.02) rotate(${spin}deg)`, opacity: 0.6 },
+    ],
+    { duration: DURATION_MS, easing: "cubic-bezier(0.6, 0, 0.95, 0.5)", fill: "forwards" }
+  );
+
+  // Flecks of the project's colors, caught in the draft and pulled in after.
+  for (let i = 0; i < FLECKS; i += 1) {
+    const fleck = document.createElement("div");
+    fleck.className = "celebrate-particle";
+    const size = 3 + Math.random() * 5;
+    fleck.style.width = `${size}px`;
+    fleck.style.height = `${size}px`;
+    fleck.style.background = palette[i % palette.length];
+    fleck.style.borderRadius = "50%";
+    fleck.style.left = `${cx}px`;
+    fleck.style.top = `${cy}px`;
+    overlay.appendChild(fleck);
+
     const angle = Math.random() * Math.PI * 2;
-    const speed = 90 + Math.random() * 200;
-    const vx = Math.cos(angle) * speed;
-    const vy = Math.sin(angle) * speed - 130;
-    const g = 620;
-    const t = DURATION_MS / 1000;
-    const at = (f: number) =>
-      `translate(${vx * t * f}px, ${vy * t * f + 0.5 * g * (t * f) ** 2}px) rotate(${f * (Math.random() < 0.5 ? -1 : 1) * 340}deg)`;
-    particle.animate(
+    const distance = 70 + Math.random() * 130;
+    const sx = Math.cos(angle) * distance;
+    const sy = Math.sin(angle) * distance;
+    const delay = Math.random() * 180;
+    fleck.animate(
       [
-        { transform: at(0), opacity: 1 },
-        { transform: at(0.35), opacity: 1 },
-        { transform: at(0.7), opacity: 0.9 },
-        { transform: at(1), opacity: 0 },
+        { transform: `translate(${sx}px, ${sy}px) scale(1)`, opacity: 0 },
+        { transform: `translate(${sx * 0.7}px, ${sy * 0.7}px) scale(0.9)`, opacity: 0.9, offset: 0.3 },
+        { transform: "translate(0, 0) scale(0.2)", opacity: 0 },
       ],
-      { duration: DURATION_MS, easing: "cubic-bezier(0.12, 0.6, 0.35, 1)" }
+      { duration: DURATION_MS - 60, delay, easing: "cubic-bezier(0.55, 0, 1, 0.45)", fill: "backwards" }
     );
   }
 
-  window.setTimeout(() => overlay.remove(), DURATION_MS + 80);
+  window.setTimeout(() => {
+    overlay.remove();
+    // If the archive failed, the card is still mounted and comes back; if it
+    // succeeded, the node is gone and this is a no-op.
+    el.style.visibility = "";
+  }, DURATION_MS + 180);
 }
