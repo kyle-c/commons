@@ -12,6 +12,7 @@ import type {
 const api: CommonsApi = {
   pickRepo: () => ipcRenderer.invoke("pick-repo"),
   inspectRepo: (repoPath) => ipcRenderer.invoke("inspect-repo", repoPath),
+  listRepoApps: (fromPath) => ipcRenderer.invoke("list-repo-apps", fromPath),
   startDevServer: (repoPath, name) => ipcRenderer.invoke("start-dev-server", repoPath, name),
   listDevServers: () => ipcRenderer.invoke("list-dev-servers"),
   detectExternalServers: (repoPaths) => ipcRenderer.invoke("detect-external-servers", repoPaths),

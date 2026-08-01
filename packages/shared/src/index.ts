@@ -16,6 +16,17 @@ export interface DiscoveredRoute {
   section?: string;
 }
 
+/** One runnable app inside a repo — a monorepo has several. */
+export interface AppCandidate {
+  /** Absolute path to the app folder. */
+  path: string;
+  /** Folder name, or the repo name when the app is at the root. */
+  label: string;
+  framework: "nextjs" | "expo" | "vite" | "custom" | "unknown";
+  /** package.json name, when it has one. */
+  name?: string;
+}
+
 /** Result of pointing Commons at a local repo. */
 export interface RepoInspection {
   repoPath: string;
@@ -36,6 +47,11 @@ export interface RepoInspection {
    * pattern cannot be derived here — only suggested.
    */
   vercel?: { projectName?: string };
+  /**
+   * Every app found in the repo, when there is more than one. Present so the
+   * UI can say which one it adopted and offer the others.
+   */
+  apps?: AppCandidate[];
 }
 
 /** Status of the dev server Commons runs for a project. */
@@ -293,6 +309,8 @@ export interface CommonsApi {
   getGitStatus(repoPath: string): Promise<GitRepoStatus | null>;
   /** Fast-forward-only pull; refuses dirty trees. */
   pullRepo(repoPath: string): Promise<{ ok: boolean; message: string }>;
+  /** Every runnable app in the repo containing this path (monorepo picker). */
+  listRepoApps(fromPath: string): Promise<AppCandidate[]>;
   /** Everything a commit-everything would sweep up, so the user sees it first. */
   pendingChanges(repoPath: string): Promise<{
     ok: boolean;

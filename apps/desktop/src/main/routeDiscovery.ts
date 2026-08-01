@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { DiscoveredRoute, RepoInspection } from "@commons/shared";
+import type { DiscoveredRoute, RepoInspection, AppCandidate } from "@commons/shared";
 
 const PAGE_FILES = ["page.tsx", "page.jsx", "page.ts", "page.js"];
 const PAGE_EXTS = [".tsx", ".jsx", ".ts", ".js"];
@@ -272,6 +272,60 @@ export async function readCommonsConfig(repoPath: string): Promise<CommonsConfig
   }
 }
 
+/** The git root at or above dir, so app discovery works from any subfolder. */
+async function gitRootOf(dir: string): Promise<string> {
+  let current = dir;
+  for (let i = 0; i < 8; i += 1) {
+    try {
+      await fs.stat(path.join(current, ".git"));
+      return current;
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+  }
+  return dir;
+}
+
+/**
+ * Every runnable app in a repo, newest question first: which one are you
+ * looking at? A monorepo with a web app and a mobile app has two right
+ * answers, and Commons must not pick one on the user's behalf without saying.
+ *
+ * Works from any path inside the repo (including an already-adopted
+ * subfolder), so the picker can still offer the siblings after a choice.
+ */
+export async function listRepoApps(fromPath: string): Promise<AppCandidate[]> {
+  const root = await gitRootOf(fromPath);
+  const found: AppCandidate[] = [];
+  const classify = (deps: Record<string, string>): RepoInspection["framework"] | null =>
+    deps.next ? "nextjs" : deps.vite ? "vite" : deps.expo || deps["react-native"] ? "expo" : null;
+
+  const read = async (dir: string): Promise<{ framework: RepoInspection["framework"]; name?: string } | null> => {
+    try {
+      const pkg = JSON.parse(await fs.readFile(path.join(dir, "package.json"), "utf8"));
+      const framework = classify({ ...pkg.dependencies, ...pkg.devDependencies });
+      return framework ? { framework, name: pkg.name } : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const atRoot = await read(root);
+  if (atRoot) found.push({ path: root, label: path.basename(root), ...atRoot });
+  try {
+    for (const entry of await fs.readdir(root, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "node_modules") continue;
+      const child = await read(path.join(root, entry.name));
+      if (child) found.push({ path: path.join(root, entry.name), label: entry.name, ...child });
+    }
+  } catch {
+    // Unreadable repo — whatever we already found stands.
+  }
+  return found;
+}
+
 export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
   let framework: RepoInspection["framework"] = "unknown";
   let name = path.basename(repoPath);
@@ -317,7 +371,12 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
     const rank = { nextjs: 0, vite: 1, expo: 2 } as Record<string, number>;
     candidates.sort((a, b) => rank[a.framework] - rank[b.framework] || a.path.localeCompare(b.path));
     if (candidates.length > 0) {
-      return inspectRepo(path.join(repoPath, candidates[0].path));
+      // Still adopt the top-ranked app so nothing regresses — but report the
+      // others. Silently choosing between a repo's web and mobile apps and
+      // never saying so is how you end up looking at six web pages when you
+      // expected a phone.
+      const adopted = await inspectRepo(path.join(repoPath, candidates[0].path));
+      return { ...adopted, apps: await listRepoApps(repoPath) };
     }
   }
 

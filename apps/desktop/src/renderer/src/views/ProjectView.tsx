@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
-import type { AgentSessionEvent, AgentSessionInfo, DevServerStatus, GitRepoStatus } from "@commons/shared";
+import type { AppCandidate, AgentSessionEvent, AgentSessionInfo, DevServerStatus, GitRepoStatus } from "@commons/shared";
 import { buildDeepLink } from "@commons/shared";
 import type { Nav } from "../App";
 import type { ThreadWithMessages } from "../comments/types";
@@ -985,6 +985,60 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     return null;
   })();
 
+  // Every runnable app in this repo. A monorepo has more than one, and the
+  // picker below is how the user learns which one they're looking at.
+  const [repoApps, setRepoApps] = useState<AppCandidate[]>([]);
+  const [repoNote, setRepoNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!repoPath || !window.commons?.listRepoApps) {
+      setRepoApps([]);
+      return;
+    }
+    let cancelled = false;
+    void window.commons
+      .listRepoApps(repoPath)
+      .then((apps) => {
+        if (!cancelled) setRepoApps(apps);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [repoPath]);
+
+  /** Point this project at a different app in the same repo, and re-discover. */
+  const switchToApp = async (appPath: string) => {
+    if (!window.commons) return;
+    const inspection = await window.commons.inspectRepo(appPath);
+    await linkRepo({
+      projectId: nav.projectId,
+      userId: me._id,
+      repoPath: inspection.repoPath,
+      machineId: machineId ?? undefined,
+      sessionToken: sessionToken(),
+    });
+    // Only replace the canvas when the new app actually yielded screens.
+    // Expo apps without expo-router (classic React Navigation) define screens
+    // in JS, which cannot be enumerated from the filesystem — switching to one
+    // must not blank the project.
+    if (inspection.routes.length > 0) {
+      await rediscover({
+        projectId: nav.projectId,
+        framework: inspection.framework,
+        brandColors: inspection.brandColors,
+        frames: layoutFrames(inspection),
+        userId: me._id,
+        sessionToken: sessionToken(),
+      });
+      setRepoNote(null);
+      setOpenSetting(null);
+    } else {
+      setRepoNote(
+        "Linked, but Commons can't read this app's screens automatically — it doesn't use file-based routing. List them in commons.json to put them on the canvas."
+      );
+    }
+  };
+
   const [vercelProject, setVercelProject] = useState<string | null>(null);
   useEffect(() => {
     if (!repoPath || !window.commons?.inspectRepo) return;
@@ -1819,6 +1873,35 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                   <span className="setting-value" title={repoPath}>
                     {repoPath}
                   </span>
+                  {repoApps.length > 1 && (
+                    <>
+                      <span className="hint">
+                        This repo has {repoApps.length} apps. You're looking at{" "}
+                        {repoApps.find((a) => a.path === repoPath)?.label ?? "one of them"}.
+                      </span>
+                      <div className="repo-apps">
+                        {repoApps.map((app) => {
+                          const current = app.path === repoPath;
+                          return (
+                            <button
+                              key={app.path}
+                              className={`repo-app ${current ? "on" : ""}`}
+                              disabled={current}
+                              title={app.path}
+                              onClick={() => void switchToApp(app.path)}
+                            >
+                              <span className="repo-app-name">{app.label}</span>
+                              <span className="repo-app-kind">
+                                {app.framework === "expo" ? "mobile" : app.framework}
+                              </span>
+                              {current && <span className="repo-app-current">showing</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                  {repoNote && <span className="form-error">{repoNote}</span>}
                   <div className="reveal-form-row">
                     <button className="btn ghost" onClick={() => void locateRepo()}>
                       Change folder…
