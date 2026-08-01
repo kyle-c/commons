@@ -197,22 +197,32 @@ function FigmaSettingBody({ project, me }: { project: Doc<"projects">; me: Doc<"
   const [frameUrl, setFrameUrl] = useState("");
   const [note, setNote] = useState<string | null>(null);
 
-  if (!figmaStatus) return <span className="hint">Loading…</span>;
-  if (!figmaStatus.workspaceId) return <span className="hint">Figma frames need this project in a workspace.</span>;
+  // Every setting popover wraps its content in .reveal-form (which supplies
+  // the popover's padding — .titlebar-popover has none) and leads with a
+  // .reveal-label header. This body used to skip both, so the text jammed
+  // flush against the popover edges with no title.
+  if (!figmaStatus)
+    return (
+      <div className="reveal-form">
+        <span className="reveal-label">Figma</span>
+        <span className="hint">Loading…</span>
+      </div>
+    );
+  if (!figmaStatus.workspaceId)
+    return (
+      <div className="reveal-form">
+        <span className="reveal-label">Figma</span>
+        <span className="hint">Figma frames need this project in a workspace.</span>
+      </div>
+    );
 
   if (!figmaStatus.connected) {
     return (
-      <>
-        <span className="hint">
-          Paste a Figma personal access token (Figma → Settings → Security). It covers this whole workspace and
-          Commons only ever reads with it.
-        </span>
+      <div className="reveal-form">
+        <span className="reveal-label">Connect Figma</span>
+        <span className="hint">An access token from Figma → Settings → Security. Read-only.</span>
         <div className="reveal-form-row">
-          <input
-            placeholder="figd_…"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-          />
+          <input placeholder="figd_…" value={token} onChange={(e) => setToken(e.target.value)} />
           <button
             className="btn"
             disabled={!token.trim()}
@@ -229,19 +239,17 @@ function FigmaSettingBody({ project, me }: { project: Doc<"projects">; me: Doc<"
             Connect
           </button>
         </div>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
-      <span className="hint">
-        Figma is connected. Paste a frame link (Share → Copy link on a frame) and it lands on the canvas, rendered
-        crisp, commentable like any other screen.
-      </span>
+    <div className="reveal-form">
+      <span className="reveal-label">Figma</span>
+      <span className="hint">Paste a frame link to add it to the canvas.</span>
       <div className="reveal-form-row">
         <input
-          placeholder="https://www.figma.com/design/…?node-id=…"
+          placeholder="figma.com/design/…?node-id=…"
           value={frameUrl}
           onChange={(e) => setFrameUrl(e.target.value)}
         />
@@ -268,7 +276,7 @@ function FigmaSettingBody({ project, me }: { project: Doc<"projects">; me: Doc<"
         </button>
       </div>
       {note && <span className="hint">{note}</span>}
-    </>
+    </div>
   );
 }
 
