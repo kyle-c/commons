@@ -409,7 +409,10 @@ export default defineSchema({
     threadId: v.id("threads"),
     messageId: v.id("messages"),
     readAt: v.optional(v.number()),
-  }).index("by_user", ["userId"]),
+  })
+    .index("by_user", ["userId"])
+    // For project deletion's cascade: reach a thread's notifications directly.
+    .index("by_thread", ["threadId"]),
 
   // Personal curation: a pinned project sorts first in its workspace section
   // on the pinner's home. One row per (user, project); unpin deletes it.
@@ -418,7 +421,9 @@ export default defineSchema({
     projectId: v.id("projects"),
   })
     .index("by_user", ["userId"])
-    .index("by_user_project", ["userId", "projectId"]),
+    .index("by_user_project", ["userId", "projectId"])
+    // For project deletion's cascade: drop every user's pin of this project.
+    .index("by_project", ["projectId"]),
 
   // Presence heartbeat per user per project. previousVisitAt marks when the
   // *prior* visit ended (set when a heartbeat lands after a >10min gap) —

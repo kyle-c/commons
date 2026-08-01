@@ -81,9 +81,13 @@ export default function ProjectList({
   const setCover = useMutation(api.projects.setCover);
   const togglePin = useMutation(api.projects.togglePin);
   const setArchived = useMutation(api.projects.setArchived);
+  const deleteArchived = useMutation(api.projects.deleteArchived);
   const setStatus = useMutation(api.projects.setStatus);
   const [statusMenuFor, setStatusMenuFor] = useState<Id<"projects"> | null>(null);
   const [archivedOpen, setArchivedOpen] = useState<Record<string, boolean>>({});
+  // Two-step delete: irreversible, so the button reveals a confirm before it
+  // fires. One project confirming at a time.
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   // Collapsed workspace sections — per machine, survives restarts. A live
   // search overrides collapse so matches can never hide.
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
@@ -563,21 +567,62 @@ export default function ProjectList({
                     >
                       <ProjectCover name={project.name} seed={project._id} coverUrl={project.coverUrl} />
                       <div className="meta">
-                        <span>archived {timeAgo(project.archivedAt ?? 0)} ago</span>
-                        <button
-                          className="btn ghost restore-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void setArchived({
-                              projectId: project._id,
-                              archived: false,
-                              userId: me._id,
-                              sessionToken: sessionToken(),
-                            });
-                          }}
-                        >
-                          Restore
-                        </button>
+                        {confirmDelete === project._id ? (
+                          <>
+                            <span className="delete-warn">Delete forever? Can't be undone.</span>
+                            <button
+                              className="btn ghost danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConfirmDelete(null);
+                                void deleteArchived({
+                                  projectId: project._id,
+                                  userId: me._id,
+                                  sessionToken: sessionToken(),
+                                });
+                              }}
+                            >
+                              Delete
+                            </button>
+                            <button
+                              className="btn ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConfirmDelete(null);
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span>archived {timeAgo(project.archivedAt ?? 0)} ago</span>
+                            <button
+                              className="btn ghost restore-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void setArchived({
+                                  projectId: project._id,
+                                  archived: false,
+                                  userId: me._id,
+                                  sessionToken: sessionToken(),
+                                });
+                              }}
+                            >
+                              Restore
+                            </button>
+                            <button
+                              className="btn ghost danger delete-btn"
+                              title="Delete this project and everything in it, permanently"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConfirmDelete(project._id);
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}

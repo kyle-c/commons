@@ -3655,3 +3655,15 @@ kbd {
 .flow-bar .hint {
   flex: 1;
 }
+
+/* Destructive ghost button — restrained until hovered, so it never shouts. */
+.btn.ghost.danger {
+  color: var(--danger);
+}
+.btn.ghost.danger:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+.delete-warn {
+  color: var(--danger);
+  font-size: var(--text-xs);
+}

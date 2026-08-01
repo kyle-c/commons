@@ -1,5 +1,8 @@
-import { mutation, query, internalQuery } from "./_generated/server";
+import { mutation, query, internalQuery, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import {
   accessibleProject,
   canAccessProject,
@@ -476,6 +479,193 @@ export const setArchived = mutation({
     await ctx.db.patch(args.projectId, { archivedAt: args.archived ? Date.now() : undefined });
   },
 });
+
+/**
+ * Permanently delete an archived project and everything under it.
+ *
+ * Archive-first is a deliberate two-step: archiving is reversible and is where
+ * a project rests; deletion is not, so it is only offered from the archived
+ * shelf, never from the live grid. A project you can still see is a project
+ * you can still restore.
+ *
+ * The project row and its cover image go now, so the card vanishes at once and
+ * every viewer-facing query (which resolves through the project) immediately
+ * returns nothing for it. The children — frames, threads, messages,
+ * transcripts, test sessions, snapshots and their storage blobs — are swept by
+ * a batched cascade, because a busy project's transcript alone can exceed one
+ * transaction's limits. The cascade re-queries live state each run and deletes
+ * strictly leaves-first, so it converges no matter how large the project.
+ */
+export const deleteArchived = mutation({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const viewerId = await resolveViewer(ctx, args);
+    const project = await accessibleProject(ctx, args.projectId, viewerId);
+    if (!project) throw new Error("You don't have access to this project.");
+    if (!project.archivedAt) {
+      throw new Error("Archive the project before deleting it — deletion is only offered from the archive.");
+    }
+    if (project.coverImageId) await ctx.storage.delete(project.coverImageId);
+    await ctx.db.delete(args.projectId);
+    await ctx.scheduler.runAfter(0, internal.projects.cascadeDeleteProject, { projectId: args.projectId });
+    return { ok: true };
+  },
+});
+
+/**
+ * Delete up to a budget of a deleted project's descendants, then reschedule
+ * until none remain. Order is leaves-first so parents can still enumerate
+ * their children: messages before threads, events before their sessions.
+ */
+export const cascadeDeleteProject = internalMutation({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const BUDGET = 400;
+    let spent = 0;
+    const exhausted = () => spent >= BUDGET;
+
+    // 1. Threads → their messages (with image blobs) and notifications.
+    const threads = await ctx.db
+      .query("threads")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+    for (const thread of threads) {
+      const messages = await ctx.db
+        .query("messages")
+        .withIndex("by_thread", (q) => q.eq("threadId", thread._id))
+        .take(BUDGET - spent);
+      for (const message of messages) {
+        for (const blob of message.images ?? []) await ctx.storage.delete(blob);
+        await ctx.db.delete(message._id);
+        spent += 1;
+      }
+      if (exhausted()) return void (await reschedule(ctx, projectId));
+      const notes = await ctx.db
+        .query("notifications")
+        .withIndex("by_thread", (q) => q.eq("threadId", thread._id))
+        .take(BUDGET - spent);
+      for (const note of notes) {
+        await ctx.db.delete(note._id);
+        spent += 1;
+      }
+      if (exhausted()) return void (await reschedule(ctx, projectId));
+      // The thread itself only once its messages are gone (next pass will if
+      // this thread still had a full budget of messages above).
+      const remaining = await ctx.db
+        .query("messages")
+        .withIndex("by_thread", (q) => q.eq("threadId", thread._id))
+        .first();
+      if (!remaining) {
+        await ctx.db.delete(thread._id);
+        spent += 1;
+        if (exhausted()) return void (await reschedule(ctx, projectId));
+      }
+    }
+
+    // 2. Agent sessions → their events.
+    const sessions = await ctx.db
+      .query("agentSessions")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+    for (const session of sessions) {
+      const events = await ctx.db
+        .query("agentEvents")
+        .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+        .take(BUDGET - spent);
+      for (const event of events) {
+        await ctx.db.delete(event._id);
+        spent += 1;
+      }
+      if (exhausted()) return void (await reschedule(ctx, projectId));
+      const more = await ctx.db
+        .query("agentEvents")
+        .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+        .first();
+      if (!more) {
+        await ctx.db.delete(session._id);
+        spent += 1;
+        if (exhausted()) return void (await reschedule(ctx, projectId));
+      }
+    }
+
+    // 3. Tests → their sessions and events.
+    const tests = await ctx.db
+      .query("tests")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+    for (const test of tests) {
+      const testChildQueries = [
+        () => ctx.db.query("testSessions").withIndex("by_test", (q) => q.eq("testId", test._id)),
+        () => ctx.db.query("testEvents").withIndex("by_test", (q) => q.eq("testId", test._id)),
+      ];
+      for (const build of testChildQueries) {
+        const rows = await build().take(BUDGET - spent);
+        for (const row of rows) {
+          await ctx.db.delete(row._id);
+          spent += 1;
+        }
+        if (exhausted()) return void (await reschedule(ctx, projectId));
+      }
+      const leftover =
+        (await ctx.db.query("testSessions").withIndex("by_test", (q) => q.eq("testId", test._id)).first()) ??
+        (await ctx.db.query("testEvents").withIndex("by_test", (q) => q.eq("testId", test._id)).first());
+      if (!leftover) {
+        await ctx.db.delete(test._id);
+        spent += 1;
+        if (exhausted()) return void (await reschedule(ctx, projectId));
+      }
+    }
+
+    // 4. Frame snapshots (with blobs), then everything keyed directly on the
+    //    project. Each is take(budget) with a reschedule so a huge table
+    //    cannot blow the transaction.
+    const snaps = await ctx.db
+      .query("frameSnapshots")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .take(BUDGET - spent);
+    for (const snap of snaps) {
+      await ctx.storage.delete(snap.storageId);
+      await ctx.db.delete(snap._id);
+      spent += 1;
+    }
+    if (exhausted()) return void (await reschedule(ctx, projectId));
+
+    // Each thunk carries a literal table name so Convex resolves its by_project
+    // index; a dynamic string would erase that typing.
+    const directQueries = [
+      () => ctx.db.query("frames").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+      () => ctx.db.query("repoLinks").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+      () => ctx.db.query("annotations").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+      () => ctx.db.query("annotationRuns").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+      () => ctx.db.query("annotationEdits").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+      () => ctx.db.query("deploys").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+      () => ctx.db.query("deploymentSamples").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+      () => ctx.db.query("projectPins").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+      () => ctx.db.query("presence").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+      () => ctx.db.query("flowEdges").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+      () => ctx.db.query("cursors").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+    ];
+    for (const build of directQueries) {
+      const rows = await build().take(BUDGET - spent);
+      for (const row of rows) {
+        await ctx.db.delete(row._id);
+        spent += 1;
+      }
+      if (exhausted()) return void (await reschedule(ctx, projectId));
+    }
+
+    // Nothing hit the budget: the project is fully swept. (If any table still
+    // had rows we would have rescheduled above.)
+  },
+});
+
+async function reschedule(ctx: MutationCtx, projectId: Id<"projects">): Promise<void> {
+  await ctx.scheduler.runAfter(0, internal.projects.cascadeDeleteProject, { projectId });
+}
 
 // Shared lifecycle label on the card. Any member; undefined clears it.
 export const setStatus = mutation({
