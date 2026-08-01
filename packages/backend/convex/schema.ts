@@ -314,6 +314,20 @@ export default defineSchema({
   // Observed (branch -> preview URL) pairs from deployment_status events.
   // Two or more samples let us infer the {branch} pattern, and we keep them
   // so a later sample can *disprove* a pattern we previously inferred.
+  // Every deploy that reached a project, newest first. previewUrl only ever
+  // says "now"; this is "and before that". On hosts with immutable
+  // per-deployment URLs (Vercel), each row is an openable old version, which
+  // makes this a version history without storing a single pixel.
+  deploys: defineTable({
+    projectId: v.id("projects"),
+    at: v.number(),
+    production: v.boolean(),
+    environment: v.optional(v.string()),
+    branch: v.string(),
+    sha: v.optional(v.string()),
+    url: v.string(),
+  }).index("by_project", ["projectId", "at"]),
+
   deploymentSamples: defineTable({
     projectId: v.id("projects"),
     branch: v.string(),

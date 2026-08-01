@@ -420,6 +420,7 @@ export const handleDeployment = internalMutation({
     installationId: v.number(),
     repoUrls: v.array(v.string()), // html_url, clone_url, ssh_url, full_name
     branch: v.string(),
+    sha: v.optional(v.string()),
     defaultBranch: v.string(),
     environment: v.optional(v.string()),
     environmentUrl: v.string(),
@@ -456,7 +457,13 @@ export const handleDeployment = internalMutation({
 
     const production = isProductionDeploy(args.environment, args.branch, args.defaultBranch);
     for (const project of projects) {
-      await applyDeploy(ctx, project, { url, branch: args.branch, production, environment: args.environment });
+      await applyDeploy(ctx, project, {
+        url,
+        branch: args.branch,
+        sha: args.sha,
+        production,
+        environment: args.environment,
+      });
     }
     return { matched: projects.length };
   },
@@ -465,9 +472,30 @@ export const handleDeployment = internalMutation({
 async function applyDeploy(
   ctx: MutationCtx,
   project: Doc<"projects">,
-  deploy: { url: string; branch: string; production: boolean; environment?: string }
+  deploy: { url: string; branch: string; sha?: string; production: boolean; environment?: string }
 ): Promise<void> {
   const patch: Record<string, unknown> = {};
+
+  // The log is unconditional: history that only remembers some deploys reads
+  // as history with holes. Capped so the table cannot grow without bound.
+  await ctx.db.insert("deploys", {
+    projectId: project._id,
+    at: Date.now(),
+    production: deploy.production,
+    environment: deploy.environment,
+    branch: deploy.branch,
+    sha: deploy.sha,
+    url: deploy.url,
+  });
+  const logged = await ctx.db
+    .query("deploys")
+    .withIndex("by_project", (q) => q.eq("projectId", project._id))
+    .collect();
+  if (logged.length > 50) {
+    for (const old of logged.sort((a, b) => a.at - b.at).slice(0, logged.length - 50)) {
+      await ctx.db.delete(old._id);
+    }
+  }
 
   if (deploy.production) {
     // A human's preview URL is a decision, not a guess: never overwrite it.
@@ -646,5 +674,40 @@ export const pruneShaSamples = internalMutation({
     const junk = all.filter((s) => /^[0-9a-f]{40}$/.test(s.branch));
     for (const sample of junk) await ctx.db.delete(sample._id);
     return { deleted: junk.length, kept: all.length - junk.length };
+  },
+});
+
+/**
+ * The deploy log, newest first: what shipped, when, from which branch.
+ *
+ * Rendered in the History popover, so it degrades (empty for no access)
+ * rather than refusing; a query is rendered, a mutation is invoked.
+ */
+export const deployHistory = query({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { projectId, ...viewer }) => {
+    const viewerId = await resolveViewer(ctx, viewer);
+    const project = viewerId ? await accessibleProject(ctx, projectId, viewerId) : null;
+    if (!project) return [];
+    const rows = await ctx.db
+      .query("deploys")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+    return rows
+      .sort((a, b) => b.at - a.at)
+      .slice(0, 30)
+      .map((d) => ({
+        _id: d._id,
+        at: d.at,
+        production: d.production,
+        branch: d.branch,
+        sha: d.sha ? d.sha.slice(0, 7) : null,
+        url: d.url,
+        current: d.url === project.previewUrl,
+      }));
   },
 });

@@ -226,6 +226,7 @@ http.route({
           (u: unknown): u is string => typeof u === "string" && u.length > 0
         ),
         branch: branchName,
+        sha: typeof payload.deployment?.sha === "string" ? payload.deployment.sha : undefined,
         defaultBranch: String(repo.default_branch ?? "main"),
         environment: payload.deployment_status?.environment ?? payload.deployment?.environment,
         environmentUrl: String(url),

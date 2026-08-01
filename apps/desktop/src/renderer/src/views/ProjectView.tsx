@@ -64,7 +64,7 @@ function buildThreadPrompt(thread: ThreadWithMessages, frame: Doc<"frames"> | un
  * the deployed preview URLs. An attention dot on the icon replaces the old
  * always-visible "Get this project / Locate / Preview URL ⚠" button row.
  */
-type SettingKey = "repo" | "preview" | "drafts";
+type SettingKey = "repo" | "preview" | "drafts" | "history";
 
 /** One toolbar icon, one concern: a small anchored popover per setting. */
 function SettingPopover({
@@ -178,6 +178,46 @@ function ExternalServerRow({
  * A URL-valued setting: first open shows the explainer and the field;
  * once set, shows the current value with Change/Remove.
  */
+/**
+ * The deploy log as a version history. On hosts with immutable per-deploy
+ * URLs every row is an openable old version of the app, so each entry is a
+ * link, not a line item. previewUrl says "now"; this is "and before that".
+ */
+function DeployHistoryBody({ projectId, me }: { projectId: Id<"projects">; me: Doc<"users"> }) {
+  const history = useQuery(api.github.deployHistory, {
+    projectId,
+    userId: me._id,
+    sessionToken: sessionToken(),
+  });
+  if (!history || history.length === 0) {
+    return (
+      <span className="hint">
+        Deploys land here once GitHub is connected: what shipped, when, and a link to each version as it was.
+      </span>
+    );
+  }
+  return (
+    <div className="deploy-history">
+      {history.map((d) => (
+        <button
+          key={d._id}
+          className="deploy-row"
+          title="Open this version in your browser"
+          onClick={() => (window.commons ? void window.commons.openExternal(d.url) : window.open(d.url))}
+        >
+          <span className={`deploy-dot ${d.production ? "prod" : ""}`} />
+          <span className="deploy-when">{timeAgo(d.at)}</span>
+          <span className="deploy-branch" title={d.branch}>
+            {d.branch}
+          </span>
+          {d.sha && <span className="deploy-sha">{d.sha}</span>}
+          {d.current && <span className="deploy-current">current</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function UrlSettingBody({
   label,
   hint,
@@ -625,6 +665,16 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
    */
   const liveStatus: DevServerStatus = repoPath ? devStatus : { state: "stopped" };
   const [openSetting, setOpenSetting] = useState<SettingKey | null>(null);
+  /**
+   * Freshness marker: everything Convex-backed is live, so the only thing
+   * that can go stale mid-session is the pixels inside the frames. The
+   * webhook stamps lastDeployAt the moment a deploy goes green and that
+   * field streams into this view, so "is there a newer version" is a
+   * comparison, not a poll: newer than when you opened it means the iframes
+   * predate the deploy.
+   */
+  const [openedAt, setOpenedAt] = useState(() => Date.now());
+  useEffect(() => setOpenedAt(Date.now()), [nav.projectId]);
   // The Tests panel points here instead of embedding its own editor.
   useEffect(() => {
     const onOpen = () => setOpenSetting("preview");
@@ -795,6 +845,20 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const [compare, setCompare] = useState<{ title: string; routePath?: string; draftPreviewUrl: string } | null>(null);
   // Per-frame counters bumped when an agent finishes editing; keys the frame iframes.
   const [frameReloadTokens, setFrameReloadTokens] = useState<Record<string, number>>({});
+  const reloadFrames = () => {
+    setFrameReloadTokens((prev) => {
+      const next = { ...prev };
+      for (const f of frames) next[f._id] = (next[f._id] ?? 0) + 1;
+      return next;
+    });
+    setOpenedAt(Date.now());
+  };
+  const reloadRef = useRef(reloadFrames);
+  reloadRef.current = reloadFrames;
+  useEffect(
+    () => registerShortcut("r", () => reloadRef.current(), { description: "Reload frames with the latest deploy" }),
+    []
+  );
 
   // Mirrored sessions are the source of truth for the panel (whole team sees them).
   const convexSessions = useQuery(api.agentSessions.forProject, { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() }) ?? [];
@@ -1550,6 +1614,14 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             }}
           />
         </SettingPopover>
+        <SettingPopover
+          icon="layers"
+          label="History"
+          open={openSetting === "history"}
+          onOpenChange={(o) => setOpenSetting(o ? "history" : null)}
+        >
+          <DeployHistoryBody projectId={project._id} me={me} />
+        </SettingPopover>
         <span className="tb-divider" />
         {(repoPath || project.gitRemote || convexSessions.length > 0) && (
           <button
@@ -1601,6 +1673,14 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         )}
       </div>
 
+      {project.lastDeployAt !== undefined && project.lastDeployAt > openedAt && (
+        <div className="nudge-banner">
+          <span>A newer version of the app just deployed — these frames are showing the previous one.</span>
+          <button className="btn" onClick={reloadFrames}>
+            Reload (R)
+          </button>
+        </div>
+      )}
       {catchUp && !catchUpDismissed && (
         <div className="nudge-banner catchup">
           <span>

@@ -571,12 +571,71 @@ export const confirmAliasPattern = internalAction({
 });
 
 /**
+ * Ground truth for "what did our webhook do with each delivery": GitHub
+ * stores the response body per delivery, so this returns state, repo, and
+ * our own answer for the recent deployment_status deliveries. Reading beats
+ * guessing.
+ */
+export const auditDeliveries = internalAction({
+  args: { count: v.optional(v.number()) },
+  handler: async (_ctx, { count }) => {
+    const auth = {
+      Authorization: `Bearer ${await appJwt()}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    };
+    const list = await fetch(`${GITHUB_API}/app/hook/deliveries?per_page=100`, { headers: auth });
+    if (!list.ok) return { ok: false as const, detail: `${list.status}` };
+    const raw = await list.text();
+    const ids = raw
+      .split(/\{"id":/)
+      .slice(1)
+      .filter((chunk) => /"event"\s*:\s*"deployment_status"/.test(chunk))
+      .map((chunk) => chunk.match(/^\s*(\d+)/)?.[1] ?? "")
+      .filter((id) => id !== "")
+      .slice(0, count ?? 8);
+    const results: unknown[] = [];
+    for (const id of ids) {
+      const one = await fetch(`${GITHUB_API}/app/hook/deliveries/${id}`, { headers: auth });
+      if (!one.ok) {
+        results.push({ id, fetch: one.status });
+        continue;
+      }
+      const body = (await one.json()) as {
+        delivered_at?: string;
+        status_code?: number;
+        request?: { payload?: Record<string, never> };
+        response?: { payload?: string };
+      };
+      const payload = body.request?.payload ?? ({} as Record<string, never>);
+      const statusObj = (payload["deployment_status"] ?? {}) as Record<string, unknown>;
+      const repo = (payload["repository"] ?? {}) as Record<string, unknown>;
+      results.push({
+        id,
+        at: body.delivered_at,
+        httpStatus: body.status_code,
+        state: statusObj.state ?? null,
+        repo: repo.full_name ?? null,
+        ourResponse: (body.response?.payload ?? "").slice(0, 200),
+      });
+    }
+    return { ok: true as const, results };
+  },
+});
+
+/**
  * Ask GitHub to re-send past deployment_status deliveries, so a pipeline fix
  * can be exercised against real payloads without pushing new commits.
  */
 export const redeliverDeployments = internalAction({
-  args: { count: v.optional(v.number()) },
-  handler: async (_ctx, { count }) => {
+  args: {
+    count: v.optional(v.number()),
+    // Only redeliver events for this repository. Without it, whichever repo
+    // deployed most recently monopolizes the redelivery window, which is
+    // exactly how a busy sibling repo hid every delivery that mattered.
+    repositoryId: v.optional(v.number()),
+  },
+  handler: async (_ctx, { count, repositoryId }) => {
     const auth = {
       Authorization: `Bearer ${await appJwt()}`,
       Accept: "application/vnd.github+json",
@@ -590,6 +649,7 @@ export const redeliverDeployments = internalAction({
       .split(/\{"id":/)
       .slice(1)
       .filter((chunk) => /"event"\s*:\s*"deployment_status"/.test(chunk))
+      .filter((chunk) => repositoryId === undefined || chunk.includes(`"repository_id":${repositoryId}`))
       .map((chunk) => chunk.match(/^\s*(\d+)/)?.[1] ?? "")
       .filter((id) => id !== "")
       .slice(0, count ?? 2);

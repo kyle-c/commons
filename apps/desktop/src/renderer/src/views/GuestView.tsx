@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Id } from "@commons/backend/convex/_generated/dataModel";
@@ -23,6 +24,15 @@ import CanvasView from "../canvas/CanvasView";
  */
 export default function GuestView({ shareToken }: { shareToken: string }) {
   const data = useQuery(api.projects.sharePage, { shareToken });
+  // Same freshness rule as the member app: lastDeployAt streams in live, so
+  // newer-than-opened means the frames predate the deploy.
+  const [openedAt, setOpenedAt] = useState(() => Date.now());
+  const [reloadToken, setReloadToken] = useState(0);
+  const frameReloadTokens = useMemo(
+    () => Object.fromEntries((data?.frames ?? []).map((f) => [f._id, reloadToken])),
+    [data?.frames, reloadToken]
+  );
+  const staleDeploy = Boolean(data?.project.lastDeployAt && data.project.lastDeployAt > openedAt);
 
   if (data === undefined) {
     return (
@@ -48,6 +58,17 @@ export default function GuestView({ shareToken }: { shareToken: string }) {
       <header className="guest-bar">
         <span className="guest-project">{data.project.name}</span>
         <span className="guest-note">Shared link. Look around, read the discussion, leave comments.</span>
+        {staleDeploy && (
+          <button
+            className="btn guest-reload"
+            onClick={() => {
+              setReloadToken((t) => t + 1);
+              setOpenedAt(Date.now());
+            }}
+          >
+            Newer version deployed — reload
+          </button>
+        )}
       </header>
       <div className="guest-canvas">
         <CanvasView
@@ -58,6 +79,7 @@ export default function GuestView({ shareToken }: { shareToken: string }) {
           threads={data.threads}
           users={[]}
           devStatus={{ state: "stopped" }}
+          frameReloadTokens={frameReloadTokens}
           previewUrl={data.project.previewUrl}
           annotations={data.annotations.map((a) => ({
             _id: a._id,

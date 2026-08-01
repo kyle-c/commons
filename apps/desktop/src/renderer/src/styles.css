@@ -3468,12 +3468,21 @@ kbd {
   position: absolute;
   will-change: transform, opacity;
 }
-.celebrate-ring {
+.vacuum-void {
   position: absolute;
-  width: 130px;
-  height: 130px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  border: 2px solid color-mix(in srgb, var(--text-primary) 55%, transparent);
+  /* A point of nothing: darker than the canvas, with a faint event-horizon
+     edge so it reads on both themes. */
+  background: radial-gradient(circle, rgb(0 0 0 / 0.92) 55%, rgb(0 0 0 / 0) 72%);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--text-primary) 35%, transparent);
+  will-change: transform, opacity;
+}
+.vacuum-ghost {
+  position: absolute;
+  margin: 0;
+  pointer-events: none;
   will-change: transform, opacity;
 }
 
@@ -3510,4 +3519,66 @@ kbd {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* ── Deploy history ──────────────────────────────────────────────────────
+   Rows are links to old versions, so they behave like rows, not buttons. */
+.deploy-history {
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 0 -6px;
+}
+.deploy-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 6px;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  text-align: left;
+}
+.deploy-row:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.deploy-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  align-self: center;
+}
+.deploy-dot.prod {
+  background: var(--success);
+}
+.deploy-when {
+  flex: none;
+  width: 64px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+.deploy-branch {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deploy-sha {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+.deploy-current {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--success);
+}
+.guest-reload {
+  margin-left: auto;
 }

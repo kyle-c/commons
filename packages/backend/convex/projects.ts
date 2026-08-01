@@ -398,6 +398,8 @@ export const sharePage = query({
         name: project.name,
         previewUrl: project.previewUrl,
         status: project.status,
+        // So the guest page can offer "a newer version deployed, reload".
+        lastDeployAt: project.lastDeployAt,
       },
       frames: framesWithSnapshots,
       threads: threadsWithMessages,
