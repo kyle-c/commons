@@ -3832,9 +3832,9 @@ kbd {
     color-mix(in srgb, var(--accent) 4%, transparent) 40%,
     transparent 72%
   );
-  /* Quick out, slow in: movement should extinguish it at once, while its
-     arrival is gradual enough to feel like light rather than a popup. */
-  transition: opacity 120ms var(--ease-out);
+  /* Unhurried both ways. Cutting the light the instant a cursor twitched read
+     as a flicker; now it dims where it stood while you move on. */
+  transition: opacity 650ms var(--ease-out);
 }
 .panel-glow.on {
   opacity: 1;

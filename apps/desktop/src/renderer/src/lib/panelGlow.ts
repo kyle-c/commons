@@ -6,7 +6,7 @@
  * glow a constant companion — it chased the pointer around and became part of
  * the furniture. Requiring stillness first means it only ever shows up when
  * someone has actually settled on something to read, which is the moment worth
- * marking. Move again and it's gone at once.
+ * marking. Move again and it fades away where it stood, unhurried.
  *
  * ONE orb, parented to <body> and positioned in viewport coordinates, rather
  * than one per panel. Living inside a panel meant `overflow-y: auto` clipped
@@ -59,10 +59,11 @@ function paint(now: number): void {
   if (!orb) return;
   const still = now - restingSince;
   if (still < DWELL_MS) {
-    // Not settled yet: stay dark, but sit at the cursor so the growth begins
-    // exactly where the pointer stopped rather than sliding into place.
+    // Waiting out the dwell. Drop the class so the fade begins, but leave the
+    // transform exactly where it was: a light that is still visible must not
+    // be dragged to the new cursor position, or the slow fade turns into a
+    // slide. It gets its new position below, at the moment it reappears.
     orb.classList.remove("on");
-    orb.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${START_SCALE})`;
     return;
   }
   const grown = Math.min(1, (still - DWELL_MS) / SWELL_MS);
@@ -70,8 +71,10 @@ function paint(now: number): void {
   // as settling rather than inflating.
   const eased = 1 - (1 - grown) ** 3;
   const scale = START_SCALE + (MAX_SCALE - START_SCALE) * eased;
-  orb.classList.add("on");
+  // Position is claimed here, on the first frame of reappearing, and then
+  // simply held while the scale grows.
   orb.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale.toFixed(3)})`;
+  orb.classList.add("on");
 }
 
 function tick(): void {
@@ -102,9 +105,9 @@ function onPointerMove(event: PointerEvent): void {
   y = event.clientY;
   restingSince = performance.now();
   over = true;
-  // Any movement puts it out immediately — the whole point is that it marks
-  // stillness, so it must never trail a moving pointer.
-  ensureOrb().classList.remove("on");
+  // Movement starts the fade rather than cutting the light: paint() drops the
+  // class and leaves the orb where it stands, so it dims in place.
+  ensureOrb();
 
   paint(restingSince);
   if (!frame) frame = requestAnimationFrame(tick);
