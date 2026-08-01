@@ -3833,14 +3833,22 @@ kbd {
 .panel-glow.on {
   opacity: 1;
 }
-/* The panels that host it: a containing block so the orb positions against
-   the panel, and a clip so the light stops at the panel's edge. */
+/* The panels that host it need a containing block and their own stacking
+   context — but NOT a position override. These already carry their own
+   positioning (.titlebar-popover is absolute under its trigger, .agent-panel
+   is fixed to the right edge), and forcing `relative` here tore both off
+   their anchors. `isolation` alone gives the stacking context, and any
+   non-static position is already a containing block. */
 .titlebar-popover,
-.overlay-card,
 .agent-panel,
+.overlay-card,
+.flow-review {
+  isolation: isolate;
+}
+/* Only the ones that are genuinely static need promoting. */
+.overlay-card,
 .flow-review {
   position: relative;
-  isolation: isolate;
 }
 .titlebar-popover > *:not(.panel-glow),
 .overlay-card > *:not(.panel-glow),
