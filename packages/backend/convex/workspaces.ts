@@ -160,7 +160,22 @@ export const mine = query({
         const githubAccounts = installs
           .filter((row): row is NonNullable<typeof row> => row !== null && !row.removedAt)
           .map((row) => ({ _id: row._id, accountLogin: row.accountLogin }));
-        return { ...workspace, members: profiles, githubAccounts };
+        // Explicit projection, never a spread: the workspace row carries
+        // credentials (slackWebhookUrl, figmaToken) that must never reach a
+        // client, not even a member's. "Connected" booleans are safe to
+        // ship; the secrets themselves stay on the backend. A spread here
+        // leaked both to every member's app on every home-view load.
+        return {
+          _id: workspace._id,
+          _creationTime: workspace._creationTime,
+          name: workspace.name,
+          kind: workspace.kind,
+          domain: workspace.domain,
+          slackConnected: Boolean(workspace.slackWebhookUrl),
+          figmaConnected: Boolean(workspace.figmaToken),
+          members: profiles,
+          githubAccounts,
+        };
       })
     );
     return workspaces
@@ -177,9 +192,17 @@ export const mine = query({
 export const membersForProject = query({
   args: { projectId: v.id("projects"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
   handler: async (ctx, { projectId, ...viewer }) => {
-    const project = await accessibleProject(ctx, projectId, await resolveViewer(ctx, viewer));
+    const viewerId = await resolveViewer(ctx, viewer);
+    const project = await accessibleProject(ctx, projectId, viewerId);
     if (!project) return [];
-    if (!project.workspaceId) return await ctx.db.query("users").collect();
+    // A legacy project with no workspace used to return every user in the
+    // deployment — a cross-tenant leak of names and emails. accessibleProject
+    // already restricts these to the creator, so the only correct member set
+    // is the viewer themselves.
+    if (!project.workspaceId) {
+      const me = viewerId ? await ctx.db.get(viewerId) : null;
+      return me ? [me] : [];
+    }
     const members = await ctx.db
       .query("workspaceMembers")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", project.workspaceId!))

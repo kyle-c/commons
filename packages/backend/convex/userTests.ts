@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
-import { accessibleProject, resolveViewer } from "./access";
+import { accessibleProject, resolveViewer, randomToken } from "./access";
 
 /**
  * Maze-style usability tests. Team members build tests in Commons; testers run
@@ -32,10 +32,7 @@ const taskResultValidator = v.object({
   misclickCount: v.number(),
 });
 
-function randomToken(): string {
-  // Math.random is deterministic-on-replay inside Convex mutations.
-  return Array.from({ length: 4 }, () => Math.random().toString(36).slice(2, 8)).join("");
-}
+// Bearer tokens (tester harness, report) come from the shared CSPRNG helper.
 
 // ---------------------------------------------------------------------------
 // Team-facing API (userId-gated like every other project query)

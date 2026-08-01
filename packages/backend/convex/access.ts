@@ -99,3 +99,20 @@ export async function filterMentions(
   const allowed = await Promise.all(mentions.map((id) => canAccessProject(ctx, project, id)));
   return mentions.filter((_, i) => allowed[i]);
 }
+
+/**
+ * A cryptographically random hex token. The one place bearer secrets are
+ * minted, so nobody re-derives it wrong.
+ *
+ * Convex mutations replay deterministically, which once prompted a belief
+ * that Math.random was "fine here" — but Math.random is a non-crypto PRNG
+ * whose stream an attacker can reconstruct from a few outputs, and these
+ * tokens ARE the credential (share links, tester harnesses, connect flows).
+ * crypto.getRandomValues is seeded per execution by the Convex runtime and
+ * works in mutations (auth.ts has minted session tokens this way all along).
+ */
+export function randomToken(bytes = 24): string {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
+}

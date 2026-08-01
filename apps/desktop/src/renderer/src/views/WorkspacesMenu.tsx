@@ -205,9 +205,9 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
                     </div>
                     <span style={{ flex: 1 }} />
                     <button
-                      className={`slack-chip ${workspace.slackWebhookUrl ? "on" : ""}`}
+                      className={`slack-chip ${workspace.slackConnected ? "on" : ""}`}
                       title={
-                        workspace.slackWebhookUrl
+                        workspace.slackConnected
                           ? "New threads and agent results post to Slack. Click to change."
                           : "Post new threads and agent results to a Slack channel"
                       }
@@ -217,7 +217,7 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
                         )
                       }
                     >
-                      <span className={`status-dot ${workspace.slackWebhookUrl ? "ready" : ""}`} />
+                      <span className={`status-dot ${workspace.slackConnected ? "ready" : ""}`} />
                       Slack
                     </button>
                   </>
@@ -248,14 +248,18 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
                   )}
                   {editing?.id === workspace._id && editing.field === "slack" && (
                     <InlineField
-                      placeholder="https://hooks.slack.com/services/…"
                       submitLabel="Save"
                       allowEmpty
-                      initialValue={workspace.slackWebhookUrl ?? ""}
+                      initialValue=""
+                      placeholder={
+                        workspace.slackConnected
+                          ? "Connected — paste a new webhook to replace it"
+                          : "https://hooks.slack.com/services/…"
+                      }
                       hint={
                         <>
                           Posts new threads and agent results to a channel you pick. In Slack, create an
-                          incoming webhook and paste its URL here (save empty to disconnect).{" "}
+                          incoming webhook and paste its URL here.{" "}
                           <button
                             className="hint-link"
                             onClick={() => {
@@ -270,13 +274,28 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
                       }
                       onClose={() => setEditing(null)}
                       onSubmit={async (url) => {
+                        if (!url) {
+                          setEditing(null);
+                          return; // blank = leave the current connection untouched
+                        }
                         await setSlackWebhook({
                           workspaceId: workspace._id,
                           userId: me._id,
                           sessionToken: sessionToken(),
-                          webhookUrl: url || undefined,
+                          webhookUrl: url,
                         });
-                        setNotice(url ? "Slack channel saved." : "Slack channel disconnected.");
+                        setNotice("Slack channel saved.");
+                      }}
+                      secondaryLabel={workspace.slackConnected ? "Disconnect" : undefined}
+                      onSecondary={async () => {
+                        await setSlackWebhook({
+                          workspaceId: workspace._id,
+                          userId: me._id,
+                          sessionToken: sessionToken(),
+                          webhookUrl: undefined,
+                        });
+                        setNotice("Slack channel disconnected.");
+                        setEditing(null);
                       }}
                     />
                   )}

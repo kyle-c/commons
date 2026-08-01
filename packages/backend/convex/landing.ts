@@ -385,6 +385,7 @@ export function landingHtml(version?: string): string {
           <li>Anyone can comment from a link, with no account</li>
           <li>Share links open the same canvas — guests browse, read, and comment with just a name</li>
           <li>Figma frames land beside live screens, commentable like everything else</li>
+          <li>A Flow view draws every path through the app from real tester sessions</li>
         </ul>
       </div>
       <div class="shot">

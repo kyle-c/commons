@@ -5,8 +5,7 @@ import {
   canAccessProject,
   requireProjectAccess,
   requireViewer,
-  resolveViewer,
-} from "./access";
+  resolveViewer, randomToken } from "./access";
 import { isMember, ensurePersonalWorkspace } from "./workspaces";
 
 export const create = mutation({
@@ -250,7 +249,7 @@ export const setShareToken = mutation({
     const project = await ctx.db.get(args.projectId);
     if (!project || project.createdBy !== userId) throw new Error("Only the project creator can share to web");
     const shareToken = args.enable
-      ? (project.shareToken ?? Array.from({ length: 4 }, () => Math.random().toString(36).slice(2, 8)).join(""))
+      ? (project.shareToken ?? randomToken(16))
       : undefined;
     await ctx.db.patch(args.projectId, { shareToken });
     return shareToken ?? null;

@@ -13,6 +13,8 @@ export function InlineField({
   hint,
   initialValue = "",
   allowEmpty = false,
+  secondaryLabel,
+  onSecondary,
 }: {
   placeholder: string;
   submitLabel: string;
@@ -21,6 +23,9 @@ export function InlineField({
   hint?: React.ReactNode;
   initialValue?: string;
   allowEmpty?: boolean;
+  /** A destructive second action (e.g. "Disconnect") shown beside submit. */
+  secondaryLabel?: string;
+  onSecondary?: () => Promise<void> | void;
 }) {
   const [value, setValue] = useState(initialValue);
   const [busy, setBusy] = useState(false);
@@ -57,6 +62,11 @@ export function InlineField({
         <button className="btn primary" disabled={busy || (!allowEmpty && !value.trim())} onClick={() => void submit()}>
           {submitLabel}
         </button>
+        {secondaryLabel && onSecondary && (
+          <button className="btn ghost danger" disabled={busy} onClick={() => void onSecondary()}>
+            {secondaryLabel}
+          </button>
+        )}
         <button className="btn ghost" onClick={onClose}>
           ✕
         </button>

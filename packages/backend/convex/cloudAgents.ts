@@ -265,7 +265,7 @@ export const markFailed = internalMutation({
   args: { sessionId: v.id("agentSessions"), runToken: v.string(), error: v.string() },
   handler: async (ctx, { sessionId, runToken, error }) => {
     const session = await ctx.db.get(sessionId);
-    if (!session || session.runToken !== runToken) return null;
+    if (!session || session.runner !== "actions" || session.runToken !== runToken) return null;
     await ctx.db.insert("agentEvents", { sessionId, event: { type: "status", status: "error", error } });
     await ctx.db.patch(sessionId, { status: "error", error });
     return null;

@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { accessibleProject, requireViewer, resolveViewer } from "./access";
+import { accessibleProject, requireViewer, resolveViewer, randomToken } from "./access";
 import { internal } from "./_generated/api";
 
 /**
@@ -143,10 +143,7 @@ export function isProductionDeploy(environment: string | undefined, ref: string,
 const STATE_TTL_MS = 15 * 60 * 1000;
 
 function newStateToken(): string {
-  // Math.random is fine here: Convex mutations replay deterministically, and
-  // the token's job is unguessability within a 15-minute window, not secrecy
-  // at rest. 48 chars of base36 is far past what a redirect can be brute-forced for.
-  return Array.from({ length: 4 }, () => Math.random().toString(36).slice(2, 14)).join("");
+  return randomToken(24);
 }
 
 async function isWorkspaceMember(
