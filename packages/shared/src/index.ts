@@ -52,6 +52,12 @@ export interface RepoInspection {
    * UI can say which one it adopted and offer the others.
    */
   apps?: AppCandidate[];
+  /**
+   * Screens read from a classic React Navigation app's navigators. Present
+   * even when `routes` is empty — that combination means the screens exist
+   * but have no web URLs, because the app has no `linking` config.
+   */
+  navigatorScreens?: string[];
 }
 
 /** Status of the dev server Commons runs for a project. */

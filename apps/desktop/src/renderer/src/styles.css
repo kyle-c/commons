@@ -3486,6 +3486,9 @@ kbd {
   inset: 0;
   pointer-events: none;
   z-index: 200;
+  /* Isolate the burst from the page: its layout and paint can never dirty
+     the grid underneath, so the card list isn't recalculated mid-animation. */
+  contain: strict;
 }
 .celebrate-particle {
   position: absolute;
@@ -3507,6 +3510,10 @@ kbd {
   margin: 0;
   pointer-events: none;
   will-change: transform, opacity;
+  /* The clone is a snapshot, not a live card — its subtree never needs to
+     re-lay-out, and promoting it once keeps the whole scale on the GPU. */
+  contain: layout paint;
+  backface-visibility: hidden;
 }
 
 /* ── Guest composer ──────────────────────────────────────────────────────
@@ -3770,4 +3777,21 @@ kbd {
   margin-left: auto;
   font-size: var(--text-xs);
   color: var(--success);
+}
+
+/* The linking config a classic navigator needs — shown to be copied, so it
+   keeps its shape and scrolls rather than wrapping into soup. */
+.linking-snippet {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--text-secondary);
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre;
 }

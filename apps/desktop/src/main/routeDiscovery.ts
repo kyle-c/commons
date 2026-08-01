@@ -326,6 +326,74 @@ export async function listRepoApps(fromPath: string): Promise<AppCandidate[]> {
   return found;
 }
 
+
+/**
+ * Screens of a classic React Navigation app (no expo-router).
+ *
+ * expo-router puts routes on disk, so they enumerate by walking folders. A
+ * classic navigator registers screens in JSX — `<Stack.Screen name="Feed" …>`
+ * — which is still static and still readable, so the screen list is genuinely
+ * recoverable. What is NOT recoverable is a URL per screen: React Navigation
+ * only maps screens to paths when the app supplies a `linking` config. Without
+ * one, every screen lives at the same address on web and Commons would have to
+ * invent paths to draw them apart — which it will not do.
+ *
+ * So this reports both halves honestly: the screens it found, and whether they
+ * are addressable. The UI turns "found 10, none addressable" into the exact
+ * one-time fix rather than an empty canvas.
+ */
+export async function discoverNavigatorScreens(
+  appDir: string
+): Promise<{ screens: string[]; linkingPaths: Record<string, string> | null }> {
+  const files: string[] = [];
+  const walk = async (dir: string, depth: number): Promise<void> => {
+    if (depth > 6) return;
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") || SKIP_DIRS.has(entry.name)) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) await walk(full, depth + 1);
+      else if (/\.(tsx|jsx|ts|js)$/.test(entry.name)) files.push(full);
+    }
+  };
+  await walk(appDir, 0);
+
+  const screens: string[] = [];
+  let linkingPaths: Record<string, string> | null = null;
+  // <Stack.Screen name="Feed" …> / <Tab.Screen …> / <Drawer.Screen …>
+  const screenTag = /<\s*[A-Za-z_$][\w$]*\.Screen\b[^>]*?\bname\s*=\s*["']([^"']+)["']/g;
+
+  for (const file of files) {
+    let source: string;
+    try {
+      source = await fs.readFile(file, "utf8");
+    } catch {
+      continue;
+    }
+    for (const match of source.matchAll(screenTag)) {
+      if (!screens.includes(match[1])) screens.push(match[1]);
+    }
+    // A linking config makes screens addressable: linking={{ prefixes, config:
+    // { screens: { Feed: "feed" } }}. Read the leaf mapping when it's there.
+    if (linkingPaths === null && /\bprefixes\s*:/.test(source)) {
+      const screensBlock = source.match(/screens\s*:\s*\{([\s\S]*?)\}/);
+      if (screensBlock) {
+        const pairs: Record<string, string> = {};
+        for (const pair of screensBlock[1].matchAll(/([A-Za-z_$][\w$]*)\s*:\s*["']([^"']+)["']/g)) {
+          pairs[pair[1]] = pair[2];
+        }
+        if (Object.keys(pairs).length > 0) linkingPaths = pairs;
+      }
+    }
+  }
+  return { screens, linkingPaths };
+}
+
 export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
   let framework: RepoInspection["framework"] = "unknown";
   let name = path.basename(repoPath);
@@ -334,7 +402,7 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
     if (pkg.name) name = pkg.name;
     const deps = { ...pkg.dependencies, ...pkg.devDependencies };
     if (deps.next) framework = "nextjs";
-    else if (deps["expo-router"] && deps["react-native-web"]) framework = "expo";
+    else if (deps["expo-router"] || deps.expo || deps["react-native"]) framework = "expo";
     else if (deps.vite) framework = "vite";
   } catch {
     // No package.json — leave as unknown; caller surfaces the error state.
@@ -407,6 +475,29 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
       }
     }
   }
+
+  // Still nothing: a classic React Navigation app. Its screens are declared in
+  // JSX rather than on disk, so read them from the navigators. They become
+  // real routes only when the app has a linking config to give them URLs.
+  let navigatorScreens: string[] | undefined;
+  if (routes.length === 0 && framework === "expo") {
+    const found = await discoverNavigatorScreens(repoPath);
+    if (found.screens.length > 0) {
+      navigatorScreens = found.screens;
+      if (found.linkingPaths) {
+        for (const name of found.screens) {
+          const mapped = found.linkingPaths[name];
+          if (!mapped) continue;
+          routes.push({
+            path: mapped.startsWith("/") ? mapped : `/${mapped}`,
+            file: "react-navigation",
+            title: name,
+            dynamic: /:|\[/.test(mapped),
+          });
+        }
+      }
+    }
+  }
   if (routes.length === 0 && framework === "nextjs") {
     for (const appDir of ["app", "src/app"]) {
       const abs = path.join(repoPath, appDir);
@@ -443,6 +534,7 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
 
   routes.sort((a, b) => a.path.localeCompare(b.path));
   return {
+    navigatorScreens,
     repoPath,
     name,
     framework,

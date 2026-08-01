@@ -381,6 +381,29 @@ function FlowReviewPanel({
 }
 
 /**
+ * The `linking` config a classic React Navigation app needs before its screens
+ * have web addresses. Generated from the screens actually found, kebab-cased,
+ * so it can be pasted onto the NavigationContainer as-is.
+ */
+function buildLinkingSnippet(screens: string[]): string {
+  const entries = screens
+    .map((name) => `      ${name}: "${name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()}",`)
+    .join("\n");
+  return [
+    "<NavigationContainer",
+    "  linking={{",
+    '    prefixes: ["myapp://"],',
+    "    config: {",
+    "      screens: {",
+    entries,
+    "      },",
+    "    },",
+    "  }}",
+    ">",
+  ].join("\n");
+}
+
+/**
  * The deploy log as a version history. On hosts with immutable per-deploy
  * URLs every row is an openable old version of the app, so each entry is a
  * link, not a line item. previewUrl says "now"; this is "and before that".
@@ -989,6 +1012,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   // picker below is how the user learns which one they're looking at.
   const [repoApps, setRepoApps] = useState<AppCandidate[]>([]);
   const [repoNote, setRepoNote] = useState<string | null>(null);
+  const [linkingSnippet, setLinkingSnippet] = useState<string | null>(null);
   useEffect(() => {
     if (!repoPath || !window.commons?.listRepoApps) {
       setRepoApps([]);
@@ -1032,9 +1056,16 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
       });
       setRepoNote(null);
       setOpenSetting(null);
+    } else if (inspection.navigatorScreens && inspection.navigatorScreens.length > 0) {
+      // The screens were found; they just have no web addresses. Name them, so
+      // it's clear discovery worked and only the linking config is missing.
+      setRepoNote(
+        `Found ${inspection.navigatorScreens.length} screens (${inspection.navigatorScreens.slice(0, 3).join(", ")}…), but this app has no linking config, so they share one web address. Add one and Commons can draw them separately.`
+      );
+      setLinkingSnippet(buildLinkingSnippet(inspection.navigatorScreens));
     } else {
       setRepoNote(
-        "Linked, but Commons can't read this app's screens automatically — it doesn't use file-based routing. List them in commons.json to put them on the canvas."
+        "Linked, but Commons can't read this app's screens — it doesn't use file-based routing. List them in commons.json to put them on the canvas."
       );
     }
   };
@@ -1902,6 +1933,17 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                     </>
                   )}
                   {repoNote && <span className="form-error">{repoNote}</span>}
+                  {linkingSnippet && (
+                    <>
+                      <pre className="linking-snippet">{linkingSnippet}</pre>
+                      <button
+                        className="btn ghost"
+                        onClick={() => void navigator.clipboard.writeText(linkingSnippet)}
+                      >
+                        Copy linking config
+                      </button>
+                    </>
+                  )}
                   <div className="reveal-form-row">
                     <button className="btn ghost" onClick={() => void locateRepo()}>
                       Change folder…

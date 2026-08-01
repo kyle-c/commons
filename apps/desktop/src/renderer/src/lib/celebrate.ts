@@ -22,16 +22,26 @@
  *   AudioContext must never break archiving.
  */
 
-const DURATION_MS = 560;
-const FLECKS = 14;
+// Tuned for snap: the card is gone by ~300ms and the void closes by 400ms.
+// Past roughly half a second a confirmation animation stops reading as
+// responsive and starts reading as a wait.
+const DURATION_MS = 400;
+const FLECKS = 12;
 
 function reducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-function cssColor(name: string, fallback: string): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return value || fallback;
+let tokenCache: { accent: string; tertiary: string } | null = null;
+function themeTokens(): { accent: string; tertiary: string } {
+  // Read once per session: getComputedStyle forces a style recalculation, and
+  // paying it on the click that starts an animation is the worst moment.
+  if (!tokenCache) {
+    const style = getComputedStyle(document.documentElement);
+    const read = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback;
+    tokenCache = { accent: read("--accent", "#7c9c7c"), tertiary: read("--text-tertiary", "#8f8d80") };
+  }
+  return tokenCache;
 }
 
 /**
@@ -155,30 +165,32 @@ export function vacuumFrom(el: HTMLElement, colors: string[] = []): void {
   const rect = el.getBoundingClientRect();
   const cx = rect.left + rect.width / 2;
   const cy = rect.top + rect.height / 2;
-  const palette = [
-    ...colors.filter((c) => typeof c === "string" && c.length > 0),
-    cssColor("--accent", "#7c9c7c"),
-    cssColor("--text-tertiary", "#8f8d80"),
-  ];
+  const tokens = themeTokens();
+  const palette = [...colors.filter((c) => typeof c === "string" && c.length > 0), tokens.accent, tokens.tertiary];
 
   const overlay = document.createElement("div");
   overlay.className = "celebrate-overlay";
-  document.body.appendChild(overlay);
+  // Assembled off-document and inserted in one write, so the browser lays out
+  // once instead of once per fleck.
+  const frag = document.createDocumentFragment();
 
   // The void: opens fast, waits for the card, snaps shut.
   const voidDot = document.createElement("div");
   voidDot.className = "vacuum-void";
   voidDot.style.left = `${cx}px`;
   voidDot.style.top = `${cy}px`;
-  overlay.appendChild(voidDot);
-  voidDot.animate(
+  frag.appendChild(voidDot);
+  const animations: (() => void)[] = [];
+  animations.push(() =>
+    voidDot.animate(
     [
       { transform: "translate(-50%, -50%) scale(0)", opacity: 0 },
       { transform: "translate(-50%, -50%) scale(1)", opacity: 1, offset: 0.25 },
       { transform: "translate(-50%, -50%) scale(1)", opacity: 1, offset: 0.82 },
       { transform: "translate(-50%, -50%) scale(0)", opacity: 0 },
     ],
-    { duration: DURATION_MS + 140, easing: "cubic-bezier(0.4, 0, 0.2, 1)" }
+      { duration: DURATION_MS + 110, easing: "cubic-bezier(0.4, 0, 0.2, 1)" }
+    )
   );
 
   // The card itself: a clone in the overlay, so reactivity can unmount the
@@ -189,17 +201,21 @@ export function vacuumFrom(el: HTMLElement, colors: string[] = []): void {
   ghost.style.top = `${rect.top}px`;
   ghost.style.width = `${rect.width}px`;
   ghost.style.height = `${rect.height}px`;
-  overlay.appendChild(ghost);
+  frag.appendChild(ghost);
   el.style.visibility = "hidden";
 
   const spin = (Math.random() < 0.5 ? -1 : 1) * (14 + Math.random() * 14);
-  ghost.animate(
-    [
-      { transform: "scale(1) rotate(0deg)", opacity: 1, easing: "cubic-bezier(0.5, 0, 0.9, 0.4)" },
-      { transform: `scale(0.82) rotate(${spin * 0.3}deg)`, opacity: 1, offset: 0.4 },
-      { transform: `scale(0.02) rotate(${spin}deg)`, opacity: 0.6 },
-    ],
-    { duration: DURATION_MS, easing: "cubic-bezier(0.6, 0, 0.95, 0.5)", fill: "forwards" }
+  animations.push(() =>
+    ghost.animate(
+      [
+        { transform: "scale(1) rotate(0deg)", opacity: 1 },
+        { transform: `scale(0.78) rotate(${spin * 0.35}deg)`, opacity: 1, offset: 0.45 },
+        { transform: `scale(0.02) rotate(${spin}deg)`, opacity: 0.5 },
+      ],
+      // Steep-in curve: the card commits to the void early instead of
+      // drifting, which is most of what reads as "faster".
+      { duration: DURATION_MS, easing: "cubic-bezier(0.7, 0, 0.9, 0.35)", fill: "forwards" }
+    )
   );
 
   // Flecks of the project's colors, caught in the draft and pulled in after.
@@ -213,27 +229,33 @@ export function vacuumFrom(el: HTMLElement, colors: string[] = []): void {
     fleck.style.borderRadius = "50%";
     fleck.style.left = `${cx}px`;
     fleck.style.top = `${cy}px`;
-    overlay.appendChild(fleck);
+    frag.appendChild(fleck);
 
     const angle = Math.random() * Math.PI * 2;
     const distance = 70 + Math.random() * 130;
     const sx = Math.cos(angle) * distance;
     const sy = Math.sin(angle) * distance;
-    const delay = Math.random() * 180;
-    fleck.animate(
-      [
-        { transform: `translate(${sx}px, ${sy}px) scale(1)`, opacity: 0 },
-        { transform: `translate(${sx * 0.7}px, ${sy * 0.7}px) scale(0.9)`, opacity: 0.9, offset: 0.3 },
-        { transform: "translate(0, 0) scale(0.2)", opacity: 0 },
-      ],
-      { duration: DURATION_MS - 60, delay, easing: "cubic-bezier(0.55, 0, 1, 0.45)", fill: "backwards" }
+    const delay = Math.random() * 110;
+    animations.push(() =>
+      fleck.animate(
+        [
+          { transform: `translate(${sx}px, ${sy}px) scale(1)`, opacity: 0 },
+          { transform: `translate(${sx * 0.66}px, ${sy * 0.66}px) scale(0.9)`, opacity: 0.9, offset: 0.28 },
+          { transform: "translate(0, 0) scale(0.2)", opacity: 0 },
+        ],
+        { duration: DURATION_MS - 80, delay, easing: "cubic-bezier(0.6, 0, 1, 0.4)", fill: "backwards" }
+      )
     );
   }
+
+  overlay.appendChild(frag);
+  document.body.appendChild(overlay);
+  for (const start of animations) start();
 
   window.setTimeout(() => {
     overlay.remove();
     // If the archive failed, the card is still mounted and comes back; if it
     // succeeded, the node is gone and this is a no-op.
     el.style.visibility = "";
-  }, DURATION_MS + 180);
+  }, DURATION_MS + 140);
 }
