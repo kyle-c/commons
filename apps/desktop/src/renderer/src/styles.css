@@ -325,7 +325,11 @@ textarea:focus {
   max-width: 300px;
 }
 .setup-pop .reveal-form {
+  /* Every setting popover is the same width and the same inset, so switching
+     between them doesn't reflow the panel under the cursor. */
   min-width: 264px;
+  padding: 12px 14px 12px;
+  gap: 8px;
 }
 
 .team-row {
@@ -943,6 +947,9 @@ textarea:focus {
 .hint {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
+  /* Popover prose wraps constantly at 340px — without a stated leading each
+     body set its own and the panels never lined up. */
+  line-height: 1.45;
 }
 
 /* ---------- User tests (Prototype tab) ---------- */
@@ -3794,4 +3801,51 @@ kbd {
   max-height: 200px;
   overflow: auto;
   white-space: pre;
+}
+
+/* ── Panel glow ──────────────────────────────────────────────────────────
+   A warm point of light under the cursor on panels and popovers, swelling
+   while the pointer rests. Moved and scaled by transform only, so it rides
+   the compositor and never repaints the panel it sits in. */
+.panel-glow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 260px;
+  height: 260px;
+  margin: -130px 0 0 -130px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  will-change: transform, opacity;
+  transform: translate3d(-999px, -999px, 0);
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--accent) 20%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 9%, transparent) 45%,
+    transparent 70%
+  );
+  /* Only the fade is animated here; position and swell come from the rAF
+     loop, which would fight a transition. */
+  transition: opacity 260ms var(--ease-out);
+}
+.panel-glow.on {
+  opacity: 1;
+}
+/* The panels that host it: a containing block so the orb positions against
+   the panel, and a clip so the light stops at the panel's edge. */
+.titlebar-popover,
+.overlay-card,
+.agent-panel,
+.flow-review {
+  position: relative;
+  isolation: isolate;
+}
+.titlebar-popover > *:not(.panel-glow),
+.overlay-card > *:not(.panel-glow),
+.agent-panel > *:not(.panel-glow),
+.flow-review > *:not(.panel-glow) {
+  position: relative;
+  z-index: 1;
 }

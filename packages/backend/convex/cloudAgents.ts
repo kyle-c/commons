@@ -329,6 +329,12 @@ jobs:
       - name: Run the Commons agent
         env:
           ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
+          # Optional: point the agent at an OpenAI-compatible gateway such as
+          # OpenRouter. Set ANTHROPIC_BASE_URL as a repo variable (or secret)
+          # and put the gateway's key in ANTHROPIC_API_KEY. Leave both unset
+          # to talk to Anthropic directly.
+          ANTHROPIC_BASE_URL: \${{ vars.ANTHROPIC_BASE_URL }}
+          COMMONS_AGENT_MODEL: \${{ vars.COMMONS_AGENT_MODEL }}
           COMMONS_PAYLOAD: \${{ toJson(github.event.client_payload) }}
         run: |
           mkdir -p /tmp/commons && cd /tmp/commons
@@ -398,9 +404,13 @@ let numTurns = 0;
 let totalCostUsd;
 let ok = false;
 try {
+  // Pinned rather than left to the SDK default, so a default that moves
+  // upstream can't silently change what your drafts are written by. Override
+  // per repo with a COMMONS_AGENT_MODEL variable.
+  const MODEL = process.env.COMMONS_AGENT_MODEL || "claude-sonnet-5";
   for await (const message of query({
     prompt,
-    options: { cwd: process.cwd(), permissionMode: "acceptEdits", maxTurns: 40 },
+    options: { cwd: process.cwd(), permissionMode: "acceptEdits", maxTurns: 40, model: MODEL },
   })) {
     if (message.type === "assistant") {
       for (const block of message.message.content ?? []) {

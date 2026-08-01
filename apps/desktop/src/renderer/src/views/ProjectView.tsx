@@ -224,7 +224,7 @@ function FigmaSettingBody({ project, me }: { project: Doc<"projects">; me: Doc<"
         <div className="reveal-form-row">
           <input placeholder="figd_…" value={token} onChange={(e) => setToken(e.target.value)} />
           <button
-            className="btn"
+            className="btn primary"
             disabled={!token.trim()}
             onClick={async () => {
               await saveToken({
@@ -254,7 +254,7 @@ function FigmaSettingBody({ project, me }: { project: Doc<"projects">; me: Doc<"
           onChange={(e) => setFrameUrl(e.target.value)}
         />
         <button
-          className="btn"
+          className="btn primary"
           disabled={!frameUrl.trim()}
           onClick={async () => {
             setNote(null);
@@ -416,13 +416,16 @@ function DeployHistoryBody({ projectId, me }: { projectId: Id<"projects">; me: D
   });
   if (!history || history.length === 0) {
     return (
-      <span className="hint">
-        Deploys land here once GitHub is connected — each one a link to that version.
-      </span>
+      <div className="reveal-form">
+        <span className="reveal-label">History</span>
+        <span className="hint">Deploys land here once GitHub is connected.</span>
+      </div>
     );
   }
   return (
-    <div className="deploy-history">
+    <div className="reveal-form">
+      <span className="reveal-label">History</span>
+      <div className="deploy-history">
       {history.map((d) => (
         <button
           key={d._id}
@@ -438,7 +441,8 @@ function DeployHistoryBody({ projectId, me }: { projectId: Id<"projects">; me: D
           {d.sha && <span className="deploy-sha">{d.sha}</span>}
           {d.current && <span className="deploy-current">current</span>}
         </button>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

@@ -24,9 +24,12 @@
   --text-inverse: #1a1b17;
 
   /* Accent — muted teal, the brand's one cool note */
-  --accent: #45a898;
-  --accent-hover: #5cbcac;
-  --accent-muted: rgba(69, 168, 152, 0.16);
+  /* Burnt orange. Deliberately redder than --comment bronze (#c9944a) so the
+     brand's two warm roles stay separable: accent = what you can act on,
+     bronze = where discussion lives. */
+  --accent: #c8743f;
+  --accent-hover: #d98a54;
+  --accent-muted: rgba(200, 116, 63, 0.16);
 
   /* Semantic — status colors from the brand sheet; comment warmth is bronze */
   --success: #58a86b;
@@ -76,9 +79,9 @@
   --text-inverse: #fbf9f4;
 
   /* Accent — deeper teal for contrast on paper */
-  --accent: #1f7a6e;
-  --accent-hover: #16665c;
-  --accent-muted: rgba(31, 122, 110, 0.13);
+  --accent: #9c531f;
+  --accent-hover: #84441a;
+  --accent-muted: rgba(156, 83, 31, 0.13);
 
   /* Semantic — darkened for light backgrounds */
   --success: #2e7d4f;

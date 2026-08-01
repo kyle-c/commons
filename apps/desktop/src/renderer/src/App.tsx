@@ -13,6 +13,7 @@ import CommandPalette from "./views/CommandPalette";
 import { clearStoredSession, getStoredSession, initials, type StoredSession } from "./lib/session";
 import { getRecents } from "./lib/recents";
 import { applyStoredPreviewAppearance } from "./lib/previewAppearance";
+import { initPanelGlow } from "./lib/panelGlow";
 import { loadTabs, saveTabs, type ProjectTab } from "./lib/tabs";
 import TabBar from "./components/TabBar";
 
@@ -119,6 +120,9 @@ export default function App() {
   useEffect(() => saveTabs(tabs, activeId), [tabs, activeId]);
 
   // A deep-linked or restored project gets its tab on first render.
+  // Cursor-following warmth on panels and popovers (one delegated listener).
+  useEffect(() => initPanelGlow(), []);
+
   useEffect(() => {
     if (nav.screen === "project") {
       const id = nav.projectId as string;
