@@ -1851,36 +1851,59 @@ kbd {
   padding: 16px;
   overflow: hidden;
 }
-.project-cover::before {
+/* The scrim only exists for photographic covers: photos have uncontrolled
+   contrast everywhere, so they get dimmed. The generated ribbon art runs at
+   full saturation — dimming the whole cover to protect three words was
+   backwards. The words protect themselves now (see the span). */
+.project-cover:has(.cover-img)::before {
   content: "";
   position: absolute;
   inset: 0;
-  /* keep the name legible on bright brand colors */
   background: linear-gradient(rgba(16, 16, 18, 0.2), rgba(16, 16, 18, 0.45));
 }
 .project-cover span {
   position: relative;
-  font-size: var(--text-xl);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  /* Theme-aware ink with an opposite-tone halo: cream-on-charcoal in dark,
-     ink-on-sand in light — readable over any ribbon composition. */
-  color: rgba(250, 248, 240, 0.95);
+  /* The name speaks the app's editorial voice: same serif as the "Projects"
+     header, so covers read as titled works rather than labeled tiles. Serif
+     sets visually smaller than sans at equal px, hence the nudge. */
+  font-family: var(--font-display);
+  font-size: calc(var(--text-xl) + 3px);
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  /* Theme ink + map-label halo: the letterforms carry their own ground (a
+     tight ring of the surface color, then a wide soft pool) so contrast is
+     guaranteed on any ribbon in either mode — the cartographer's trick for
+     text over terrain. The feathered radial keeps it a glow, never a box. */
+  color: var(--text-primary);
+  /* The halo IS the scrim: a tight ring for edge contrast, then two wide
+     pools that soften the art around the words. Shadows feather with the
+     letterforms, so unlike a background gradient this can never print a
+     rectangle behind a long name. */
   text-shadow:
-    0 1px 2px rgba(15, 15, 10, 0.5),
-    0 1px 14px rgba(15, 15, 10, 0.45);
+    0 1px 0 color-mix(in srgb, var(--bg-canvas) 90%, transparent),
+    0 -1px 0 color-mix(in srgb, var(--bg-canvas) 90%, transparent),
+    1px 0 0 color-mix(in srgb, var(--bg-canvas) 90%, transparent),
+    -1px 0 0 color-mix(in srgb, var(--bg-canvas) 90%, transparent),
+    0 0 8px color-mix(in srgb, var(--bg-canvas) 88%, transparent),
+    0 2px 26px color-mix(in srgb, var(--bg-canvas) 80%, transparent),
+    0 4px 52px color-mix(in srgb, var(--bg-canvas) 55%, transparent);
+  padding: 6px 12px;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-:root[data-theme="light"] .project-cover span {
-  color: rgba(38, 37, 30, 0.92);
+/* Uploaded cover images are usually photographic — cream-on-scrim in both
+   modes, since a photo's local contrast answers to nobody's theme tokens. */
+.project-cover .cover-img + span {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  background: none;
+  color: rgba(250, 248, 240, 0.95);
   text-shadow:
-    0 1px 2px rgba(250, 248, 240, 0.9),
-    0 0 14px rgba(250, 248, 240, 0.75);
+    0 1px 2px rgba(15, 15, 10, 0.5),
+    0 1px 14px rgba(15, 15, 10, 0.45);
 }
-/* Uploaded cover images are usually photographic — keep cream-on-scrim. */
 :root[data-theme="light"] .project-cover .cover-img + span {
   color: rgba(250, 248, 240, 0.95);
   text-shadow:
