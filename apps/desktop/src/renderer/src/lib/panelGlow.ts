@@ -7,126 +7,114 @@
  * you notice it only if you stop, which is exactly when a surface should feel
  * alive rather than inert.
  *
- * Built as one delegated listener instead of a component so every panel gets
- * it, including ones that don't exist yet, with no prop to thread and nothing
- * to remember at each call site.
+ * ONE orb, parented to <body> and positioned in viewport coordinates, rather
+ * than one per panel. Living inside a panel meant `overflow-y: auto` clipped
+ * the light dead at the border; from the body it spills past the edges, so a
+ * panel reads as lit rather than as a rectangle containing a gradient. It also
+ * means a single element for the whole app instead of one per surface.
  *
  * Performance is the whole design:
- * - The orb is a fixed-size gradient moved and scaled by `transform` alone, so
- *   it lives on the compositor and never repaints the panel underneath. The
- *   canvas cursor trail uses this same trick for the same reason.
- * - The rAF loop runs only while a pointer is actually over a panel, and stops
- *   itself the moment the glow reaches its cap or the pointer leaves. An idle
- *   app schedules no frames.
- * - One orb per panel, created lazily on first hover and reused thereafter.
+ * - Moved and scaled by `transform` alone, so it lives on the compositor and
+ *   never repaints what's beneath it. The canvas cursor trail uses the same
+ *   trick for the same reason.
+ * - The rAF loop runs only while a pointer is over a panel, and stops itself
+ *   once the swell reaches its cap. An idle app schedules no frames.
  *
- * Skipped entirely under prefers-reduced-motion: a growing light is still
- * motion, and nobody needs it to use the tool.
+ * Skipped under prefers-reduced-motion: a growing light is still motion.
  */
 
 const PANEL_SELECTOR = ".titlebar-popover, .overlay-card, .agent-panel, .flow-review";
 
-/** Resting radius multiplier, and the cap it swells to while the cursor rests. */
+/** Resting size multiplier, and the cap it swells to while the cursor rests. */
 const BASE_SCALE = 1;
-const MAX_SCALE = 1.85;
+const MAX_SCALE = 1.7;
 /** How long a still cursor takes to reach the cap. */
-const SWELL_MS = 2600;
+const SWELL_MS = 2800;
 
-interface GlowState {
-  orb: HTMLElement;
-  /** When the pointer last moved — the clock the swell is measured from. */
-  restingSince: number;
-  x: number;
-  y: number;
-}
-
-const states = new WeakMap<HTMLElement, GlowState>();
-let active: HTMLElement | null = null;
+let orb: HTMLElement | null = null;
+let restingSince = 0;
+let x = 0;
+let y = 0;
+let over = false;
 let frame = 0;
 
 function reducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-function orbFor(panel: HTMLElement): GlowState {
-  const existing = states.get(panel);
-  if (existing) return existing;
-  const orb = document.createElement("div");
-  orb.className = "panel-glow";
-  orb.setAttribute("aria-hidden", "true");
-  // Prepended so it sits under the panel's content in paint order without
-  // needing a z-index on every child.
-  panel.prepend(orb);
-  const state: GlowState = { orb, restingSince: performance.now(), x: 0, y: 0 };
-  states.set(panel, state);
-  return state;
+function ensureOrb(): HTMLElement {
+  if (!orb) {
+    orb = document.createElement("div");
+    orb.className = "panel-glow";
+    orb.setAttribute("aria-hidden", "true");
+    document.body.appendChild(orb);
+  }
+  return orb;
 }
 
-function paint(state: GlowState, now: number): void {
-  const rested = Math.min(1, (now - state.restingSince) / SWELL_MS);
+function paint(now: number): void {
+  if (!orb) return;
+  const rested = Math.min(1, (now - restingSince) / SWELL_MS);
   // Ease-out: most of the growth lands early, then it creeps to the cap, so
   // the swell reads as settling rather than inflating.
   const eased = 1 - (1 - rested) ** 3;
   const scale = BASE_SCALE + (MAX_SCALE - BASE_SCALE) * eased;
-  state.orb.style.transform = `translate3d(${state.x}px, ${state.y}px, 0) scale(${scale.toFixed(3)})`;
-  state.orb.style.opacity = String(0.55 + 0.45 * eased);
+  orb.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale.toFixed(3)})`;
 }
 
 function tick(): void {
   frame = 0;
-  if (!active) return;
-  const state = states.get(active);
-  if (!state) return;
+  if (!over) return;
   const now = performance.now();
-  paint(state, now);
-  // Stop scheduling once the swell is capped — a resting cursor should cost
-  // nothing after it has finished growing.
-  if (now - state.restingSince < SWELL_MS) frame = requestAnimationFrame(tick);
+  paint(now);
+  // Once capped, a resting cursor should cost nothing.
+  if (now - restingSince < SWELL_MS) frame = requestAnimationFrame(tick);
 }
 
 function onPointerMove(event: PointerEvent): void {
   const target = event.target as HTMLElement | null;
-  const panel = target?.closest?.(PANEL_SELECTOR) as HTMLElement | null;
+  const panel = target?.closest?.(PANEL_SELECTOR);
 
   if (!panel) {
-    if (active) {
-      states.get(active)?.orb.classList.remove("on");
-      active = null;
+    if (over && orb) {
+      over = false;
+      orb.classList.remove("on");
     }
     return;
   }
 
-  if (active && active !== panel) states.get(active)?.orb.classList.remove("on");
-  active = panel;
+  // Viewport coordinates: the orb is parented to <body>, deliberately outside
+  // the panel, so it is never clipped by the panel's own scroll container.
+  x = event.clientX;
+  y = event.clientY;
+  restingSince = performance.now();
+  over = true;
+  ensureOrb().classList.add("on");
 
-  const state = orbFor(panel);
-  const rect = panel.getBoundingClientRect();
-  // Add scroll so the light stays under the cursor in a scrolled panel.
-  state.x = event.clientX - rect.left + panel.scrollLeft;
-  state.y = event.clientY - rect.top + panel.scrollTop;
-  state.restingSince = performance.now();
-  state.orb.classList.add("on");
-
-  paint(state, state.restingSince);
+  paint(restingSince);
   if (!frame) frame = requestAnimationFrame(tick);
 }
 
-function onPointerLeaveWindow(): void {
-  if (!active) return;
-  states.get(active)?.orb.classList.remove("on");
-  active = null;
+function hide(): void {
+  if (!over) return;
+  over = false;
+  orb?.classList.remove("on");
 }
 
 /** Start the effect. Safe to call once at app start; a no-op if unsupported. */
 export function initPanelGlow(): () => void {
   if (reducedMotion()) return () => {};
   document.addEventListener("pointermove", onPointerMove, { passive: true });
-  document.addEventListener("pointerleave", onPointerLeaveWindow);
+  document.addEventListener("pointerleave", hide);
+  window.addEventListener("blur", hide);
   return () => {
     document.removeEventListener("pointermove", onPointerMove);
-    document.removeEventListener("pointerleave", onPointerLeaveWindow);
+    document.removeEventListener("pointerleave", hide);
+    window.removeEventListener("blur", hide);
     if (frame) cancelAnimationFrame(frame);
     frame = 0;
-    active = null;
+    over = false;
+    orb?.remove();
+    orb = null;
   };
 }

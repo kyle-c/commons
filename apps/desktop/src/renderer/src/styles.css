@@ -3804,56 +3804,36 @@ kbd {
 }
 
 /* ── Panel glow ──────────────────────────────────────────────────────────
-   A warm point of light under the cursor on panels and popovers, swelling
-   while the pointer rests. Moved and scaled by transform only, so it rides
-   the compositor and never repaints the panel it sits in. */
+   A warm point of light under the cursor on panels and popovers. Parented to
+   <body> in viewport coordinates rather than to the panel, so it spills past
+   the panel's edges instead of being clipped dead at the border by its scroll
+   container — a lit surface, not a rectangle full of gradient.
+
+   Bigger and fainter than the first pass: at this size the falloff does the
+   work, and anything stronger competes with the content it's meant to light. */
 .panel-glow {
-  position: absolute;
+  position: fixed;
   left: 0;
   top: 0;
-  width: 260px;
-  height: 260px;
-  margin: -130px 0 0 -130px;
+  width: 460px;
+  height: 460px;
+  margin: -230px 0 0 -230px;
   border-radius: 50%;
   pointer-events: none;
-  z-index: 0;
+  /* Above the panels it lights (popovers sit at 100) but below modal scrims,
+     so it never washes over a dialog. */
+  z-index: 120;
   opacity: 0;
   will-change: transform, opacity;
-  transform: translate3d(-999px, -999px, 0);
+  transform: translate3d(-9999px, -9999px, 0);
   background: radial-gradient(
     circle at center,
-    color-mix(in srgb, var(--accent) 20%, transparent) 0%,
-    color-mix(in srgb, var(--accent) 9%, transparent) 45%,
-    transparent 70%
+    color-mix(in srgb, var(--accent) 9%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 4%, transparent) 40%,
+    transparent 72%
   );
-  /* Only the fade is animated here; position and swell come from the rAF
-     loop, which would fight a transition. */
-  transition: opacity 260ms var(--ease-out);
+  transition: opacity 320ms var(--ease-out);
 }
 .panel-glow.on {
   opacity: 1;
-}
-/* The panels that host it need a containing block and their own stacking
-   context — but NOT a position override. These already carry their own
-   positioning (.titlebar-popover is absolute under its trigger, .agent-panel
-   is fixed to the right edge), and forcing `relative` here tore both off
-   their anchors. `isolation` alone gives the stacking context, and any
-   non-static position is already a containing block. */
-.titlebar-popover,
-.agent-panel,
-.overlay-card,
-.flow-review {
-  isolation: isolate;
-}
-/* Only the ones that are genuinely static need promoting. */
-.overlay-card,
-.flow-review {
-  position: relative;
-}
-.titlebar-popover > *:not(.panel-glow),
-.overlay-card > *:not(.panel-glow),
-.agent-panel > *:not(.panel-glow),
-.flow-review > *:not(.panel-glow) {
-  position: relative;
-  z-index: 1;
 }
