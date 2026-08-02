@@ -328,7 +328,7 @@ function FlowReviewPanel({
         <div className="flow-review-body">
           {note && <span className="form-error">{note}</span>}
           {proposals.length === 0 && (
-            <p className="hint">Nothing pending. Run “Find edge cases” to send a browser through your preview.</p>
+            <p className="hint">Nothing pending. Run “Find error &amp; empty states” to send a browser through your preview.</p>
           )}
           {proposals.map((p) => (
             <div key={p._id} className="flow-proposal">
@@ -1040,6 +1040,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const addFlowEdge = useMutation(api.flows.addEdge);
   const [crawlNote, setCrawlNote] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [drawOpen, setDrawOpen] = useState(false);
   const [connectFrom, setConnectFrom] = useState<string>("");
   const [connectTo, setConnectTo] = useState<string>("");
   const [connectLabel, setConnectLabel] = useState("");
@@ -2443,7 +2444,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               {flowEdges === undefined
                 ? "Loading paths…"
                 : flowEdges.length === 0
-                  ? "No paths yet. Run a user test, or connect two screens."
+                  ? "No paths yet — they are drawn from tester sessions, from links in the code, or by hand."
                   : `${flowEdges.length} path${flowEdges.length === 1 ? "" : "s"}`}
               {crawl?.status === "starting" || crawl?.status === "running"
                 ? ` · Crawling your preview… ${crawl.found} found`
@@ -2471,7 +2472,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                 }
               }}
             >
-              Find edge cases
+              Find error &amp; empty states
             </button>
             <button
               className="btn ghost"
@@ -2497,16 +2498,28 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                 }
               }}
             >
-              {deriving ? "Deriving…" : "Derive from tests"}
+              {deriving ? "Reading sessions…" : "Draw paths from tester sessions"}
             </button>
           </div>
-          {/* Manual edges: connect two screens, name the trigger. Kept a simple
-              two-select form rather than canvas drag — no CanvasView surgery,
-              and it reads clearly. */}
+          {/* Hand-drawn paths. The form only exists while wanted: an always-on
+              row of bare dropdowns read as furniture with no purpose (a user
+              said exactly that), so the door is a sentence and the form is
+              one too. */}
+          {!drawOpen && (
+            <div className="flow-connect">
+              <button className="btn ghost" onClick={() => setDrawOpen(true)}>
+                Draw a path by hand…
+              </button>
+              <span className="hint">
+                For a connection the map is missing — tester sessions and code links draw the rest.
+              </span>
+            </div>
+          )}
+          {drawOpen && (
           <div className="flow-connect">
-            <span className="hint">Connect</span>
+            <span className="hint">A person on</span>
             <select value={connectFrom} onChange={(e) => setConnectFrom(e.target.value)}>
-              <option value="">from…</option>
+              <option value="">this screen…</option>
               {frames.map((f) => (
                 <option key={f._id} value={f._id}>
                   {f.title}
@@ -2514,9 +2527,9 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                 </option>
               ))}
             </select>
-            <span className="hint">→</span>
+            <span className="hint">can get to</span>
             <select value={connectTo} onChange={(e) => setConnectTo(e.target.value)}>
-              <option value="">to…</option>
+              <option value="">this one…</option>
               {frames.map((f) => (
                 <option key={f._id} value={f._id}>
                   {f.title}
@@ -2525,7 +2538,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               ))}
             </select>
             <input
-              placeholder="trigger, e.g. “tap Buy”"
+              placeholder="by doing what? e.g. “tapping Buy”"
               value={connectLabel}
               onChange={(e) => setConnectLabel(e.target.value)}
             />
@@ -2546,14 +2559,19 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                   setConnectFrom("");
                   setConnectTo("");
                   setConnectLabel("");
+                  setDrawOpen(false);
                 } catch (err) {
                   setCrawlNote(err instanceof Error ? err.message : String(err));
                 }
               }}
             >
-              Add edge
+              Draw it
+            </button>
+            <button className="btn ghost icon-btn" aria-label="Close" onClick={() => setDrawOpen(false)}>
+              ✕
             </button>
           </div>
+          )}
           {reviewOpen && (
             <FlowReviewPanel
               proposals={flowProposals ?? []}
