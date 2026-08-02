@@ -2157,29 +2157,73 @@ kbd {
   gap: 18px;
   z-index: 3;
 }
-/* Notes read as margin-notes from a colleague, not system output: paper-warm
-   tint, a hand-placed lean that alternates down the stack, and air between
-   them. The lean is ±0.6° — enough to feel pinned up, never enough to fight
-   legibility — and straightens on hover so reading is always level. */
+/* Notes are the designer speaking, so they look like speech: a bubble with
+   a tail pointing up at the screen it's about, one deliberately tight
+   corner (the comic-lettering tell), the editorial serif for the voice,
+   and a hand-placed lean that alternates down the stack. Not a card. A
+   card is what a system emits; a bubble is what a person says. */
 .frame-note {
-  padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--comment) 30%, transparent);
-  border-left: 3px solid var(--comment);
-  border-radius: 3px var(--radius-lg) var(--radius-lg) var(--radius-lg);
-  background: color-mix(in srgb, var(--comment) 7%, var(--bg-panel));
+  position: relative;
+  padding: 13px 16px 14px;
+  border: 1.5px solid color-mix(in srgb, var(--comment) 38%, transparent);
+  border-radius: 20px 22px 22px 4px;
+  background: color-mix(in srgb, var(--comment) 8%, var(--bg-panel));
   color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.5;
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  line-height: 1.55;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18), 0 8px 20px rgba(0, 0, 0, 0.12);
   transform: rotate(-0.6deg);
-  transition: transform var(--dur-fast) var(--ease-out);
+  transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.frame-note::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 30px;
+  width: 13px;
+  height: 13px;
+  background: inherit;
+  border-left: inherit;
+  border-top: inherit;
+  border-radius: 4px 0 0 0;
+  transform: rotate(45deg);
 }
 .frame-note:nth-child(even) {
   transform: rotate(0.6deg);
-  border-radius: var(--radius-lg) 3px var(--radius-lg) var(--radius-lg);
+  border-radius: 22px 20px 4px 22px;
+}
+.frame-note:nth-child(even)::before {
+  left: auto;
+  right: 30px;
 }
 .frame-note:hover {
   transform: rotate(0deg);
+}
+/* Click the words, edit the words: the bubble itself becomes the editor.
+   Same face, same tail — only the ring says it's live. */
+.frame-note textarea {
+  width: 100%;
+  border: 0;
+  background: none;
+  resize: vertical;
+  font: inherit;
+  color: var(--text-primary);
+  line-height: inherit;
+  padding: 0;
+  outline: none;
+  min-height: 60px;
+}
+.frame-note.editing {
+  border-color: var(--accent);
+  transform: rotate(0deg);
+}
+.frame-note .note-hint {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-sans, inherit);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 @media (prefers-reduced-motion: reduce) {
   .frame-note,

@@ -1083,7 +1083,6 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const addGifMutation = useMutation(api.reactions.addGif);
   const removeGif = useMutation(api.reactions.removeGif);
   const curateAnnotation = useMutation(api.annotations.curate);
-  const [editNote, setEditNote] = useState<{ _id: string; text: string } | null>(null);
   const [gifFor, setGifFor] = useState<Doc<"frames"> | null>(null);
   const [gifAnchor, setGifAnchor] = useState<{ fx: number; fy: number } | null>(null);
   const giphy = useQuery(
@@ -2414,49 +2413,6 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           </div>
         </div>
       )}
-      {editNote && (
-        <div className="overlay-scrim" onMouseDown={() => setEditNote(null)}>
-          <div className="overlay-card" onMouseDown={(e) => e.stopPropagation()}>
-            <header>Edit this note</header>
-            <div className="reveal-form">
-              <span className="hint">
-                Published notes stay editable — the reader sees the note, the record keeps the
-                rewrite. Approving your own words is still the bar.
-              </span>
-              <textarea
-                autoFocus
-                rows={4}
-                value={editNote.text}
-                onChange={(e) => setEditNote({ ...editNote, text: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setEditNote(null);
-                }}
-              />
-              <div className="reveal-form-row">
-                <button
-                  className="btn primary"
-                  disabled={!editNote.text.trim()}
-                  onClick={async () => {
-                    await curateAnnotation({
-                      annotationId: editNote._id as Id<"annotations">,
-                      action: "edit",
-                      text: editNote.text.trim(),
-                      userId: me._id,
-                      sessionToken: sessionToken(),
-                    }).catch(() => {});
-                    setEditNote(null);
-                  }}
-                >
-                  Save the rewrite
-                </button>
-                <button className="btn ghost" onClick={() => setEditNote(null)}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
       {gifFor && (
         <div className="overlay-scrim" onMouseDown={() => setGifFor(null)}>
           <div className="overlay-card" onMouseDown={(e) => e.stopPropagation()}>
@@ -2892,7 +2848,15 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             setGifNote(null);
           }}
           onRemoveGif={(frameId) => void removeGif({ frameId, userId: me._id, sessionToken: sessionToken() })}
-          onEditNote={(note) => setEditNote(note)}
+          onEditNote={(note) =>
+            void curateAnnotation({
+              annotationId: note._id as Id<"annotations">,
+              action: "edit",
+              text: note.text,
+              userId: me._id,
+              sessionToken: sessionToken(),
+            }).catch(() => {})
+          }
           onBloom={(frame, x, y, fx, fy) => setBloom({ frame, x, y, fx, fy })}
         />
       ) : (

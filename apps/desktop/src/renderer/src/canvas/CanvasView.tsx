@@ -559,6 +559,8 @@ export default function CanvasView({
   const [commentMode, setCommentMode] = useState(false);
   // Notes layer: on by default — the annotations are curated, that's the point.
   const [notesOn, setNotesOn] = useState(true);
+  // Inline note editing: the bubble itself is the editor (no modal).
+  const [editingNote, setEditingNote] = useState<{ id: string; text: string } | null>(null);
   // Perceived speed: keys are `${frameId}:${reloadToken}` so a reload shows
   // the previous pixels (snapshot underlay) until the fresh iframe paints.
   const [loadedFrames, setLoadedFrames] = useState<Record<string, boolean>>({});
@@ -1271,25 +1273,46 @@ export default function CanvasView({
                 style={{ left: pos.x, top: pos.y + frame.height + 34, width: frame.width }}
                 onMouseDown={(e) => e.stopPropagation()}
               >
-                {notes.map((note) => (
-                  <div key={note._id} className="frame-note">
-                    {onEditNote && (
-                      <button
-                        className="note-edit"
-                        title="Edit this note (the change is logged)"
-                        onClick={() => onEditNote(note)}
-                      >
-                        <Icon name="pen" size={11} />
-                      </button>
-                    )}
-                    {note.text}
-                    {note.inferred && (
-                      <span className="citation inferred" title="No evidence in the record. The designer approved this as their read">
-                        inferred
-                      </span>
-                    )}
-                  </div>
-                ))}
+                {notes.map((note) =>
+                  editingNote?.id === note._id ? (
+                    <div key={note._id} className="frame-note editing">
+                      <textarea
+                        autoFocus
+                        value={editingNote.text}
+                        onChange={(e) => setEditingNote({ id: note._id, text: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") setEditingNote(null);
+                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                            if (editingNote.text.trim() && editingNote.text.trim() !== note.text)
+                              onEditNote?.({ _id: note._id, text: editingNote.text.trim() });
+                            setEditingNote(null);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (editingNote.text.trim() && editingNote.text.trim() !== note.text)
+                            onEditNote?.({ _id: note._id, text: editingNote.text.trim() });
+                          setEditingNote(null);
+                        }}
+                      />
+                      <span className="note-hint">⌘↩ or click away saves · Esc leaves it</span>
+                    </div>
+                  ) : (
+                    <div
+                      key={note._id}
+                      className="frame-note"
+                      title={onEditNote ? "Click to edit — the rewrite is logged" : undefined}
+                      onClick={() => onEditNote && setEditingNote({ id: note._id, text: note.text })}
+                      style={onEditNote ? { cursor: "text" } : undefined}
+                    >
+                      {note.text}
+                      {note.inferred && (
+                        <span className="citation inferred" title="No evidence in the record. The designer approved this as their read">
+                          inferred
+                        </span>
+                      )}
+                    </div>
+                  )
+                )}
               </div>
             );
           })}
