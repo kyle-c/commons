@@ -117,6 +117,27 @@ export default function ProjectList({
     const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
     await setCover({ projectId: coverTarget, storageId, userId: me._id, sessionToken: sessionToken() });
   };
+  /**
+   * Where each project's code sits on *this* machine, so archiving can stop
+   * the server it left running.
+   *
+   * Leaving a project only releases its server on a grace timer, because
+   * coming straight back is common and a five-minute-old server is instant.
+   * Archiving is the opposite kind of act: it says this is finished. Waiting
+   * out a grace period there means a port stays held by something the user has
+   * explicitly put away, and the port viewer keeps listing it.
+   *
+   * Per machine by definition — a repoLink from another laptop points at a
+   * path whose server is not the one running here.
+   */
+  const myRepoLinks =
+    useQuery(api.repoLinks.mine, { userId: me._id, machineId: machineId ?? undefined, sessionToken: sessionToken() }) ?? [];
+  const stopServerFor = (projectId: Id<"projects">) => {
+    const link = myRepoLinks.find((row) => row.projectId === projectId);
+    // Nothing running, no working copy here, or web build: all no-ops.
+    if (link?.repoPath) void window.commons?.stopDevServer?.(link.repoPath).catch(() => {});
+  };
+
   const [adding, setAdding] = useState(false);
   // Inline rename, entered from the card's hover pen. Enter/blur commit,
   // Esc cancels; committing a no-op or empty value just closes the field.
@@ -456,6 +477,9 @@ export default function ProjectList({
                   // mutation lands.
                   const card = e.currentTarget.closest(".project-card");
                   if (card instanceof HTMLElement) vacuumFrom(card, project.brandColors ?? []);
+                  // Put away means put away: the port goes too, rather than
+                  // being held by a project that is no longer on the grid.
+                  stopServerFor(project._id);
                   void setArchived({ projectId: project._id, archived: true, userId: me._id, sessionToken: sessionToken() });
                 }}
               >
@@ -634,6 +658,11 @@ export default function ProjectList({
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 setConfirmDelete(null);
+                                // Belt and braces: archiving already stopped
+                                // it, but a project archived on another
+                                // machine (or before this shipped) can still
+                                // be holding a port here.
+                                stopServerFor(project._id);
                                 try {
                                   await deleteArchived({
                                     projectId: project._id,
