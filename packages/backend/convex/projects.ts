@@ -897,6 +897,20 @@ export const ogForShareToken = internalQuery({
   },
 });
 
+/** Capabilities learned by inspecting the working copy (self-healing on open). */
+export const setSupportsDarkMode = mutation({
+  args: {
+    projectId: v.id("projects"),
+    supportsDarkMode: v.boolean(),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { projectId, supportsDarkMode, ...viewer }) => {
+    await requireProjectAccess(ctx, projectId, viewer);
+    await ctx.db.patch(projectId, { supportsDarkMode });
+  },
+});
+
 /** The ledger's memory: what the last runtime survey found. */
 export const recordSurvey = mutation({
   args: {

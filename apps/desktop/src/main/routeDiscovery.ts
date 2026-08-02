@@ -162,6 +162,33 @@ async function collectStyleFiles(dir: string, depth: number, out: string[]): Pro
  * stylesheets/theme files, greys and near-black/white filtered out, ranked by
  * frequency, second pick forced to a distinct hue.
  */
+/**
+ * Does this app actually have a dark mode? Evidence, not assumption: a
+ * prefers-color-scheme media query or data-theme switch in its styles, or a
+ * darkMode key in a Tailwind config. Apps without one still render fine —
+ * they just render identically in both schemes, so offering a theme flip is
+ * a control that does nothing, and dead controls read as broken.
+ */
+async function detectDarkMode(repoPath: string): Promise<boolean> {
+  const files: string[] = [];
+  await collectStyleFiles(repoPath, 0, files);
+  for (const name of ["tailwind.config.js", "tailwind.config.ts", "tailwind.config.cjs"]) {
+    files.push(path.join(repoPath, name));
+  }
+  for (const file of files) {
+    let text: string;
+    try {
+      text = (await fs.readFile(file, "utf8")).slice(0, 100_000);
+    } catch {
+      continue;
+    }
+    if (/prefers-color-scheme\s*:\s*dark/.test(text)) return true;
+    if (/data-theme\s*=?\s*["']dark["']/.test(text)) return true;
+    if (/darkMode\s*:/.test(text) && /tailwind\.config/.test(file)) return true;
+  }
+  return false;
+}
+
 async function detectBrandColors(repoPath: string): Promise<string[] | undefined> {
   const files: string[] = [];
   await collectStyleFiles(repoPath, 0, files);
@@ -546,6 +573,7 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
     routes,
     gitRemote: await detectGitRemote(repoPath),
     brandColors: await detectBrandColors(repoPath),
+    supportsDarkMode: await detectDarkMode(repoPath),
     vercel: await detectVercel(repoPath),
   };
 }

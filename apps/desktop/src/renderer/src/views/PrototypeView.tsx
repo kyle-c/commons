@@ -104,7 +104,7 @@ export default function PrototypeView({
             <Icon name="image" /> Figma
           </button>
         )}
-        {url && !figmaMode && <PreviewAppearanceButton />}
+        {url && !figmaMode && project.supportsDarkMode && <PreviewAppearanceButton />}
         <button
           className={`btn ghost ${testsOpen ? "active" : ""}`}
           title="Task-based usability tests, shareable by link (U)"

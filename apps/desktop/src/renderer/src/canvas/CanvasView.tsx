@@ -107,6 +107,8 @@ interface Props {
   onEditNote?: (note: { _id: string; text: string }) => void;
   /** Right-click on a frame: open the reaction palette at the cursor. */
   onBloom?: (frame: Doc<"frames">, clientX: number, clientY: number, fx: number, fy: number) => void;
+  /** Whether the previewed app declares a dark mode; the theme flip hides otherwise. */
+  supportsDarkMode?: boolean;
 }
 
 /**
@@ -528,6 +530,7 @@ export default function CanvasView({
   onRemoveGif,
   onEditNote,
   onBloom,
+  supportsDarkMode,
   projectId,
   frames,
   threads,
@@ -1512,11 +1515,10 @@ export default function CanvasView({
         >
           <Icon name="maximize" />
         </button>
-        {/* The forced color scheme already reaches canvas frames — styles.css
-            targets .frame-body iframe as well as the prototype stage — so
-            without this control the canvas was stuck on whatever the prototype
-            view last set, with no way to see or change it from here. */}
-        <PreviewAppearanceButton />
+        {/* Only for apps that actually have a dark mode (evidence-scanned
+            from the repo): a theme flip on a single-scheme app is a control
+            that visibly does nothing, and dead controls read as broken. */}
+        {supportsDarkMode && <PreviewAppearanceButton />}
         {/* Everything left of this changes what you're looking at; everything
             right of it changes how close you are. */}
         <span className="tb-divider" />

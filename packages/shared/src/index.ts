@@ -40,6 +40,8 @@ export interface RepoInspection {
   gitRemote?: string;
   /** Two most prominent brand colors found in the repo's stylesheets. */
   brandColors?: string[];
+  /** Whether the app's own styles declare a dark mode (evidence-scanned). */
+  supportsDarkMode?: boolean;
   /**
    * Vercel deployment config found in the repo. Only ever a hint for
    * prefilling: .vercel/project.json carries projectId/orgId and sometimes

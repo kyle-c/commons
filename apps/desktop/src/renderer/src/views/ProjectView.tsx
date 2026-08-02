@@ -1083,6 +1083,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const addGifMutation = useMutation(api.reactions.addGif);
   const removeGif = useMutation(api.reactions.removeGif);
   const curateAnnotation = useMutation(api.annotations.curate);
+  const setSupportsDarkMode = useMutation(api.projects.setSupportsDarkMode);
   const [gifFor, setGifFor] = useState<Doc<"frames"> | null>(null);
   const [gifAnchor, setGifAnchor] = useState<{ fx: number; fy: number } | null>(null);
   const giphy = useQuery(
@@ -1235,7 +1236,22 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     void window.commons
       .inspectRepo(repoPath)
       .then((inspection) => {
-        if (!cancelled) setVercelProject(inspection.vercel?.projectName ?? null);
+        if (cancelled) return;
+        setVercelProject(inspection.vercel?.projectName ?? null);
+        // Self-heal: capability learned from the working copy, recorded so
+        // every machine (and the theme flip's visibility) agrees.
+        if (
+          inspection.supportsDarkMode !== undefined &&
+          project &&
+          inspection.supportsDarkMode !== project.supportsDarkMode
+        ) {
+          void setSupportsDarkMode({
+            projectId: nav.projectId,
+            supportsDarkMode: inspection.supportsDarkMode,
+            userId: me._id,
+            sessionToken: sessionToken(),
+          }).catch(() => {});
+        }
       })
       .catch(() => {});
     return () => {
@@ -2858,6 +2874,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             }).catch(() => {})
           }
           onBloom={(frame, x, y, fx, fy) => setBloom({ frame, x, y, fx, fy })}
+          supportsDarkMode={project.supportsDarkMode === true}
         />
       ) : (
         <PrototypeView

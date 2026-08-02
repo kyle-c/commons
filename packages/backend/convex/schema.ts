@@ -165,6 +165,10 @@ export default defineSchema({
     // Two most prominent colors from the repo's stylesheets — drives the
     // project card cover.
     brandColors: v.optional(v.array(v.string())),
+    // The app's styles declare a dark mode (scanned from the repo). Absent =
+    // unknown or no: either way the theme flip is withheld, because a
+    // control that does nothing reads as broken.
+    supportsDarkMode: v.optional(v.boolean()),
     // Custom uploaded card cover (Convex storage); beats the brand gradient.
     coverImageId: v.optional(v.id("_storage")),
     // Web share (SNAP-4/DL-3 lite): anyone with /p/<shareToken> gets the
