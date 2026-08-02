@@ -19,7 +19,7 @@ import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessi
 import { getConvexUrl, initials, sessionToken, timeAgo } from "../lib/session";
 import { usePublicSiteUrl } from "../lib/publicUrl";
 import { resolveFrameUrl } from "../lib/frameUrl";
-import { playConnected, playDraftReady, playProposals } from "../lib/sounds";
+import { playConnected, playDraftReady, playProposals, playThrow } from "../lib/sounds";
 import { claimSurface, useSurfaceExclusivity } from "../lib/surfaces";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
@@ -1085,6 +1085,9 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const curateAnnotation = useMutation(api.annotations.curate);
   const [editNote, setEditNote] = useState<{ _id: string; text: string } | null>(null);
   const [gifFor, setGifFor] = useState<Doc<"frames"> | null>(null);
+  const [gifAnchor, setGifAnchor] = useState<{ fx: number; fy: number } | null>(null);
+  /** The reaction palette, bloomed at the cursor by a right-click on a frame. */
+  const [bloom, setBloom] = useState<{ frame: Doc<"frames">; x: number; y: number; fx: number; fy: number } | null>(null);
   const [gifUrl, setGifUrl] = useState("");
   const [gifNote, setGifNote] = useState<string | null>(null);
   const submitGif = async () => {
@@ -1094,6 +1097,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     const result = await addGifMutation({
       frameId: gifFor._id,
       url,
+      fx: gifAnchor?.fx,
+      fy: gifAnchor?.fy,
       userId: me._id,
       sessionToken: sessionToken(),
     }).catch(() => ({ ok: false as const, reason: "not_a_gif" as const }));
@@ -2289,6 +2294,73 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           </button>
         </div>
       )}
+      {bloom && (
+        <div className="bloom-scrim" onMouseDown={() => setBloom(null)} onContextMenu={(e) => { e.preventDefault(); setBloom(null); }}>
+          <div
+            className="bloom-palette"
+            style={{ left: bloom.x, top: bloom.y }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {["✨", "🔥", "❓", "😬"].map((emoji) => (
+              <button
+                key={emoji}
+                className="bloom-item"
+                title="Throw it here"
+                onClick={() => {
+                  void toggleReaction({
+                    frameId: bloom.frame._id,
+                    emoji,
+                    fx: bloom.fx,
+                    fy: bloom.fy,
+                    userId: me._id,
+                    sessionToken: sessionToken(),
+                  });
+                  playThrow();
+                  setBloom(null);
+                }}
+              >
+                {emoji}
+              </button>
+            ))}
+            <button
+              className="bloom-item"
+              title={`Dot-vote this screen (${votesData?.votesLeft ?? 0} left)`}
+              onClick={() => {
+                void toggleVote({ frameId: bloom.frame._id, userId: me._id, sessionToken: sessionToken() });
+                playThrow();
+                setBloom(null);
+              }}
+            >
+              ●
+            </button>
+            <button
+              className="bloom-item"
+              title="Throw a GIF here"
+              onClick={() => {
+                setGifFor(bloom.frame);
+                setGifAnchor({ fx: bloom.fx, fy: bloom.fy });
+                setGifUrl("");
+                setGifNote(null);
+                setBloom(null);
+              }}
+            >
+              🎞️
+            </button>
+            {bloom.frame.kind === "route" && !bloom.frame.variantBranch && (project.gitRemote || repoPath) && (
+              <button
+                className="bloom-item whatif"
+                title="What if… — ask an agent for a live variant"
+                onClick={() => {
+                  setWhatIf({ frame: bloom.frame });
+                  setBloom(null);
+                }}
+              >
+                ✦
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {editNote && (
         <div className="overlay-scrim" onMouseDown={() => setEditNote(null)}>
           <div className="overlay-card" onMouseDown={(e) => e.stopPropagation()}>
@@ -2690,6 +2762,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           }}
           onRemoveGif={(frameId) => void removeGif({ frameId, userId: me._id, sessionToken: sessionToken() })}
           onEditNote={(note) => setEditNote(note)}
+          onBloom={(frame, x, y, fx, fy) => setBloom({ frame, x, y, fx, fy })}
         />
       ) : (
         <PrototypeView

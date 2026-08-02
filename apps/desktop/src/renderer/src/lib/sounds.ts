@@ -222,3 +222,17 @@ export function playProposals(): void {
     // As above.
   }
 }
+
+/** A sticker lands: one soft tick, felt more than heard. */
+export function playThrow(): void {
+  if (throttled("throw")) return;
+  try {
+    const audioCtx = ctx();
+    if (!audioCtx) return;
+    const out = master(audioCtx, 0.1);
+    const t0 = audioCtx.currentTime + 0.02;
+    note(audioCtx, out, 620 + Math.random() * 60, t0, 0.09, 0.5, true);
+  } catch {
+    // Silence is an acceptable outcome.
+  }
+}

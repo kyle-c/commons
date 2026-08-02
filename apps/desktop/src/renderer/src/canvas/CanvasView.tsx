@@ -95,16 +95,18 @@ interface Props {
   }[];
   /** Exploration layer (signed-in canvas only; absent in guest mode). */
   branchPreviewPattern?: string;
-  reactions?: Record<string, { emoji: string; count: number; mine: boolean }[]>;
+  reactions?: Record<string, { emoji: string; count: number; mine: boolean; fx?: number; fy?: number }[]>;
   votes?: Record<string, { count: number; mine: boolean }>;
-  onReact?: (frameId: Id<"frames">, emoji: string) => void;
+  onReact?: (frameId: Id<"frames">, emoji: string, fx?: number, fy?: number) => void;
   onVote?: (frameId: Id<"frames">) => void;
   onWhatIf?: (frame: Doc<"frames">) => void;
-  gifs?: Record<string, { src: string; mine: boolean; by: string }[]>;
+  gifs?: Record<string, { src: string; mine: boolean; by: string; fx?: number; fy?: number }[]>;
   onAddGif?: (frame: Doc<"frames">) => void;
   onRemoveGif?: (frameId: Id<"frames">) => void;
   /** Members can rewrite an approved note where it stands; edits are logged. */
   onEditNote?: (note: { _id: string; text: string }) => void;
+  /** Right-click on a frame: open the reaction palette at the cursor. */
+  onBloom?: (frame: Doc<"frames">, clientX: number, clientY: number, fx: number, fy: number) => void;
 }
 
 /**
@@ -270,6 +272,8 @@ const FrameLayer = memo(function FrameLayer({
   gifs,
   onAddGif,
   onRemoveGif,
+  onEditNote,
+  onBloom,
 }: {
   frames: CanvasFrame[];
   localPos: Record<string, { x: number; y: number }>;
@@ -289,14 +293,16 @@ const FrameLayer = memo(function FrameLayer({
   onLoaded: (loadKey: string) => void;
   /** Exploration props: variants render from draft branches via this pattern. */
   branchPreviewPattern?: string;
-  reactions?: Record<string, { emoji: string; count: number; mine: boolean }[]>;
+  reactions?: Record<string, { emoji: string; count: number; mine: boolean; fx?: number; fy?: number }[]>;
   votes?: Record<string, { count: number; mine: boolean }>;
-  onReact?: (frameId: Id<"frames">, emoji: string) => void;
+  onReact?: (frameId: Id<"frames">, emoji: string, fx?: number, fy?: number) => void;
   onVote?: (frameId: Id<"frames">) => void;
   onWhatIf?: (frame: Doc<"frames">) => void;
-  gifs?: Record<string, { src: string; mine: boolean; by: string }[]>;
+  gifs?: Record<string, { src: string; mine: boolean; by: string; fx?: number; fy?: number }[]>;
   onAddGif?: (frame: Doc<"frames">) => void;
   onRemoveGif?: (frameId: Id<"frames">) => void;
+  onEditNote?: (note: { _id: string; text: string }) => void;
+  onBloom?: (frame: Doc<"frames">, clientX: number, clientY: number, fx: number, fy: number) => void;
 }) {
   return (
     <>
@@ -347,89 +353,7 @@ const FrameLayer = memo(function FrameLayer({
                 </span>
               )}
               <span style={{ flex: 1 }} />
-              {reactions?.[frame._id]?.map((r) => (
-                <button
-                  key={r.emoji}
-                  className={`stamp ${r.mine ? "mine" : ""}`}
-                  title={r.mine ? "Stamped — click to take yours back" : "Add yours"}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onReact?.(frame._id, r.emoji);
-                  }}
-                >
-                  {r.emoji}
-                  {r.count > 1 ? <i>{r.count}</i> : null}
-                </button>
-              ))}
-              {votes?.[frame._id] && votes[frame._id].count > 0 && (
-                <button
-                  className={`stamp vote ${votes[frame._id].mine ? "mine" : ""}`}
-                  title={votes[frame._id].mine ? "Your dot is here — click to take it back" : "Dot-vote this screen"}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onVote?.(frame._id);
-                  }}
-                >
-                  ●<i>{votes[frame._id].count}</i>
-                </button>
-              )}
               {openCount > 0 && <span className="badge comments">{openCount}</span>}
-              {(onReact || onVote || onWhatIf) && (
-                <span className="frame-actions" onMouseDown={(e) => e.stopPropagation()}>
-                  {onReact &&
-                    ["✨", "🔥", "❓", "😬"].map((emoji) => (
-                      <button
-                        key={emoji}
-                        className="stamp ghost"
-                        title="Stamp it"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onReact(frame._id, emoji);
-                        }}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  {onVote && !votes?.[frame._id]?.count && (
-                    <button
-                      className="stamp ghost"
-                      title="Dot-vote this screen"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onVote(frame._id);
-                      }}
-                    >
-                      ●
-                    </button>
-                  )}
-                  {onAddGif && (
-                    <button
-                      className="stamp ghost"
-                      title="Drop a GIF on this screen"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onAddGif(frame);
-                      }}
-                    >
-                      🎞️
-                    </button>
-                  )}
-                  {onWhatIf && frame.kind === "route" && !frame.variantBranch && (
-                    <button
-                      className="stamp ghost whatif"
-                      title="What if… — ask an agent for a live variant of this screen"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onWhatIf(frame);
-                      }}
-                    >
-                      ✦
-                    </button>
-                  )}
-                </span>
-              )}
             </div>
             <div className="frame-body">
               {url ? (
@@ -483,13 +407,65 @@ const FrameLayer = memo(function FrameLayer({
                               : "Waiting for a preview — ask a teammate with the repo to publish one"}
                 </div>
               )}
+              {(reactions?.[frame._id]?.length ?? 0) > 0 && (
+                <div className="sticker-layer" aria-hidden={false}>
+                  {reactions![frame._id].map((r, i) =>
+                    r.fx !== undefined && r.fy !== undefined ? (
+                      <button
+                        key={`${r.emoji}-${i}`}
+                        className={`sticker thrown ${r.mine ? "mine" : ""}`}
+                        style={{ left: `${r.fx * 100}%`, top: `${r.fy * 100}%` }}
+                        title={r.mine ? "Yours — click to take it back" : "Thrown by a teammate"}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (r.mine) onReact?.(frame._id, r.emoji);
+                        }}
+                      >
+                        {r.emoji}
+                      </button>
+                    ) : null
+                  )}
+                  <span className="sticker-cluster" onMouseDown={(e) => e.stopPropagation()}>
+                    {reactions![frame._id]
+                      .filter((r) => r.fx === undefined)
+                      .map((r) => (
+                        <button
+                          key={r.emoji}
+                          className={`stamp ${r.mine ? "mine" : ""}`}
+                          title={r.mine ? "Click to take yours back" : "A teammate's stamp"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (r.mine) onReact?.(frame._id, r.emoji);
+                          }}
+                        >
+                          {r.emoji}
+                          {r.count > 1 ? <i>{r.count}</i> : null}
+                        </button>
+                      ))}
+                    {votes?.[frame._id] && votes[frame._id].count > 0 && (
+                      <button
+                        className={`stamp vote ${votes[frame._id].mine ? "mine" : ""}`}
+                        title={votes[frame._id].mine ? "Your dot — click to take it back" : "Dot-votes"}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onVote?.(frame._id);
+                        }}
+                      >
+                        ●<i>{votes[frame._id].count}</i>
+                      </button>
+                    )}
+                  </span>
+                </div>
+              )}
               {(gifs?.[frame._id]?.length ?? 0) > 0 && (
                 <div className="gif-stack" onMouseDown={(e) => e.stopPropagation()}>
-                  {gifs![frame._id].slice(0, 4).map((g, i) => (
+                  {gifs![frame._id].slice(0, 8).map((g, i) => (
                     <img
                       key={i}
                       src={g.src}
-                      className={`gif-sticker ${g.mine ? "mine" : ""}`}
+                      className={`gif-sticker ${g.mine ? "mine" : ""} ${g.fx !== undefined ? "thrown" : ""}`}
+                      style={g.fx !== undefined && g.fy !== undefined ? { position: "absolute", left: `${g.fx * 100}%`, top: `${g.fy * 100}%` } : undefined}
                       title={g.mine ? "Yours — click to remove" : `From ${g.by}`}
                       onClick={() => {
                         if (g.mine) onRemoveGif?.(frame._id);
@@ -497,7 +473,6 @@ const FrameLayer = memo(function FrameLayer({
                       alt=""
                     />
                   ))}
-                  {gifs![frame._id].length > 4 && <span className="gif-more">+{gifs![frame._id].length - 4}</span>}
                 </div>
               )}
               {heatmap && frame.routePath && (
@@ -518,8 +493,14 @@ const FrameLayer = memo(function FrameLayer({
               {!focused && url && (
                 <div
                   className="frame-shield"
-                  title="Click to interact with this screen"
+                  title="Click to interact · right-click to react"
                   onMouseDown={(e) => onShieldDown(frame, e)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const box = e.currentTarget.getBoundingClientRect();
+                    onBloom?.(frame, e.clientX, e.clientY, (e.clientX - box.left) / box.width, (e.clientY - box.top) / box.height);
+                  }}
                 />
               )}
               {commentMode && <div className="frame-shield" onMouseDown={(e) => onShieldDown(frame, e)} />}
@@ -546,6 +527,7 @@ export default function CanvasView({
   onAddGif,
   onRemoveGif,
   onEditNote,
+  onBloom,
   projectId,
   frames,
   threads,
