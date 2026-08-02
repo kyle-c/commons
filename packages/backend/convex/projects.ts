@@ -852,6 +852,26 @@ export const addVariant = mutation({
   },
 });
 
+/** The ledger's memory: what the last runtime survey found. */
+export const recordSurvey = mutation({
+  args: {
+    projectId: v.id("projects"),
+    report: v.object({
+      at: v.number(),
+      pagesVisited: v.number(),
+      proposed: v.number(),
+      gatedRoutes: v.array(v.string()),
+      unresolvedDynamic: v.array(v.string()),
+    }),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { projectId, report, ...viewer }) => {
+    await requireProjectAccess(ctx, projectId, viewer);
+    await ctx.db.patch(projectId, { surveyReport: report });
+  },
+});
+
 // Custom card cover from the home card's hover affordance. Any member;
 // replacing deletes the old file.
 export const setCover = mutation({

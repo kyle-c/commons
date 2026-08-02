@@ -14,6 +14,12 @@ const api: CommonsApi = {
   inspectRepo: (repoPath) => ipcRenderer.invoke("inspect-repo", repoPath),
   listRepoApps: (fromPath) => ipcRenderer.invoke("list-repo-apps", fromPath),
   discoverRouteLinks: (repoPath) => ipcRenderer.invoke("discover-route-links", repoPath),
+  surveyApp: (baseUrl, routes) => ipcRenderer.invoke("survey-app", baseUrl, routes),
+  onSurveyProgress: (cb) => {
+    const handler = (_e: unknown, p: { visited: number; total: number; current: string }) => cb(p);
+    ipcRenderer.on("survey-progress", handler);
+    return () => ipcRenderer.removeListener("survey-progress", handler);
+  },
   startDevServer: (repoPath, name) => ipcRenderer.invoke("start-dev-server", repoPath, name),
   listDevServers: () => ipcRenderer.invoke("list-dev-servers"),
   detectExternalServers: (repoPaths) => ipcRenderer.invoke("detect-external-servers", repoPaths),

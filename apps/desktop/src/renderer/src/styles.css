@@ -2154,19 +2154,38 @@ kbd {
   position: absolute;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 18px;
   z-index: 3;
 }
+/* Notes read as margin-notes from a colleague, not system output: paper-warm
+   tint, a hand-placed lean that alternates down the stack, and air between
+   them. The lean is ±0.6° — enough to feel pinned up, never enough to fight
+   legibility — and straightens on hover so reading is always level. */
 .frame-note {
-  padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-left: 3px solid var(--accent);
-  border-radius: var(--radius-md);
-  background: var(--bg-panel);
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--comment) 30%, transparent);
+  border-left: 3px solid var(--comment);
+  border-radius: 3px var(--radius-lg) var(--radius-lg) var(--radius-lg);
+  background: color-mix(in srgb, var(--comment) 7%, var(--bg-panel));
   color: var(--text-secondary);
   font-size: 13px;
-  line-height: 1.45;
-  box-shadow: var(--shadow-soft, 0 1px 4px rgba(0, 0, 0, 0.25));
+  line-height: 1.5;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18), 0 8px 20px rgba(0, 0, 0, 0.12);
+  transform: rotate(-0.6deg);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.frame-note:nth-child(even) {
+  transform: rotate(0.6deg);
+  border-radius: var(--radius-lg) 3px var(--radius-lg) var(--radius-lg);
+}
+.frame-note:hover {
+  transform: rotate(0deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .frame-note,
+  .frame-note:nth-child(even) {
+    transform: none;
+  }
 }
 .frame-note .citation {
   margin-left: 8px;
@@ -3825,13 +3844,13 @@ kbd {
 .stamp {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 1px 5px;
+  gap: 3px;
+  padding: 2px 7px;
   border: 1px solid transparent;
   border-radius: 999px;
   background: none;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 13.5px;
   line-height: 1.4;
 }
 .stamp i {
@@ -3845,15 +3864,17 @@ kbd {
 }
 .stamp.vote {
   color: var(--accent);
-  font-size: 10px;
+  font-size: 12px;
 }
 .stamp.ghost {
-  opacity: 0;
+  /* Present at rest, awake on hover. Fully hidden tested as undiscoverable —
+     the layer might as well not exist if nobody ever hovers a header. */
+  opacity: 0.4;
   filter: grayscale(1);
   transition: opacity var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out);
 }
 .frame-header:hover .stamp.ghost {
-  opacity: 0.7;
+  opacity: 0.85;
 }
 .frame-header .stamp.ghost:hover {
   opacity: 1;
@@ -3862,7 +3883,8 @@ kbd {
 .stamp.ghost.whatif {
   color: var(--accent);
   filter: none;
-  font-size: 12px;
+  font-size: 15px;
+  opacity: 0.55;
 }
 .frame-actions {
   display: inline-flex;
@@ -3872,6 +3894,31 @@ kbd {
 .badge.variant {
   background: color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--accent);
+}
+
+.coverage-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.coverage-row.headline {
+  font-size: var(--text-md);
+  color: var(--text-primary);
+}
+.coverage-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.coverage-item {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+.mono {
+  font-family: var(--font-mono);
 }
 
 /* The linking config a classic navigator needs — shown to be copied, so it

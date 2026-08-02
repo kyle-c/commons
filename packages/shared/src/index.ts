@@ -333,6 +333,17 @@ export interface CommonsApi {
   listRepoApps(fromPath: string): Promise<AppCandidate[]>;
   /** CAN-11: (from route → to route) pairs declared by Link/router.push in the source. */
   discoverRouteLinks(repoPath: string): Promise<{ from: string; to: string }[]>;
+  /** Runtime survey: drive the running app, report screens/gates the canvas lacks. */
+  surveyApp(
+    baseUrl: string,
+    routes: { path: string; dynamic: boolean }[]
+  ): Promise<{
+    pagesVisited: number;
+    gatedRoutes: string[];
+    screens: { path: string; title: string; signature: string; png: Uint8Array; width: number; height: number }[];
+    unresolvedDynamic: string[];
+  }>;
+  onSurveyProgress(cb: (p: { visited: number; total: number; current: string }) => void): () => void;
   /** Everything a commit-everything would sweep up, so the user sees it first. */
   pendingChanges(repoPath: string): Promise<{
     ok: boolean;

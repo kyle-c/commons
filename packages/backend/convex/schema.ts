@@ -145,6 +145,17 @@ export default defineSchema({
     branchPatternSource: v.optional(v.union(v.literal("manual"), v.literal("github"))),
     // Last successful production deploy seen for this project's repo.
     lastDeployAt: v.optional(v.number()),
+    // The coverage ledger's memory: what the last runtime survey found and
+    // could not fix by itself. Small by construction (strings and counts).
+    surveyReport: v.optional(
+      v.object({
+        at: v.number(),
+        pagesVisited: v.number(),
+        proposed: v.number(),
+        gatedRoutes: v.array(v.string()),
+        unresolvedDynamic: v.array(v.string()),
+      })
+    ),
     // Set when a deploy lands: existing snapshots now show older pixels than
     // the deployed app. A desktop client refreshes them opportunistically.
     snapshotsStaleAt: v.optional(v.number()),
@@ -591,8 +602,16 @@ export default defineSchema({
     trigger: v.optional(v.string()),
     // The happy-path route frame this state hangs off, if the crawl matched one.
     fromRoutePath: v.optional(v.string()),
+    // What the proposal IS. Absent = "state" (rows from the CI crawl predate
+    // the field). "screen": a page the runtime survey reached that no frame
+    // covers — promoting creates a route frame, not a state frame.
+    kind: v.optional(v.union(v.literal("state"), v.literal("screen"))),
+    // Viewport the survey rendered at, so a promoted screen keeps its shape.
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
     // Dedup key (route + a signature of the rendered page) so the same state
-    // isn't proposed twice within a crawl.
+    // isn't proposed twice within a crawl — and, because rejected rows are
+    // kept, so a rejection holds across every future survey.
     signature: v.string(),
     status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected")),
     createdAt: v.number(),

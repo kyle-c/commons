@@ -28,6 +28,7 @@ import { useClickOutside } from "../lib/useClickOutside";
 import { useMachineId } from "../lib/machine";
 import { getRecents, pushRecent } from "../lib/recents";
 import Icon, { type IconName } from "../components/icons";
+import CoverageLedger from "./CoverageLedger";
 import { PopSection, RevealField } from "../components/popover";
 import { ConnectionPanel } from "./ConnectionPanel";
 import { PublishPanel } from "./PublishPanel";
@@ -1220,8 +1221,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
 
   // One side-panel slot: Agent and Narrate are exclusive — opening one
   // closes the other, and both slide in under their titlebar buttons.
-  const [sidePanel, setSidePanelRaw] = useState<"agents" | "narrate" | "inbox" | null>(null);
-  type SidePanel = "agents" | "narrate" | "inbox";
+  const [sidePanel, setSidePanelRaw] = useState<"agents" | "narrate" | "inbox" | "coverage" | null>(null);
+  type SidePanel = "agents" | "narrate" | "inbox" | "coverage";
   // One surface at a time. Popovers, side panels and the device menu each used
   // to own their state and knew nothing of the others, so a popover could open
   // on top of a live panel. Every opener now goes through these, which close
@@ -1495,6 +1496,10 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
 
   useEffect(
     () => registerShortcut("a", () => toggleSidePanel("agents"), { description: "Agent sessions" }),
+    []
+  );
+  useEffect(
+    () => registerShortcut("g", () => toggleSidePanel("coverage"), { description: "Coverage: gaps and the runtime survey" }),
     []
   );
   useEffect(
@@ -2194,6 +2199,14 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           onClick={() => toggleSidePanel("narrate")}
         >
           <Icon name="pen" />
+        </button>
+        <button
+          className={`btn ghost icon-btn ${sidePanel === "coverage" ? "active" : ""}`}
+          aria-label="Coverage"
+          title="Coverage: what the canvas might be missing (G)"
+          onClick={() => toggleSidePanel("coverage")}
+        >
+          <Icon name="layers" />
           {(annotationData?.draftCount ?? 0) > 0 && (
             <span className="count-badge">{annotationData!.draftCount}</span>
           )}
@@ -2569,6 +2582,31 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         />
       )}
 
+      {sidePanel === "coverage" && (
+        <CoverageLedger
+          project={project}
+          me={me}
+          frames={frames}
+          baseUrl={liveStatus.state === "ready" ? liveStatus.url : project.previewUrl ?? null}
+          routes={frames
+            .filter((f) => f.kind === "route" && !f.variantBranch)
+            .map((f) => ({ path: f.routePath ?? "/", dynamic: (f.routePath ?? "").includes("[") }))}
+          onGoReview={() => {
+            setSidePanel(null);
+            setNav({ ...nav, view: "flow" });
+          }}
+          onSignIn={
+            signInTarget
+              ? () => {
+                  setSidePanel(null);
+                  setNav({ ...nav, view: "prototype" });
+                  setSignInHint(true);
+                }
+              : undefined
+          }
+          onClose={() => setSidePanel(null)}
+        />
+      )}
       {sidePanel === "narrate" && (
         <NarrationPanel
           me={me}

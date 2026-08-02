@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { DEEP_LINK_PROTOCOL, parseAuthCallback, parseDeepLink } from "@commons/shared";
 import type { AgentStartOptions, AnnotationGenerateRequest } from "@commons/shared";
 import { discoverRouteLinks, inspectRepo, listRepoApps } from "./routeDiscovery";
+import { surveyApp } from "./surveyor";
 import * as runner from "./projectRunner";
 import * as agents from "./agents/sessionManager";
 import * as annotator from "./annotator";
@@ -207,6 +208,9 @@ app.whenReady().then(() => {
   ipcMain.handle("inspect-repo", (_e, repoPath: string) => inspectRepo(repoPath));
   ipcMain.handle("list-repo-apps", (_e, fromPath: string) => listRepoApps(fromPath));
   ipcMain.handle("discover-route-links", (_e, repoPath: string) => discoverRouteLinks(repoPath));
+  ipcMain.handle("survey-app", (e, baseUrl: string, routes: { path: string; dynamic: boolean }[]) =>
+    surveyApp(baseUrl, routes, (p) => e.sender.send("survey-progress", p))
+  );
   ipcMain.handle("start-dev-server", (_e, repoPath: string, name?: string) => runner.start(repoPath, name));
   ipcMain.handle("list-dev-servers", () => runner.list());
   ipcMain.handle("stop-dev-server", (_e, repoPath: string) => runner.stop(repoPath));
