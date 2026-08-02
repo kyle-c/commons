@@ -559,7 +559,10 @@ export default defineSchema({
     fromFrameId: v.id("frames"),
     toFrameId: v.id("frames"),
     label: v.optional(v.string()),
-    source: v.union(v.literal("tests"), v.literal("manual")),
+    // tests: recorded tester sessions. manual: drawn by hand. code: declared
+    // in the source (Link hrefs, router.push targets) — still evidence, never
+    // invention, but evidence of intent rather than of observed behaviour.
+    source: v.union(v.literal("tests"), v.literal("manual"), v.literal("code")),
     weight: v.number(),
     updatedAt: v.number(),
   }).index("by_project", ["projectId"]),

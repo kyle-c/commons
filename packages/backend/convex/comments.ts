@@ -92,8 +92,15 @@ export const createThread = mutation({
     fy: v.optional(v.number()),
     canvasX: v.optional(v.number()),
     canvasY: v.optional(v.number()),
+    sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, { body, mentions: rawMentions, ...thread }) => {
+  handler: async (ctx, { body, mentions: rawMentions, sessionToken, ...thread }) => {
+    // Authorship is proven, not claimed: the session decides who wrote this,
+    // and the claimed id is only accepted when it matches. This was the last
+    // of the open-question-11 tail — access was checked but the author field
+    // itself was caller-supplied, which is impersonation-with-membership.
+    const viewer = await requireViewer(ctx, { userId: thread.createdBy, sessionToken });
+    if (viewer !== thread.createdBy) throw new Error("Author must be the signed-in user.");
     const project = await ctx.db.get(thread.projectId);
     if (!project || !(await canAccessProject(ctx, project, thread.createdBy))) {
       throw new Error("You don't have access to this project.");
@@ -276,8 +283,12 @@ export const reply = mutation({
     body: v.string(),
     mentions: v.array(v.id("users")),
     images: v.optional(v.array(v.id("_storage"))),
+    sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { sessionToken, ...args }) => {
+    // Same proof as createThread: the session names the author.
+    const viewer = await requireViewer(ctx, { userId: args.authorId, sessionToken });
+    if (viewer !== args.authorId) throw new Error("Author must be the signed-in user.");
     const thread = await ctx.db.get(args.threadId);
     const project = thread ? await ctx.db.get(thread.projectId) : null;
     if (!thread || !project || !(await canAccessProject(ctx, project, args.authorId))) {

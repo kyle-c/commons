@@ -1,5 +1,6 @@
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
+import { siteUrl } from "./siteUrl";
 
 // Outbound email via Resend's REST API (https://resend.com/docs/api-reference).
 // Without RESEND_API_KEY the actions log and no-op, so local dev works unkeyed.
@@ -63,15 +64,41 @@ export const sendMentionEmail = internalAction({
   },
 });
 
+/**
+ * ID-11: the invite email is the product's front door, not a courtesy nudge.
+ * It says what Commons is, opens in the browser with zero install (deep into
+ * the shared project when the invite came from one — the app's hash routing
+ * picks it up after sign-in), and offers the Mac download as the secondary
+ * path. The old version said "ask your teammate for the build", which was
+ * true before trycommons.app hosted a signed DMG and false ever since.
+ */
 export const sendInviteEmail = internalAction({
-  args: { email: v.string(), inviterName: v.string() },
-  handler: async (_ctx, { email, inviterName }) => {
-    const subject = `${inviterName} invited you to Commons`;
+  args: {
+    email: v.string(),
+    inviterName: v.string(),
+    projectId: v.optional(v.string()),
+    projectName: v.optional(v.string()),
+  },
+  handler: async (_ctx, { email, inviterName, projectId, projectName }) => {
+    const site = siteUrl();
+    const openUrl = projectId ? `${site}/app#p=${projectId}&view=canvas` : `${site}/app`;
+    const invitedTo = projectName
+      ? `<strong>${escapeHtml(projectName)}</strong> on Commons`
+      : `the team's Commons workspace`;
+    const subject = projectName
+      ? `${inviterName} invited you to ${projectName} on Commons`
+      : `${inviterName} invited you to Commons`;
     const html = `
 <div style="font:15px/1.6 -apple-system,system-ui,sans-serif;color:#222;max-width:480px">
-  <p><strong>${escapeHtml(inviterName)}</strong> invited you to the team's Commons workspace — the shared canvas for designing in Figma and code.</p>
-  <p>Install the Commons app (ask ${escapeHtml(inviterName)} for the build), then sign in with Google using <strong>${escapeHtml(email)}</strong>.</p>
-  ${footer}
+  <p><strong>${escapeHtml(inviterName)}</strong> invited you to ${invitedTo}.</p>
+  <p style="color:#555">Commons is a shared canvas showing the team's app as it actually runs —
+  you comment on real screens, and feedback becomes working drafts.</p>
+  <p style="margin:24px 0">
+    <a href="${openUrl}" style="background:#1f7a6e;color:#fff;text-decoration:none;padding:11px 20px;border-radius:9px;font-weight:500">Open Commons in your browser</a>
+  </p>
+  <p style="color:#555">Sign in with Google or an email link using <strong>${escapeHtml(email)}</strong> — no install needed.
+  On a Mac, the <a href="${site}/download" style="color:#1f7a6e">desktop app</a> adds live dev servers and agents.</p>
+  <p style="color:#888;font-size:13px;margin-top:24px">Sent by Commons · <a href="${site}" style="color:#888">trycommons.app</a></p>
 </div>`;
     await sendEmail(email, subject, html);
   },

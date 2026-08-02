@@ -655,6 +655,31 @@ function SharePopover({
   const moveProject = useMutation(api.workspaces.moveProject);
   const setShareToken = useMutation(api.projects.setShareToken);
   const [copied, setCopied] = useState<"app" | "web" | null>(null);
+  const invite = useMutation(api.invites.create);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteNote, setInviteNote] = useState<string | null>(null);
+  const sendInvite = async () => {
+    const email = inviteEmail.trim();
+    if (!email) return;
+    const result = await invite({
+      email,
+      invitedBy: me._id,
+      projectId: project._id,
+      sessionToken: sessionToken(),
+    }).catch(() => ({ ok: false as const, reason: "invalid_email" as const }));
+    if (result.ok) {
+      setInviteNote(`Invited — the email links straight to ${project.name}.`);
+      setInviteEmail("");
+    } else {
+      setInviteNote(
+        result.reason === "already_member"
+          ? "They already have an account — @mention them instead."
+          : result.reason === "already_invited"
+            ? "Already invited. The email is on its way."
+            : "That doesn't look like an email address."
+      );
+    }
+  };
   const isCreator = project.createdBy === me._id;
   const myWorkspaces = useQuery(
     api.workspaces.mine,
@@ -739,6 +764,29 @@ function SharePopover({
               No web link yet. The project's creator can mint one here.
             </div>
           )}
+          <PopSection label="Invite" />
+          <div className="reveal-form" style={{ paddingTop: 0 }}>
+            {/* ID-11: an invite sent from here carries this project — the
+                email deep-links into this canvas and acceptance lands in its
+                workspace, so "come see this" is one send, not a tour. */}
+            <div className="reveal-form-row">
+              <input
+                placeholder="teammate@company.com"
+                value={inviteEmail}
+                onChange={(e) => {
+                  setInviteEmail(e.target.value);
+                  setInviteNote(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void sendInvite();
+                }}
+              />
+              <button className="btn" disabled={!inviteEmail.trim()} onClick={() => void sendInvite()}>
+                Invite
+              </button>
+            </div>
+            {inviteNote && <span className="hint">{inviteNote}</span>}
+          </div>
           {isCreator && (
             <>
               <PopSection label="Access" />
@@ -997,6 +1045,25 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   );
   const deriveFlow = useMutation(api.flows.deriveFromTests);
   const [deriving, setDeriving] = useState(false);
+  // CAN-11: opening the Flow view on a machine with the repo refreshes the
+  // code-declared edges — Link hrefs and router.push targets, drawn as quiet
+  // dashed lines under whatever testers have actually walked. Re-scanned per
+  // open, replaced wholesale (the code is the source of truth), and skipped
+  // entirely without a working copy: no repo, no claims about the code.
+  const ingestCodeEdges = useMutation(api.flows.ingestCodeEdges);
+  const codeEdgesScanned = useRef<string | null>(null);
+  useEffect(() => {
+    if (nav.view !== "flow" || !repoPath || !window.commons?.discoverRouteLinks) return;
+    if (codeEdgesScanned.current === repoPath) return;
+    codeEdgesScanned.current = repoPath;
+    void window.commons
+      .discoverRouteLinks(repoPath)
+      .then((links) =>
+        ingestCodeEdges({ projectId: nav.projectId, links, userId: me._id, sessionToken: sessionToken() })
+      )
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nav.view, repoPath]);
   const flowPos = useMemo(
     () =>
       nav.view === "flow" && flowEdges

@@ -90,7 +90,7 @@ interface Props {
     weight: number;
     label?: string;
     /** "tests" = walked by testers (weighted); "manual" = drawn by a person. */
-    source?: "tests" | "manual";
+    source?: "tests" | "manual" | "code";
   }[];
 }
 
@@ -167,7 +167,7 @@ function FlowEdgeLayer({
     toFrameId: string;
     weight: number;
     label?: string;
-    source?: "tests" | "manual";
+    source?: "tests" | "manual" | "code";
   }[];
   frames: { id: string; x: number; y: number; width: number; height: number }[];
 }) {
@@ -195,19 +195,22 @@ function FlowEdgeLayer({
         const midY = forward ? (y1 + y2) / 2 : Math.max(y1, y2) + 120;
         // Weight only means something for tester-derived edges. A hand-drawn
         // edge is intent, not evidence: fixed width, dashed, and silent when
-        // unlabeled — "1×" would have claimed a tester walked it.
-        const manual = edge.source === "manual";
-        const width = manual ? 1.5 : 1.5 + Math.log2(1 + edge.weight);
-        const caption = edge.label ?? (manual ? null : `${edge.weight}×`);
+        // unlabeled — "1×" would have claimed a tester walked it. Code edges
+        // (CAN-11) are the same register — the source declares this path
+        // exists, nobody has been observed on it — so they share the dashed
+        // treatment, quieter still, and never carry a count.
+        const declared = edge.source === "manual" || edge.source === "code";
+        const width = declared ? 1.5 : 1.5 + Math.log2(1 + edge.weight);
+        const caption = edge.label ?? (declared ? null : `${edge.weight}×`);
         return (
           <g key={edge._id} className="flow-edge">
             <path
               d={path}
               fill="none"
               stroke="var(--accent)"
-              strokeOpacity={manual ? 0.4 : 0.55}
+              strokeOpacity={edge.source === "code" ? 0.28 : declared ? 0.4 : 0.55}
               strokeWidth={width}
-              strokeDasharray={manual ? "5 4" : undefined}
+              strokeDasharray={declared ? "5 4" : undefined}
               markerEnd="url(#flow-arrow)"
             />
             {caption && (
@@ -953,7 +956,7 @@ export default function CanvasView({
     setCommentMode(false);
     try {
       if (!me) return;
-      const threadId = await createThread({ projectId, createdBy: me._id, body, mentions, ...coords });
+      const threadId = await createThread({ projectId, createdBy: me._id, body, mentions, sessionToken: sessionToken(), ...coords });
       setPendingPin((p) => (p ? { ...p, threadId } : p));
       setSelectedThread(threadId);
     } catch {

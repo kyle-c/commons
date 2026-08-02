@@ -113,7 +113,7 @@ export default function ThreadPanel({ thread, me, guestToken, users, mentionUser
           placeholder="Reply…"
           submitLabel="Reply"
           onSubmit={async (body, mentions) => {
-            await reply({ threadId: thread._id, authorId: me._id, body, mentions });
+            await reply({ threadId: thread._id, authorId: me._id, body, mentions, sessionToken: sessionToken() });
           }}
         />
       ) : guestToken ? (

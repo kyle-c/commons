@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { accessibleProject, requireProjectAccess, requireViewer, resolveViewer } from "./access";
 
@@ -142,6 +142,54 @@ export const reconcileHost = mutation({
       await ctx.db.insert("agentEvents", {
         sessionId: session._id,
         event: { type: "status", status: "stopped", error: "Host went offline mid-session." },
+      });
+    }
+  },
+});
+
+/**
+ * The time-based half of reconciliation. reconcileHost above closes orphans
+ * when the host relaunches — but a host that crashes on Friday and stays
+ * closed all weekend left its sessions "running" the whole time, and cloud
+ * sessions have no host to relaunch at all. This sweep (crons.ts, every 10
+ * minutes) finalizes any active session whose last event is older than the
+ * stall window.
+ *
+ * 15 minutes is deliberately far past any legitimate quiet stretch: the local
+ * adapter streams tool events continuously, and the cloud runner's longest
+ * silent phase (installing Playwright for a crawl) is a few minutes. The
+ * cloud workflow also hard-times-out at 30, so a dead Actions run is caught
+ * here first, halfway through its own ceiling.
+ */
+const STALL_MS = 15 * 60 * 1000;
+
+export const finalizeStalled = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const active = await ctx.db
+      .query("agentSessions")
+      .filter((q) => q.or(q.eq(q.field("status"), "starting"), q.eq(q.field("status"), "running")))
+      .collect();
+    const cutoff = Date.now() - STALL_MS;
+    for (const session of active) {
+      const lastEvent = await ctx.db
+        .query("agentEvents")
+        .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+        .order("desc")
+        .first();
+      const lastSeen = lastEvent?._creationTime ?? session._creationTime;
+      if (lastSeen > cutoff) continue;
+      await ctx.db.patch(session._id, {
+        status: "error",
+        error: "No activity for 15 minutes — the runner went away without saying so.",
+      });
+      await ctx.db.insert("agentEvents", {
+        sessionId: session._id,
+        event: {
+          type: "status",
+          status: "error",
+          error: "No activity for 15 minutes — the runner went away without saying so.",
+        },
       });
     }
   },

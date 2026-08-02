@@ -49,6 +49,17 @@ export default function PrototypeView({
   const routes = frames.filter((f) => f.kind === "route");
   const [routePath, setRoutePath] = useState(routes[0]?.routePath ?? "/");
   const [testsOpen, setTestsOpen] = useState(false);
+  /**
+   * PRO-3: a Figma-backed project can flip the stage to the Figma prototype.
+   * The embed needs no token — Figma's own viewer handles auth inside the
+   * frame — so, like the canvas import, the rest of the app never holds
+   * anything. Offered only when the project has a recorded file, and never
+   * as the default: the running app is the prototype; this is the sketch.
+   */
+  const [figmaMode, setFigmaMode] = useState(false);
+  const figmaEmbedUrl = project.figmaFileKey
+    ? `https://embed.figma.com/proto/${encodeURIComponent(project.figmaFileKey)}?embed-host=commons&footer=false`
+    : null;
   // Route drawer: with real projects at 30+ screens, a native select buried
   // them — a grouped, always-visible list reads like the canvas's sections.
   const [drawerOpen, setDrawerOpen] = useState(true);
@@ -84,7 +95,16 @@ export default function PrototypeView({
           <span className="pa-path">{routePath}</span>
         </span>
         <span className="spacer" style={{ flex: 1 }} />
-        {url && <PreviewAppearanceButton />}
+        {figmaEmbedUrl && (
+          <button
+            className={`btn ghost ${figmaMode ? "active" : ""}`}
+            title="The Figma prototype for this project, embedded"
+            onClick={() => setFigmaMode((m) => !m)}
+          >
+            <Icon name="image" /> Figma
+          </button>
+        )}
+        {url && !figmaMode && <PreviewAppearanceButton />}
         <button
           className={`btn ghost ${testsOpen ? "active" : ""}`}
           title="Task-based usability tests, shareable by link (U)"
@@ -163,6 +183,12 @@ export default function PrototypeView({
         )}
       <div className="proto-stage">
         {(() => {
+          if (figmaMode && figmaEmbedUrl)
+            return (
+              <div className="proto-device" style={{ flex: 1 }}>
+                <iframe src={figmaEmbedUrl} title="Figma prototype" className="loaded" allowFullScreen />
+              </div>
+            );
           if (url)
             return (
               <div className="proto-device" style={device.width ? { width: device.width } : { flex: 1 }}>

@@ -549,3 +549,59 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
     vercel: await detectVercel(repoPath),
   };
 }
+
+
+/**
+ * CAN-11: the navigation the code itself declares.
+ *
+ * Every route file is scanned for the places it can send someone: Link
+ * hrefs and imperative router.push/replace calls with literal string
+ * targets. The result is (from route -> to route) pairs the Flow view draws
+ * as quiet dashed "declared" edges, distinct from the solid ones testers
+ * have actually walked.
+ *
+ * Honesty constraints, in keeping with never-invent:
+ * - Only string literals. An href built at runtime could go anywhere, so it
+ *   contributes nothing rather than a guess.
+ * - Dynamic targets (/posts/[id], template strings) are skipped for the
+ *   same reason.
+ * - Links are attributed only to the route file they appear in. A link in a
+ *   shared component (a nav bar, say) belongs to every screen that renders
+ *   it, and proving which screens those are means running the app - so it is
+ *   out of scope here, not approximated.
+ */
+export async function discoverRouteLinks(
+  fromPath: string
+): Promise<{ from: string; to: string }[]> {
+  const inspection = await inspectRepo(fromPath);
+  const pairs: { from: string; to: string }[] = [];
+  const seen = new Set<string>();
+  const HREF = /(?:href|to)\s*=\s*\{?\s*["'`](\/[^"'`\s}?#]*)/g;
+  const PUSH = /router\.(?:push|replace)\(\s*["'`](\/[^"'`]*?)["'`]/g;
+
+  const known = new Set(inspection.routes.map((r) => r.path));
+  for (const route of inspection.routes) {
+    if (!route.file || route.file.includes("commons.json") || route.file === "react-navigation") continue;
+    let source: string;
+    try {
+      source = await fs.readFile(path.join(inspection.repoPath, route.file), "utf8");
+    } catch {
+      continue;
+    }
+    for (const regex of [HREF, PUSH]) {
+      regex.lastIndex = 0;
+      for (const match of source.matchAll(regex)) {
+        const target = match[1].replace(/\/+$/, "") || "/";
+        if (target.includes("[") || target.includes("${")) continue;
+        // Only pairs between screens the canvas actually knows. A link to a
+        // route discovery never found is a fact about discovery, not a node.
+        if (!known.has(target) || target === route.path) continue;
+        const key = route.path + " " + target;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        pairs.push({ from: route.path, to: target });
+      }
+    }
+  }
+  return pairs;
+}

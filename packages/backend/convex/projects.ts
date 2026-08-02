@@ -37,7 +37,11 @@ export const create = mutation({
       })
     ),
   },
-  handler: async (ctx, { frames, ...project }) => {
+  // repoPath is accepted (old clients still send it) but never written:
+  // machine-local paths live in repoLinks, one per (user, machine). Writing a
+  // single shared path onto the project was the pre-repoLinks model and every
+  // reader of it is gone.
+  handler: async (ctx, { frames, repoPath: _legacy, ...project }) => {
     // Every project lands in a workspace: the requested one (creator must be
     // a member) or, for legacy clients that don't send one, the playground.
     let workspaceId = project.workspaceId;
@@ -730,7 +734,9 @@ export const togglePin = mutation({
   },
 });
 
-// DEPRECATED: machine-local paths live in repoLinks now. Kept for old callers.
+// DEPRECATED shell: machine-local paths live in repoLinks. The last writer of
+// project.repoPath is retired; this stays as a no-op only so a stale client
+// calling it gets silence instead of a crash. Delete once ≤0.2.107 is gone.
 export const setRepoPath = mutation({
   args: {
     projectId: v.id("projects"),
@@ -738,9 +744,8 @@ export const setRepoPath = mutation({
     userId: v.optional(v.id("users")),
     sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, { projectId, repoPath, ...viewer }) => {
+  handler: async (ctx, { projectId, repoPath: _ignored, ...viewer }) => {
     await requireProjectAccess(ctx, projectId, viewer);
-    await ctx.db.patch(projectId, { repoPath });
   },
 });
 

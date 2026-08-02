@@ -331,6 +331,8 @@ export interface CommonsApi {
   pullRepo(repoPath: string): Promise<{ ok: boolean; message: string }>;
   /** Every runnable app in the repo containing this path (monorepo picker). */
   listRepoApps(fromPath: string): Promise<AppCandidate[]>;
+  /** CAN-11: (from route → to route) pairs declared by Link/router.push in the source. */
+  discoverRouteLinks(repoPath: string): Promise<{ from: string; to: string }[]>;
   /** Everything a commit-everything would sweep up, so the user sees it first. */
   pendingChanges(repoPath: string): Promise<{
     ok: boolean;
