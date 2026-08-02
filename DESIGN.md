@@ -122,6 +122,21 @@ Rules of thumb:
 - `prefers-reduced-motion` collapses the entire system to instant (global block at the
   end of `styles.css`); every animation must remain purely an enhancement.
 
+**The two sanctioned exceptions to "no new durations".** Both are moments, not component
+states, and both are skipped entirely under reduced motion:
+
+- **The archive send-off** (`lib/celebrate.ts`, 520ms): a card is pulled into a void with
+  a synthesized whoosh. Archiving is otherwise the silent disappearance of a card, and
+  this gives it a beat. Its shape lives in keyframes sampling `1 - 0.98·u^1.8` rather
+  than in a curve, because the first version's steep bezier left four-fifths of the
+  movement in the last fifth of the time and read as a snap.
+- **The grid reflow** (`lib/flip.ts`, 420ms ease-out): cards FLIP into the gap the
+  archived card left instead of appearing in it. Animating only the thing that leaves,
+  and not the six things that move, is the same jolt one step later.
+
+Nothing else gets a bespoke duration. If a third exception seems necessary, it probably
+belongs in the shared scale instead.
+
 ## Perceived speed
 
 The app should feel faster than it is:
@@ -179,6 +194,13 @@ Rules that keep it honest: no external fonts, scripts, or images (it renders ins
 and survives any CSP), product visuals are drawn in CSS rather than faked in a mockup
 tool, and claims map to shipped behaviour. Motion is one gentle reveal on first sight and
 nothing else, disabled under reduced motion.
+
+Structure: hero → the shift → **who it's for** (designers, engineers, PMs as three
+`.tier` columns) → feature rows alternating side to side → how it works → access tiers →
+FAQ → closing CTA. Sections alternate `.band` with plain so the page has a pulse; a new
+section reuses the existing `.tier` / `.card` / `.row` vocabulary rather than adding CSS.
+The role section exists because the three jobs read the same product differently, and a
+visitor should find their own row before the feature detail starts.
 
 ## Anti-patterns (audit-enforced)
 

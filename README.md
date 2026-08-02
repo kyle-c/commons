@@ -1,55 +1,99 @@
 # Commons
 
-Design in Figma or in code — collaborate on both through one shared canvas. The product spec and roadmap live in a private companion repo ([kyle-c/commons-docs](https://github.com/kyle-c/commons-docs)).
+One shared canvas showing the app that actually runs. A team comments on live screens, hands a thread to a coding agent, and keeps the reasoning attached to the work. Marketing site and downloads: [trycommons.app](https://trycommons.app).
+
+Product strategy and roadmap live in a private companion repo ([kyle-c/commons-docs](https://github.com/kyle-c/commons-docs)); `SPEC.md` there is the source of truth for locked decisions.
 
 ## Run it
 
 ```sh
 pnpm install
-pnpm -C packages/backend dev     # Convex backend (local anonymous deployment works out of the box)
-pnpm -C apps/desktop dev         # Electron app
+pnpm dev
 ```
 
-The app connects to the Convex URL in `apps/desktop/.env` (`VITE_CONVEX_URL`). For the team-shared backend, create a real Convex deployment (`npx convex dev` and log in, or `npx convex deploy`) and point everyone's `.env` at it — comments, presence, and the project list sync live across machines.
-
-## Google sign-in setup
-
-Sign-in is Google OAuth through the system browser, finishing on a `commons://` deep link. One-time setup on the Convex deployment:
-
-1. In [Google Cloud console](https://console.cloud.google.com/apis/credentials), create an OAuth client of type **Web application**. Add the authorized redirect URI `https://<your-deployment>.convex.site/auth/google/callback` (the `.convex.site` HTTP-actions domain, not `.convex.cloud`; find it with `npx convex env get CONVEX_SITE_URL` or in the dashboard).
-2. `npx convex env set GOOGLE_CLIENT_ID <id>` and `npx convex env set GOOGLE_CLIENT_SECRET <secret>` (run in `packages/backend`).
-3. For @mention and invite emails: `npx convex env set RESEND_API_KEY <key>` ([resend.com](https://resend.com)) and optionally `EMAIL_FROM` (e.g. `Commons <commons@yourdomain.com>`, a domain verified in Resend). Without a key, emails are skipped and logged — everything else works.
-
-Membership is invite-only: the **first** Google sign-in on a fresh deployment creates the first account; after that, an email must be invited (Team menu, ⌘T) before it can sign in.
-
-In dev, the `commons://` callback may not reach the unpackaged app — sign-in still completes, because the app also watches the auth handshake live through Convex. Packaged builds (`pnpm -C apps/desktop dist`) register the `commons://` protocol with macOS via the app bundle, which also makes deep links in mention emails open the app directly.
-
-## Using it
-
-1. Sign in with Google (system browser opens; first user bootstraps the team, everyone else needs an invite).
-2. **+ Add project** → pick a local Next.js repo. Routes are auto-discovered, the dev server is spawned on a free port, and each screen lands as a live frame on the canvas.
-3. Pan with two-finger scroll or drag; zoom with pinch / ⌘-scroll. Click a frame to interact with the live app inside it; Esc to release.
-4. **C** toggles comment mode — click anywhere (frame or canvas) to start a thread; `@` mentions teammates, who see it in their Inbox.
-5. **Prototype** tab shows the running app full-size with device-width presets. **Copy link** puts a `commons://` deep link on the clipboard.
-6. Open a thread and hit **⚡ Agent** to send the feedback to Claude Code against your local repo — the session streams into the agent panel (**A**), teammates watch it live, the summary lands back in the thread, and the frame reloads when edits finish. Needs Anthropic credentials on the host machine (`ANTHROPIC_API_KEY` or a Claude Code login).
-7. Teammates without the repo see frames via the project's deployed **Preview** URL (titlebar) once someone sets it; "Locate repo on this Mac" gives you live local frames and agent hosting.
-
-## Distributable build
+`pnpm dev` starts the Convex dev server and the Electron app together. To run them separately:
 
 ```sh
-VITE_CONVEX_URL=https://<team-deployment>.convex.cloud pnpm -C apps/desktop dist
+pnpm -C packages/backend dev
+pnpm -C apps/desktop dev
 ```
 
-Produces a DMG + zip in `apps/desktop/release/` with the `commons://` protocol registered in the bundle. Packaging config lives in `apps/desktop/electron-builder.yml` (single source of truth — don't add a `build` block to package.json).
+The app reads `VITE_CONVEX_URL` from `apps/desktop/.env`. Point everyone at one real Convex deployment and projects, comments, presence, and agent sessions sync live across machines.
 
-- **Signing + notarization:** export `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` (app-specific password from appleid.apple.com; requires a Developer ID Application certificate in your keychain). Without them the build is unsigned/un-notarized — fine for your own machine, but teammates' Macs will refuse to open it.
-- **Local packaging test without certs:** `CSC_IDENTITY_AUTO_DISCOVERY=false pnpm -C apps/desktop dist`.
-- The Claude Agent SDK is kept outside the asar archive (`asarUnpack`) because it spawns its CLI as a subprocess.
+Other commands:
+
+```sh
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+`pnpm typecheck` also runs `scripts/check-convex-auth.mjs`, which fails on any public Convex function that does not resolve identity from a `sessionToken`.
+
+## What it does
+
+**Canvas.** Point a project at a local repo and Commons discovers its routes, spawns a dev server on a free port, and puts every screen on an infinite canvas as a live frame. Next.js, Expo, and Vite are auto-discovered; anything else that serves HTTP works via a `commons.json`. A monorepo with more than one app asks which one the project is instead of guessing. Teammates without the repo see the same screens through the project's deployed preview URL.
+
+**Comments.** Threads pinned to a frame at relative coordinates, so they survive re-layout and re-render. @mentions reach an in-app inbox and email. Live cursors and presence while reviewing together.
+
+**Agents.** Send a thread to a coding agent and it picks up the screen, the route, and the conversation. Runs locally through the Claude Agent SDK, or in the repo's own GitHub Actions when no laptop is awake. Work lands on a branch, never on a dirty tree, and never merges itself. Uses your own Anthropic or OpenRouter key, set in the app.
+
+**Prototype.** The running app full-size with device presets.
+
+**Flow.** The app as a directed graph: screens laid out by navigation depth, edges derived from recorded tester sessions, unreached screens parked apart. State frames capture a screen in an error, empty, or loading condition, either recorded by a person or proposed by a Playwright crawl that runs in the repo's own Actions. Nothing a crawl proposes joins the graph until a human approves it.
+
+**Narrate.** Drafts the reasoning behind each screen from threads, tests, and code history, with citations, and labels its inferences as inferences. Nothing publishes without approval.
+
+**User tests.** Tasks sent as one link; testers use the live app with no account. Success rates, times, paths, and click heatmaps come back onto the canvas. Real visitors can be recruited with a script tag.
+
+**Sharing.** Share links open the same canvas for people with no account, who can read and comment with just a name.
+
+**GitHub App.** Connect once and deploy events fill in preview URLs, infer the per-branch draft preview pattern, and refresh snapshots when production deploys.
+
+## Backend setup
+
+Sign-in is Google OAuth through the system browser (finishing on a `commons://` deep link) or a magic email link. Signup is open: a new account lands in its own personal workspace, and a corporate email domain auto-joins that domain's workspace when one exists.
+
+One-time setup on a Convex deployment:
+
+1. In the [Google Cloud console](https://console.cloud.google.com/apis/credentials), create an OAuth client of type **Web application** with the redirect URI `https://<your-deployment>.convex.site/auth/google/callback`. That is the `.convex.site` HTTP-actions domain, not `.convex.cloud` — find it with `npx convex env get CONVEX_SITE_URL`.
+2. From `packages/backend`: `npx convex env set GOOGLE_CLIENT_ID <id>` and `npx convex env set GOOGLE_CLIENT_SECRET <secret>`.
+3. For mention, invite, and magic-link emails: `npx convex env set RESEND_API_KEY <key>` ([resend.com](https://resend.com)) and optionally `EMAIL_FROM`. Without a key, emails are skipped and logged; everything else works.
+
+The GitHub App (deploy events, cloud agents, flow crawls) additionally needs `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_WEBHOOK_SECRET`. The slug is what builds the install URL, so "Connect GitHub" reports the app as unconfigured without it. Set the private key from a file rather than pasting it: `npx convex env set GITHUB_APP_PRIVATE_KEY --from-file key.pem`.
+
+In dev, the `commons://` callback may not reach an unpackaged app — sign-in still completes, because the app also watches the handshake through Convex. Packaged builds register the protocol with macOS, which is also what makes deep links in emails open the app.
+
+## Shipping a release
+
+```sh
+pnpm ship --notes "What changed, in a sentence or two."
+```
+
+Builds, signs, notarizes, publishes the GitHub release, updates the auto-update feed, and verifies the published artifact end to end. Release notes are required because they are what people read in the update prompt. Signing needs `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` in the environment, plus a Developer ID Application certificate in the keychain.
+
+The tree is read for the length of the build, so avoid editing files while `ship` runs.
+
+For a packaging test without certificates:
+
+```sh
+CSC_IDENTITY_AUTO_DISCOVERY=false pnpm -C apps/desktop dist
+```
+
+Packaging config lives in `apps/desktop/electron-builder.yml` and is the single source of truth; do not add a `build` block to `package.json`. The Claude Agent SDK stays outside the asar archive (`asarUnpack`) because it spawns its CLI as a subprocess.
 
 ## Workspace
 
 | Path | What |
 |---|---|
-| `apps/desktop` | Electron app — main (dev-server runner, route discovery, deep links), preload (IPC bridge), renderer (canvas, comments, prototype) |
-| `packages/backend` | Convex schema + functions (users, projects, frames, threads, notifications, presence) |
-| `packages/shared` | Types shared across processes and packages |
+| `apps/desktop/src/main` | Dev-server runner, route discovery, git operations, snapshots, external-server detection, deep links, updater |
+| `apps/desktop/src/preload` | The IPC bridge (`window.commons`); the renderer never touches fs or local services directly |
+| `apps/desktop/src/renderer` | Canvas, comments, prototype, flow, agent panel, user tests |
+| `packages/backend/convex` | Schema and all functions: auth, projects, threads, agents, flows, user tests, GitHub App, the marketing page |
+| `packages/shared` | Types shared across renderer, main, and backend |
+
+## Conventions
+
+Strict TypeScript everywhere; shared types live in `packages/shared` and are never duplicated across processes. Every public Convex function resolves identity from a `sessionToken` (`requireViewer` / `requireProjectAccess` in `access.ts`) — a `userId` argument is a claim, never proof, because Convex publishes public functions to the open internet. Design tokens live in `apps/desktop/src/renderer/src/theme.css`; no hardcoded colors. Every new surface gets a keyboard shortcut registered in `lib/shortcuts.ts`.
+
+`DESIGN.md` is the design system, and deviations from it are treated as bugs even when the code works.

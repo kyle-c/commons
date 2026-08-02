@@ -265,9 +265,9 @@ export function landingHtml(version?: string): string {
       Commons
     </a>
     <div class="links">
-      <a href="#how">How it works</a>
+      <a href="#roles">Who it's for</a>
       <a href="#features">Features</a>
-      <a href="#access">Access</a>
+      <a href="#how">How it works</a>
       <a href="#faq">FAQ</a>
     </div>
     <a class="btn primary" href="${APP_URL}">Open Commons</a>
@@ -366,6 +366,56 @@ export function landingHtml(version?: string): string {
   </div>
 </section>
 
+<!-- ── Roles ────────────────────────────────────────────── -->
+<section id="roles">
+  <div class="wrap">
+    <div class="center">
+      <p class="eyebrow">Who it's for</p>
+      <h2>Three jobs, one canvas</h2>
+      <p class="lede">
+        The people who argue about a product rarely share a tool. Designers work in a file,
+        engineers work in the repo, and PMs work in whatever screenshot reached them last.
+        Commons is the same live app for all three.
+      </p>
+    </div>
+    <div class="tiers">
+      <div class="tier">
+        <div class="who">Product designers</div>
+        <div class="how">Critique the build, not a picture of it</div>
+        <ul>
+          <li>Pin a comment to the real screen at the real breakpoint</li>
+          <li>Figma frames sit on the same canvas as live screens</li>
+          <li>Hand a thread to an agent and get a draft with a preview link</li>
+          <li>Rationale drafted with citations, published only when you approve it</li>
+          <li>Heatmaps and task results from real testers land on the screens</li>
+        </ul>
+      </div>
+      <div class="tier">
+        <div class="who">Engineers</div>
+        <div class="how">Feedback that arrives with its context</div>
+        <ul>
+          <li>Point at the repo: routes are found and each screen runs from your dev server</li>
+          <li>Agents run on your Mac or in your repo's own GitHub Actions</li>
+          <li>Drafts land on a branch, never on a dirty tree, never merged for you</li>
+          <li>A monorepo asks which app the project is instead of guessing</li>
+          <li>Comments carry the route and the commit, so nothing arrives as "the thing looked wrong"</li>
+        </ul>
+      </div>
+      <div class="tier">
+        <div class="who">Product managers</div>
+        <div class="how">See the state of it without asking anyone</div>
+        <ul>
+          <li>No install and no terminal: the full canvas runs in the browser</li>
+          <li>Share a link with execs and customers who have no account</li>
+          <li>Flow view draws every path real testers actually took</li>
+          <li>Task success rates, times, and where people gave up</li>
+          <li>Preview links keep themselves current from your deploys</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ── Features ─────────────────────────────────────────── -->
 <section id="features">
   <div class="wrap">
@@ -385,7 +435,7 @@ export function landingHtml(version?: string): string {
           <li>Anyone can comment from a link, with no account</li>
           <li>Share links open the same canvas — guests browse, read, and comment with just a name</li>
           <li>Figma frames land beside live screens, commentable like everything else</li>
-          <li>A Flow view draws every path through the app from real tester sessions</li>
+          <li>Screens keep themselves current: a deploy refreshes every snapshot</li>
         </ul>
       </div>
       <div class="shot">
@@ -421,6 +471,8 @@ export function landingHtml(version?: string): string {
           <li>Runs on your machine, or in your repo's own GitHub Actions with nobody's laptop awake</li>
           <li>Drafts live on a branch, never on a dirty tree</li>
           <li>Every draft gets a preview link the whole team can open</li>
+          <li>Connect GitHub once and preview links fill themselves in from your deploys</li>
+          <li>Your own Anthropic or OpenRouter key, set in the app, never in a terminal</li>
         </ul>
       </div>
       <div class="shot">
@@ -518,6 +570,43 @@ export function landingHtml(version?: string): string {
       </div>
     </div>
 
+    <div class="row reveal">
+      <div class="copy">
+        <p class="eyebrow">Flow</p>
+        <h2>The whole app as a map, drawn from real use</h2>
+        <p>
+          Screens laid out by how deep they sit in the journey, joined by the paths people
+          actually took. Nobody maintains it: the edges come from recorded sessions, so the
+          map is a record rather than a diagram someone last touched in March.
+        </p>
+        <ul>
+          <li>Screens nobody ever reached are parked where you cannot miss them</li>
+          <li>Error, empty, and loading states sit beside the happy path</li>
+          <li>A browser crawl can go find those states in your deployed preview</li>
+          <li>Nothing a crawl finds joins the map until a person approves it</li>
+          <li>Comments, zoom, and share links work here exactly as on the canvas</li>
+        </ul>
+      </div>
+      <div class="shot">
+        <div class="s-bar">
+          <div class="s-tab on">Flow</div>
+          <div class="s-spacer"></div>
+          <span style="color:var(--dark-ink-3);font-size:11px">3 states to review</span>
+        </div>
+        <div class="s-panel">
+          <div class="s-run"><span class="tick">✓</span> Home → Send money → Confirm</div>
+          <div class="s-run"><span class="tick">✓</span> Home → Goals</div>
+          <div class="s-run" style="color:var(--bronze)">◇ Recurring transfer · never reached</div>
+          <div class="s-msg">
+            <div class="s-who" style="color:#45a898">Crawl found 3 states</div>
+            <div class="s-txt">Send money: empty amount, declined card, offline. Approve the ones that are real.</div>
+          </div>
+          <div style="display:flex;gap:8px"><span class="s-cta">Approve</span>
+            <span class="s-pill">Reject</span></div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </section>
 
@@ -534,7 +623,8 @@ export function landingHtml(version?: string): string {
         <h3>Point Commons at your app</h3>
         <p>
           On the Mac app, choose your repo and Commons finds your routes and puts every screen
-          on the canvas. No repo on hand? Paste your deployed preview URL instead.
+          on the canvas. A monorepo asks which app you meant. No repo on hand? Paste your
+          deployed preview URL instead.
         </p>
       </div>
       <div class="card">
@@ -640,10 +730,26 @@ export function landingHtml(version?: string): string {
         </p>
       </details>
       <details>
+        <summary>What does connecting GitHub actually give you?</summary>
+        <p>
+          Deploy events, so preview links fill themselves in instead of being pasted, and a
+          place to run agents when no laptop is awake. Commons reads the deploys of repos you
+          picked during install, and matches them only inside the workspace that installed it.
+          You can run everything without it and paste preview URLs by hand.
+        </p>
+      </details>
+      <details>
+        <summary>My repo has a web app and a mobile app in it.</summary>
+        <p>
+          Commons asks which one the project is rather than picking for you. They are two
+          projects: add the repo twice and choose a different app each time.
+        </p>
+      </details>
+      <details>
         <summary>What does it cost?</summary>
         <p>
-          Nothing while Commons is in preview. Agent runs use your own Anthropic credentials,
-          so you are never billed through us for model usage.
+          Nothing while Commons is in preview. Agent runs use your own Anthropic or OpenRouter
+          key, so you are never billed through us for model usage.
         </p>
       </details>
     </div>

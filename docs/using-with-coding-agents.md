@@ -39,10 +39,14 @@ Commons lives at [trycommons.app](https://www.trycommons.app). The Mac app is wh
 
 Two ways to turn feedback into code:
 
-- **Send to agent (built in).** Any thread has a "⚡ Agent" action. Commons builds a self-contained prompt from the conversation plus frame context and runs an embedded Claude Code session on a Commons-managed checkout, on a fresh `commons/<slug>` branch. The whole team watches the transcript live, the result posts back to the thread with before/after screenshots, and "Ship" opens the pull request. Nobody's working tree is touched, and a $5 per-session ceiling caps the bill.
+- **Send to agent (built in).** Any thread has a "⚡ Agent" action. Commons builds a self-contained prompt from the conversation plus frame context and runs a Claude Code session on a Commons-managed checkout, on a fresh `commons/<slug>` branch. The whole team watches the transcript live, the result posts back to the thread with before/after screenshots, and "Ship" opens the pull request. Nobody's working tree is touched, and a $5 per-session ceiling caps the bill.
+  - **On your Mac,** which is the default and needs the repo on that machine.
+  - **In your repo's own GitHub Actions,** once the workspace has connected the GitHub App. Nobody's laptop has to be awake, and the run happens under your organization's own credentials in your own CI. The workflow only fires from your default branch, so it has to be merged there before the first run.
 - **Take it to your own harness.** Copy the thread's deep link or its text into Claude Code, Codex, or Hermes and work it there. When your agent pushes a branch matching the project's branch-preview pattern (the **branch icon** in the project subnav, a Vercel-style `{branch}` URL), everyone can open the draft live before it merges.
 
 Rule of thumb: if the change is fully described by the comment, send it to the agent in Commons. If it needs exploration, take it to your harness.
+
+**Model credentials.** Agent runs bill to your own account, never through Commons. Set an Anthropic or OpenRouter key from the agent panel's setup step; it does not require a terminal, and local runs also accept an existing Claude Code login. Cloud runs read the key from the repo's own Actions secrets.
 
 > Running a build older than v0.2.65? Update first. Before that release the embedded agent and Narrate could not launch from the packaged app at all (the Agent SDK's bundled binary could not be spawned from inside the app archive), so both failed with `spawn ENOTDIR`.
 
@@ -50,7 +54,19 @@ Rule of thumb: if the change is fully described by the comment, send it to the a
 
 Any prototype with a preview link can become a task-based usability test (the Tests panel in Prototype view). Testers get one link, no account. Success rates, times, paths, and click heatmaps come back onto the canvas, and a test can A/B today's product against an agent draft's branch preview before anything merges. Failing tasks carry their own "Send to agent" with the evidence packaged into the prompt.
 
-## 6. Per-harness notes
+## 6. Watch the shape of the app change
+
+Agents add routes faster than anyone updates a diagram, so the **Flow** view (⌘3) builds one from evidence instead. Screens are laid out by how deep they sit in the journey, edges come from paths real tester sessions took, and screens nobody ever reached are parked where you cannot miss them. Nothing to maintain: it is a record, not a drawing.
+
+**State frames** put a screen's error, empty, and loading conditions beside its happy path. Capture one yourself, or let a browser crawl go and provoke them against your deployed preview. The crawl runs as Playwright in your own GitHub Actions, the same vehicle as cloud agents, and everything it finds lands in a review queue. Nothing a crawl proposes joins the graph until a person approves it.
+
+Useful right after an agent lands a feature: the new screens appear, and anything it wired up but never linked to shows as unreached.
+
+## 7. When the app is behind a login
+
+Every frame and the prototype share one browser session, so signing in once covers the whole canvas. If your screens all render the login page, open the preview link popover and use **Sign in to previews**, which drops you into the full-size app to sign in, then reloads the screens.
+
+## 8. Per-harness notes
 
 | Harness | How it fits |
 |---|---|
@@ -58,10 +74,10 @@ Any prototype with a preview link can become a task-based usability test (the Te
 | **Codex** | Run in the repo; use branch pushes + the draft-preview pattern for visibility. The agent adapter interface (`apps/desktop/src/main/agents/adapter.ts`) is one file away from embedding it for thread-to-draft, when wanted. |
 | **Hermes or other agents** | Same external pattern: agent edits the repo, Commons renders and detects. If the agent hosts its own server, the switcher shows it; if it pushes branches, name them to match the preview pattern and drafts go team-visible. |
 
-## 7. Habits that make it sing
+## 9. Habits that make it sing
 
-- Set the **preview link** early: it's what unlocks teammates without the repo, and user tests.
-- Set the **branch preview pattern** once and every agent draft becomes a clickable link for the whole team.
+- **Connect GitHub once** and stop pasting URLs. Deploy events fill in the preview link, infer the `{branch}` draft pattern from two or more branch deploys, and refresh every snapshot when production deploys. A pattern is only accepted when it reproduces every URL actually observed, so one disagreement rejects it rather than guessing. Anything you type by hand is never overwritten.
+- Set the **preview link** early if you are not connecting GitHub: it's what unlocks teammates without the repo, and user tests.
 - Use **project status** on the home card (Exploring, In review, Testing) so people know what feedback you want while the agent iterates.
 - **Narrate** after a milestone: the annotation pass mines your threads, tests, and commits into stakeholder-ready rationale, with citations. It runs on a machine that has the repo, and drafts land in a review queue for a person to approve.
 - **Share the link, not the install.** A project's Share menu mints a page that opens the canvas for anyone, with pan, zoom, a switch into the running prototype, and commenting by name alone. That is usually the right thing to send a stakeholder, rather than asking them to sign in.
