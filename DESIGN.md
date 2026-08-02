@@ -165,6 +165,17 @@ identifier with a tooltip and aria-label carrying the words.
   would show an avatar — a "?" pin is a bug.
 - `initials()` strips punctuation; never render raw symbols in avatars.
 
+## The update chip
+
+The app's entire update story is one floating pill (`UpdateChip`): it narrates checking,
+downloading, and ready, whether the check came from the menu or the hourly background
+loop — "Check for Updates…" answers here, never with a dialog. Ready is the only state
+that stays, because it is the only one with an action; informational outcomes (up to
+date, couldn't reach the feed, dev build) excuse themselves after five seconds. Quiet
+states use `.update-chip.quiet` — even padding, secondary text, no button. One
+asymmetry, on purpose: "nothing happened" outcomes only show for checks a person asked
+for; the background loop stays silent unless it has a release in hand.
+
 ## Async states
 
 Every query-backed surface has a loading state ("Loading tests…") — a blank panel reads
@@ -195,12 +206,18 @@ and survives any CSP), product visuals are drawn in CSS rather than faked in a m
 tool, and claims map to shipped behaviour. Motion is one gentle reveal on first sight and
 nothing else, disabled under reduced motion.
 
-Structure: hero → the shift → **who it's for** (designers, engineers, PMs as three
-`.tier` columns) → feature rows alternating side to side → how it works → access tiers →
-FAQ → closing CTA. Sections alternate `.band` with plain so the page has a pulse; a new
-section reuses the existing `.tier` / `.card` / `.row` vocabulary rather than adding CSS.
-The role section exists because the three jobs read the same product differently, and a
-visitor should find their own row before the feature detail starts.
+Structure (premium pass, 2026-08-02): centered hero with a badge and the product shot
+staged in a halo → works-with strip (real integrations as text chips, never faked logos)
+→ the shift → **who it's for** (designers, engineers, PMs as three `.tier` columns) →
+feature rows alternating side to side → steps with serif numerals → access tiers → FAQ →
+closing CTA on the app's own dot grid → a real three-column footer. Sections alternate
+`.band` with plain so the page has a pulse; a new section reuses the existing `.tier` /
+`.card` / `.row` vocabulary rather than adding CSS. One material recipe on every raised
+surface (ambient + key shadow + top highlight); rules fade at both ends; the halo is the
+page's one gradient flourish and bleeds deliberately, clipped by `overflow-x: clip`
+(never `hidden`, which kills the sticky nav). The role section exists because the three
+jobs read the same product differently, and a visitor should find their own row before
+the feature detail starts.
 
 ## Anti-patterns (audit-enforced)
 

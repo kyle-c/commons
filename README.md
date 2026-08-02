@@ -38,17 +38,19 @@ pnpm build
 
 **Agents.** Send a thread to a coding agent and it picks up the screen, the route, and the conversation. Runs locally through the Claude Agent SDK, or in the repo's own GitHub Actions when no laptop is awake. Work lands on a branch, never on a dirty tree, and never merges itself. Uses your own Anthropic or OpenRouter key, set in the app.
 
-**Prototype.** The running app full-size with device presets.
+**Prototype.** The running app full-size with device presets. Figma-backed projects can flip the stage to the embedded Figma prototype.
 
-**Flow.** The app as a directed graph: screens laid out by navigation depth, edges derived from recorded tester sessions, unreached screens parked apart. State frames capture a screen in an error, empty, or loading condition, either recorded by a person or proposed by a Playwright crawl that runs in the repo's own Actions. Nothing a crawl proposes joins the graph until a human approves it.
+**Flow.** The app as a directed graph: screens laid out by navigation depth, solid edges derived from recorded tester sessions, dashed edges for paths the code itself declares (Link hrefs and router.push targets, scanned from route files), unreached screens parked apart. State frames capture a screen in an error, empty, or loading condition, either recorded by a person or proposed by a Playwright crawl that runs in the repo's own Actions. Nothing a crawl proposes joins the graph until a human approves it.
 
 **Narrate.** Drafts the reasoning behind each screen from threads, tests, and code history, with citations, and labels its inferences as inferences. Nothing publishes without approval.
 
 **User tests.** Tasks sent as one link; testers use the live app with no account. Success rates, times, paths, and click heatmaps come back onto the canvas. Real visitors can be recruited with a script tag.
 
-**Sharing.** Share links open the same canvas for people with no account, who can read and comment with just a name.
+**Sharing.** Share links open the same canvas for people with no account, who can read and comment with just a name. Invites sent from a project's Share menu carry the project: the email says what Commons is, opens in the browser with no install, and lands the invitee on that canvas.
 
 **GitHub App.** Connect once and deploy events fill in preview URLs, infer the per-branch draft preview pattern, and refresh snapshots when production deploys.
+
+**Updates.** The app checks hourly and everything speaks through one chip: it appears on its own when a release starts downloading, and "Check for Updates…" answers there too, never with a dialog.
 
 ## Backend setup
 

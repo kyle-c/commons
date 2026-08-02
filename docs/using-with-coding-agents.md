@@ -56,7 +56,7 @@ Any prototype with a preview link can become a task-based usability test (the Te
 
 ## 6. Watch the shape of the app change
 
-Agents add routes faster than anyone updates a diagram, so the **Flow** view (⌘3) builds one from evidence instead. Screens are laid out by how deep they sit in the journey, edges come from paths real tester sessions took, and screens nobody ever reached are parked where you cannot miss them. Nothing to maintain: it is a record, not a drawing.
+Agents add routes faster than anyone updates a diagram, so the **Flow** view (⌘3) builds one from evidence instead. Screens are laid out by how deep they sit in the journey, solid edges come from paths real tester sessions took, and dashed edges show the navigation the code itself declares — Link hrefs and router.push targets, scanned from route files whenever the view opens on a machine with the repo. Screens nobody ever reached are parked where you cannot miss them. Nothing to maintain: it is a record, not a drawing.
 
 **State frames** put a screen's error, empty, and loading conditions beside its happy path. Capture one yourself, or let a browser crawl go and provoke them against your deployed preview. The crawl runs as Playwright in your own GitHub Actions, the same vehicle as cloud agents, and everything it finds lands in a review queue. Nothing a crawl proposes joins the graph until a person approves it.
 
