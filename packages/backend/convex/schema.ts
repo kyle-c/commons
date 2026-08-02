@@ -100,6 +100,9 @@ export default defineSchema({
     // token pasted by an admin, used only for read endpoints (file nodes,
     // image renders). Same trust posture as the Slack webhook below.
     figmaToken: v.optional(v.string()),
+    // Giphy API key (free tier, a client-side key by design) unlocking
+    // in-palette GIF search. Same admin-pasted trust posture as figmaToken.
+    giphyKey: v.optional(v.string()),
     // Per-workspace Slack channel (incoming webhook) for thread/agent posts.
     slackWebhookUrl: v.optional(v.string()),
     createdBy: v.id("users"),
@@ -427,6 +430,9 @@ export default defineSchema({
     frameId: v.id("frames"),
     userId: v.id("users"),
     emoji: v.string(),
+    // Thrown position (relative). Absent = legacy header-toggle rows.
+    fx: v.optional(v.number()),
+    fy: v.optional(v.number()),
   })
     .index("by_project", ["projectId"])
     .index("by_frame_user", ["frameId", "userId"]),
@@ -444,6 +450,10 @@ export default defineSchema({
     // Exactly one of these: a remote GIF/WebP URL, or an uploaded blob.
     url: v.optional(v.string()),
     storageId: v.optional(v.id("_storage")),
+    // Where on the frame it was thrown (relative, like comment pins).
+    // Absent = pre-sticker rows; they cluster in the corner as before.
+    fx: v.optional(v.number()),
+    fy: v.optional(v.number()),
   })
     .index("by_project", ["projectId"])
     .index("by_frame", ["frameId"])

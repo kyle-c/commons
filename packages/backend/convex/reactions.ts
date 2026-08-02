@@ -22,10 +22,13 @@ export const toggle = mutation({
   args: {
     frameId: v.id("frames"),
     emoji: v.string(),
+    // Where it was thrown (relative). Absent = legacy header toggle.
+    fx: v.optional(v.number()),
+    fy: v.optional(v.number()),
     userId: v.optional(v.id("users")),
     sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, { frameId, emoji, ...viewer }) => {
+  handler: async (ctx, { frameId, emoji, fx, fy, ...viewer }) => {
     const userId = await requireViewer(ctx, viewer);
     if (!STAMPS.includes(emoji)) throw new Error("Not a stamp Commons knows.");
     const frame = await ctx.db.get(frameId);
@@ -38,10 +41,16 @@ export const toggle = mutation({
       .collect();
     const mine = existing.find((r) => r.emoji === emoji);
     if (mine) {
+      // Same stamp thrown at a new spot moves it; with no spot, it's a
+      // take-back (the legacy toggle, and clicking your own sticker).
+      if (fx !== undefined && fy !== undefined) {
+        await ctx.db.patch(mine._id, { fx, fy });
+        return { on: true };
+      }
       await ctx.db.delete(mine._id);
       return { on: false };
     }
-    await ctx.db.insert("reactions", { projectId: frame.projectId, frameId, userId, emoji });
+    await ctx.db.insert("reactions", { projectId: frame.projectId, frameId, userId, emoji, fx, fy });
     return { on: true };
   },
 });
@@ -60,10 +69,19 @@ export const forProject = query({
       .query("reactions")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
-    const byFrame: Record<string, { emoji: string; count: number; mine: boolean }[]> = {};
+    // Placed stamps render individually at their spot; legacy rows (no
+    // anchor) keep aggregating into the corner cluster.
+    const byFrame: Record<
+      string,
+      { emoji: string; count: number; mine: boolean; fx?: number; fy?: number }[]
+    > = {};
     for (const row of rows) {
       const list = (byFrame[row.frameId] ??= []);
-      const entry = list.find((e) => e.emoji === row.emoji);
+      if (row.fx !== undefined && row.fy !== undefined) {
+        list.push({ emoji: row.emoji, count: 1, mine: row.userId === viewerId, fx: row.fx, fy: row.fy });
+        continue;
+      }
+      const entry = list.find((e) => e.emoji === row.emoji && e.fx === undefined);
       if (entry) {
         entry.count += 1;
         entry.mine ||= row.userId === viewerId;
@@ -152,10 +170,12 @@ export const addGif = mutation({
     frameId: v.id("frames"),
     url: v.optional(v.string()),
     storageId: v.optional(v.id("_storage")),
+    fx: v.optional(v.number()),
+    fy: v.optional(v.number()),
     userId: v.optional(v.id("users")),
     sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, { frameId, url, storageId, ...viewer }) => {
+  handler: async (ctx, { frameId, url, storageId, fx, fy, ...viewer }) => {
     const userId = await requireViewer(ctx, viewer);
     const frame = await ctx.db.get(frameId);
     if (!frame || !(await accessibleProject(ctx, frame.projectId, userId))) {
@@ -183,6 +203,8 @@ export const addGif = mutation({
       userId,
       url: url?.trim(),
       storageId,
+      fx,
+      fy,
     });
     return { ok: true as const };
   },
@@ -216,7 +238,7 @@ export const gifsForProject = query({
       .query("gifReactions")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
-    const byFrame: Record<string, { src: string; mine: boolean; by: string }[]> = {};
+    const byFrame: Record<string, { src: string; mine: boolean; by: string; fx?: number; fy?: number }[]> = {};
     for (const row of rows) {
       const src = row.url ?? (row.storageId ? await ctx.storage.getUrl(row.storageId) : null);
       if (!src) continue;
@@ -225,6 +247,8 @@ export const gifsForProject = query({
         src,
         mine: row.userId === viewerId,
         by: author?.name ?? "someone",
+        fx: row.fx,
+        fy: row.fy,
       });
     }
     return byFrame;
