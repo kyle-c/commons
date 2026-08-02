@@ -4,6 +4,12 @@
     "lib": ["ES2021", "DOM"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    // Convex functions run in the Convex runtime, not Node. Without this,
+    // TypeScript auto-includes every @types package in scope — and once
+    // @types/node arrived for the tests/ project next door, its fetch and
+    // globals shadowed the DOM ones and broke inference here. Empty is what
+    // this project always effectively had; now it says so.
+    "types": [],
     "strict": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,

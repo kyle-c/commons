@@ -1,0 +1,18 @@
+{
+  // These tests read and analyse the Convex source rather than being part of
+  // it, so they run in Node and need Node's types. The convex/ tsconfig
+  // deliberately has none — Convex functions execute in the Convex runtime,
+  // where fs and child_process do not exist — which is exactly why these live
+  // outside that tree instead of loosening its types.
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["ES2021"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["./**/*"]
+}
