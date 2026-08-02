@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc } from "@commons/backend/convex/_generated/dataModel";
 import type { Nav } from "../App";
 import { sessionToken, timeAgo } from "../lib/session";
 import { registerShortcut } from "../lib/shortcuts";
+import { playMention } from "../lib/sounds";
 import Icon from "../components/icons";
 
 /**
@@ -30,6 +31,14 @@ export default function Inbox({
   const items = useQuery(api.comments.inbox, { userId: me._id, sessionToken: sessionToken() }) ?? [];
   const markRead = useMutation(api.comments.markRead);
   const unread = items.filter((i) => !i.readAt).length;
+  // A mention arriving while you're here is news; while you're away, macOS
+  // notifications own that space. First unread of a burst speaks (throttle
+  // in sounds.ts absorbs the rest); catching up to zero is silent.
+  const prevUnread = useRef(unread);
+  useEffect(() => {
+    if (unread > prevUnread.current && document.hasFocus()) playMention();
+    prevUnread.current = unread;
+  }, [unread]);
 
   useEffect(
     () => registerShortcut("i", () => setOpen(!open), { meta: true, description: "Inbox" }),

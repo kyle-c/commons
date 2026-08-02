@@ -668,6 +668,8 @@ export const cascadeDeleteProject = internalMutation({
       () => ctx.db.query("flowEdges").withIndex("by_project", (q) => q.eq("projectId", projectId)),
       () => ctx.db.query("flowCrawls").withIndex("by_project", (q) => q.eq("projectId", projectId)),
       () => ctx.db.query("cursors").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+      () => ctx.db.query("reactions").withIndex("by_project", (q) => q.eq("projectId", projectId)),
+      () => ctx.db.query("frameVotes").withIndex("by_project", (q) => q.eq("projectId", projectId)),
     ];
     for (const build of directQueries) {
       const rows = await build().take(BUDGET - spent);
@@ -802,6 +804,51 @@ export const rediscover = mutation({
       }
       await ctx.db.insert("frames", { projectId, ...frame });
     }
+  },
+});
+
+/**
+ * A what-if variant (exploration): the same route, rendered from an agent
+ * draft branch, placed beside its original. The variant is a real frame —
+ * comments, reactions, votes, and A/B tests all work on it unchanged — whose
+ * pixels come from the branch preview instead of the project preview.
+ *
+ * Placement stacks rightward from the original so four what-ifs read as a
+ * crit wall. Never invented: this is only called once an agent draft has
+ * actually reported its branch.
+ */
+export const addVariant = mutation({
+  args: {
+    variantOf: v.id("frames"),
+    prompt: v.string(),
+    branch: v.string(),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { variantOf, prompt, branch, ...viewer }) => {
+    const original = await ctx.db.get(variantOf);
+    if (!original) throw new Error("That screen is gone.");
+    await requireProjectAccess(ctx, original.projectId, viewer);
+    const siblings = await ctx.db
+      .query("frames")
+      .withIndex("by_project", (q) => q.eq("projectId", original.projectId))
+      .collect();
+    const existing = siblings.filter((f) => f.variantOf === variantOf).length;
+    const title = prompt.length > 48 ? prompt.slice(0, 45) + "…" : prompt;
+    return await ctx.db.insert("frames", {
+      projectId: original.projectId,
+      kind: "route",
+      title,
+      section: original.section,
+      routePath: original.routePath,
+      variantOf,
+      variantPrompt: prompt,
+      variantBranch: branch,
+      x: original.x + (original.width + 48) * (existing + 1),
+      y: original.y,
+      width: original.width,
+      height: original.height,
+    });
   },
 });
 

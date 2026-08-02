@@ -11,6 +11,7 @@ import ThreadPanel from "../comments/ThreadPanel";
 import Minimap from "./Minimap";
 import { initials, sessionToken } from "../lib/session";
 import { resolveFrameUrl } from "../lib/frameUrl";
+import { draftPreviewUrl } from "@commons/shared";
 import { tidyPositions } from "../lib/frameLayout";
 import { registerShortcut } from "../lib/shortcuts";
 import Icon from "../components/icons";
@@ -92,6 +93,13 @@ interface Props {
     /** "tests" = walked by testers (weighted); "manual" = drawn by a person. */
     source?: "tests" | "manual" | "code";
   }[];
+  /** Exploration layer (signed-in canvas only; absent in guest mode). */
+  branchPreviewPattern?: string;
+  reactions?: Record<string, { emoji: string; count: number; mine: boolean }[]>;
+  votes?: Record<string, { count: number; mine: boolean }>;
+  onReact?: (frameId: Id<"frames">, emoji: string) => void;
+  onVote?: (frameId: Id<"frames">) => void;
+  onWhatIf?: (frame: Doc<"frames">) => void;
 }
 
 /**
@@ -248,6 +256,12 @@ const FrameLayer = memo(function FrameLayer({
   onFrameDrag,
   onShieldDown,
   onLoaded,
+  branchPreviewPattern,
+  reactions,
+  votes,
+  onReact,
+  onVote,
+  onWhatIf,
 }: {
   frames: CanvasFrame[];
   localPos: Record<string, { x: number; y: number }>;
@@ -265,6 +279,13 @@ const FrameLayer = memo(function FrameLayer({
   onFrameDrag: (frame: Doc<"frames">, e: React.MouseEvent) => void;
   onShieldDown: (frame: Doc<"frames">, e: React.MouseEvent) => void;
   onLoaded: (loadKey: string) => void;
+  /** Exploration props: variants render from draft branches via this pattern. */
+  branchPreviewPattern?: string;
+  reactions?: Record<string, { emoji: string; count: number; mine: boolean }[]>;
+  votes?: Record<string, { count: number; mine: boolean }>;
+  onReact?: (frameId: Id<"frames">, emoji: string) => void;
+  onVote?: (frameId: Id<"frames">) => void;
+  onWhatIf?: (frame: Doc<"frames">) => void;
 }) {
   return (
     <>
@@ -272,7 +293,17 @@ const FrameLayer = memo(function FrameLayer({
         const pos = localPos[frame._id] ?? { x: frame.x, y: frame.y };
         const focused = focusedFrame === frame._id;
         const openCount = openCounts[frame._id] ?? 0;
-        const source = frame.kind === "route" ? resolveFrameUrl(frame.routePath, devStatus, previewUrl) : null;
+        // A variant renders the same route from its draft branch. No pattern
+        // means no address — the frame shows its snapshot/boot state rather
+        // than silently showing main and lying about being a variant.
+        const source =
+          frame.kind !== "route"
+            ? null
+            : frame.variantBranch
+              ? branchPreviewPattern
+                ? { url: draftPreviewUrl(branchPreviewPattern, frame.variantBranch) + (frame.routePath ?? "/"), live: false }
+                : null
+              : resolveFrameUrl(frame.routePath, devStatus, previewUrl);
         const url = source?.url ?? null;
         return (
           <div
@@ -294,13 +325,88 @@ const FrameLayer = memo(function FrameLayer({
                   state
                 </span>
               )}
-              {source && !source.live && (
+              {frame.variantBranch && (
+                <span className="badge variant" title={`What-if: ${frame.variantPrompt ?? ""} · branch ${frame.variantBranch}`}>
+                  what-if
+                </span>
+              )}
+              {source && !source.live && !frame.variantBranch && (
                 <span className="badge" title="Rendered from the deployed preview — locate the repo for a live dev server">
                   preview
                 </span>
               )}
               <span style={{ flex: 1 }} />
+              {reactions?.[frame._id]?.map((r) => (
+                <button
+                  key={r.emoji}
+                  className={`stamp ${r.mine ? "mine" : ""}`}
+                  title={r.mine ? "Stamped — click to take yours back" : "Add yours"}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReact?.(frame._id, r.emoji);
+                  }}
+                >
+                  {r.emoji}
+                  {r.count > 1 ? <i>{r.count}</i> : null}
+                </button>
+              ))}
+              {votes?.[frame._id] && votes[frame._id].count > 0 && (
+                <button
+                  className={`stamp vote ${votes[frame._id].mine ? "mine" : ""}`}
+                  title={votes[frame._id].mine ? "Your dot is here — click to take it back" : "Dot-vote this screen"}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onVote?.(frame._id);
+                  }}
+                >
+                  ●<i>{votes[frame._id].count}</i>
+                </button>
+              )}
               {openCount > 0 && <span className="badge comments">{openCount}</span>}
+              {(onReact || onVote || onWhatIf) && (
+                <span className="frame-actions" onMouseDown={(e) => e.stopPropagation()}>
+                  {onReact &&
+                    ["✨", "🔥", "❓", "😬"].map((emoji) => (
+                      <button
+                        key={emoji}
+                        className="stamp ghost"
+                        title="Stamp it"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onReact(frame._id, emoji);
+                        }}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  {onVote && !votes?.[frame._id]?.count && (
+                    <button
+                      className="stamp ghost"
+                      title="Dot-vote this screen"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onVote(frame._id);
+                      }}
+                    >
+                      ●
+                    </button>
+                  )}
+                  {onWhatIf && frame.kind === "route" && !frame.variantBranch && (
+                    <button
+                      className="stamp ghost whatif"
+                      title="What if… — ask an agent for a live variant of this screen"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onWhatIf(frame);
+                      }}
+                    >
+                      ✦
+                    </button>
+                  )}
+                </span>
+              )}
             </div>
             <div className="frame-body">
               {url ? (
@@ -381,6 +487,12 @@ export default function CanvasView({
   guestToken,
   positionOverride,
   flowEdges,
+  branchPreviewPattern,
+  reactions,
+  votes,
+  onReact,
+  onVote,
+  onWhatIf,
   projectId,
   frames,
   threads,
@@ -1100,6 +1212,12 @@ export default function CanvasView({
           viewerHasRepo={viewerHasRepo}
           selfHasRepoElsewhere={selfHasRepoElsewhere}
           repoHolderNames={repoHolderNames}
+          branchPreviewPattern={branchPreviewPattern}
+          reactions={reactions}
+          votes={votes}
+          onReact={onReact}
+          onVote={onVote}
+          onWhatIf={onWhatIf}
           {...stableFrameHandlers}
         />
 

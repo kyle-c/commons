@@ -148,3 +148,77 @@ export function playConnected(): void {
     // As above.
   }
 }
+
+
+/**
+ * News sounds — the second half of the vocabulary. The rule that admits
+ * them: sound marks consequence that ARRIVES, never navigation, and never
+ * an echo of your own click. Each of these is something finishing elsewhere.
+ */
+
+/** An agent draft came back: the connected triad, grown one note fuller. */
+export function playDraftReady(): void {
+  if (throttled("draft")) return;
+  try {
+    const audioCtx = ctx();
+    if (!audioCtx) return;
+    const out = master(audioCtx, 0.15);
+    const t0 = audioCtx.currentTime + 0.03;
+    const base = 440 + Math.random() * 10;
+    note(audioCtx, out, base, t0, 0.16, 0.38);
+    note(audioCtx, out, base * 1.25, t0 + 0.08, 0.16, 0.38);
+    note(audioCtx, out, base * 1.5, t0 + 0.16, 0.2, 0.4);
+    note(audioCtx, out, base * 2, t0 + 0.24, 0.5, 0.45); // the octave rings
+  } catch {
+    // Silence is an acceptable outcome; a thrown error here is not.
+  }
+}
+
+/** Someone needs you, specifically: two quick high notes, a third apart. */
+export function playMention(): void {
+  if (throttled("mention")) return;
+  try {
+    const audioCtx = ctx();
+    if (!audioCtx) return;
+    const out = master(audioCtx, 0.12);
+    const t0 = audioCtx.currentTime + 0.03;
+    const base = 660 + Math.random() * 12;
+    note(audioCtx, out, base, t0, 0.1, 0.4);
+    note(audioCtx, out, base * 1.26, t0 + 0.09, 0.18, 0.4); // major third up
+  } catch {
+    // As above.
+  }
+}
+
+/** A stranger finished your test: a bright little fifth-then-octave skip. */
+export function playFirstResult(): void {
+  if (throttled("first-result")) return;
+  try {
+    const audioCtx = ctx();
+    if (!audioCtx) return;
+    const out = master(audioCtx, 0.13);
+    const t0 = audioCtx.currentTime + 0.03;
+    const base = 523 + Math.random() * 10;
+    note(audioCtx, out, base * 1.5, t0, 0.12, 0.4);
+    note(audioCtx, out, base * 2, t0 + 0.1, 0.3, 0.42);
+  } catch {
+    // As above.
+  }
+}
+
+/** The crawl left findings at the door: knock, knock, a question. */
+export function playProposals(): void {
+  if (throttled("proposals")) return;
+  try {
+    const audioCtx = ctx();
+    if (!audioCtx) return;
+    const out = master(audioCtx, 0.12);
+    const t0 = audioCtx.currentTime + 0.03;
+    const base = 349 + Math.random() * 8; // ~F4
+    note(audioCtx, out, base, t0, 0.09, 0.42, true);
+    note(audioCtx, out, base, t0 + 0.12, 0.09, 0.42, true);
+    note(audioCtx, out, base * 1.19, t0 + 0.26, 0.24, 0.4, true); // minor third: "anyone home?"
+  } catch {
+    // As above.
+  }
+}

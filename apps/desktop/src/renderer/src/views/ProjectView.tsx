@@ -19,7 +19,7 @@ import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessi
 import { getConvexUrl, initials, sessionToken, timeAgo } from "../lib/session";
 import { usePublicSiteUrl } from "../lib/publicUrl";
 import { resolveFrameUrl } from "../lib/frameUrl";
-import { playConnected } from "../lib/sounds";
+import { playConnected, playDraftReady, playProposals } from "../lib/sounds";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
 import { flowPositions } from "../lib/flowLayout";
@@ -1045,8 +1045,43 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     api.flows.edges,
     nav.view === "flow" ? { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() } : "skip"
   );
+  // Crawl findings arriving is news; reviewing them is a choice. First sight
+  // of a bigger pending queue knocks, once.
+  const prevProposalCount = useRef(0);
+  useEffect(() => {
+    const pending = (flowProposals ?? []).length;
+    if (pending > prevProposalCount.current && prevProposalCount.current >= 0 && nav.view === "flow") playProposals();
+    prevProposalCount.current = pending;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flowProposals?.length]);
+
   const deriveFlow = useMutation(api.flows.deriveFromTests);
   const [deriving, setDeriving] = useState(false);
+
+  // ── Exploration layer ────────────────────────────────────────────────────
+  // Stamps and dots: one-click judgment on any frame. Queried only on the
+  // canvas (guests and flow view do their own thing).
+  const reactionsByFrame =
+    useQuery(
+      api.reactions.forProject,
+      nav.view === "canvas" ? { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() } : "skip"
+    ) ?? {};
+  const votesData = useQuery(
+    api.reactions.votesForProject,
+    nav.view === "canvas" ? { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() } : "skip"
+  );
+  const toggleReaction = useMutation(api.reactions.toggle);
+  const toggleVote = useMutation(api.reactions.toggleVote);
+
+  // What-if variants: a prompt on a frame becomes an agent draft, and the
+  // draft becomes a sibling frame rendering the branch preview. The request
+  // map remembers which session belongs to which frame so the result handler
+  // can finish the story; the branch is knowable up front for local drafts
+  // (we mint the slug) and read from the mirror for cloud ones.
+  const addVariant = useMutation(api.projects.addVariant);
+  const [whatIf, setWhatIf] = useState<{ frame: Doc<"frames"> } | null>(null);
+  const [whatIfPrompt, setWhatIfPrompt] = useState("");
+  const variantRequests = useRef(new Map<string, { frameId: Id<"frames">; prompt: string; branch?: string }>());
   // CAN-11: opening the Flow view on a machine with the repo refreshes the
   // code-declared edges — Link hrefs and router.push targets, drawn as quiet
   // dashed lines under whatever testers have actually walked. Re-scanned per
@@ -1467,6 +1502,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     threadId?: Id<"threads">;
     frameId?: Id<"frames">;
     routePath?: string;
+    /** Explicit branch slug (what-if variants need to know it up front). */
+    draftSlug?: string;
   }) => {
     const draftMode = !!project?.gitRemote;
     if (!draftMode && !repoPath) return;
@@ -1483,7 +1520,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
       ...(draftMode
         ? {
             gitRemote: project!.gitRemote,
-            draftSlug: slugify(opts.title),
+            draftSlug: opts.draftSlug ?? slugify(opts.title),
             branchPreviewPattern: project!.branchPreviewPattern,
           }
         : { repoPath: repoPath! }),
@@ -1499,6 +1536,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     });
     rememberMapping(info.sessionId, mirrorId);
     setActiveAgentSessionId(mirrorId);
+    return mirrorId;
     setSidePanel("agents");
   };
 
@@ -1555,6 +1593,36 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     });
     setActiveAgentSessionId(sessionId as Id<"agentSessions">);
     setSidePanel("agents");
+    return sessionId as Id<"agentSessions">;
+  };
+
+  /**
+   * The what-if gesture: a frame plus one sentence becomes an agent draft on
+   * its own branch, and when the draft reports back, a sibling frame appears
+   * rendering that branch's preview. PMs without a repo ride the cloud path;
+   * the variant only needs the pattern to resolve, not this machine.
+   */
+  const fireWhatIf = async () => {
+    const frame = whatIf?.frame;
+    const prompt = whatIfPrompt.trim();
+    if (!frame || !prompt) return;
+    setWhatIf(null);
+    setWhatIfPrompt("");
+    const slug = `whatif-${slugify(prompt).slice(0, 32)}-${Math.floor(Math.random() * 900 + 100)}`;
+    const title = `What if: ${prompt.length > 40 ? prompt.slice(0, 37) + "…" : prompt}`;
+    const agentPrompt = [
+      `You are exploring a what-if variant of one screen. Route: ${frame.routePath ?? "/"} ("${frame.title}").`,
+      `The what-if: ${prompt}`,
+      `Keep the change scoped to this screen and its immediate components. This is an exploration, not a refactor — favor the smallest change that makes the idea visible.`,
+    ].join("\n\n");
+    const opts = { title, prompt: agentPrompt, frameId: frame._id, routePath: frame.routePath };
+    if (window.commons && (repoPath || project?.gitRemote)) {
+      const sessionId = await startAgentSession({ ...opts, draftSlug: slug });
+      if (sessionId) variantRequests.current.set(sessionId, { frameId: frame._id, prompt, branch: `commons/${slug}` });
+    } else {
+      const sessionId = await startCloudSession(opts);
+      if (sessionId) variantRequests.current.set(sessionId, { frameId: frame._id, prompt });
+    }
   };
 
   const sendThreadToAgent = async (thread: ThreadWithMessages) => {
@@ -1586,6 +1654,33 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     branch: s.branch ?? undefined,
     startedAt: s._creationTime,
   }));
+  // News watcher: a session finishing is something arriving from elsewhere,
+  // whether this machine hosted it or a runner did. idle = finished a turn.
+  // Also the tail of the what-if flow: session done → variant frame appears.
+  const prevSessionStatus = useRef(new Map<string, string>());
+  useEffect(() => {
+    for (const s of convexSessions) {
+      const was = prevSessionStatus.current.get(s._id);
+      prevSessionStatus.current.set(s._id, s.status);
+      if (was && was !== "idle" && s.status === "idle") {
+        playDraftReady();
+        const req = variantRequests.current.get(s._id);
+        const branch = (s as { branch?: string }).branch ?? req?.branch;
+        if (req && branch) {
+          variantRequests.current.delete(s._id);
+          void addVariant({
+            variantOf: req.frameId,
+            prompt: req.prompt,
+            branch,
+            userId: me._id,
+            sessionToken: sessionToken(),
+          }).catch(() => {});
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convexSessions]);
+
   const activePanelId = activeAgentSessionId ?? convexSessions[0]?._id ?? null;
   const transcript = (useQuery(
     api.agentSessions.events,
@@ -2137,6 +2232,38 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           </button>
         </div>
       )}
+      {whatIf && (
+        <div className="overlay-scrim" onMouseDown={() => setWhatIf(null)}>
+          <div className="overlay-card" onMouseDown={(e) => e.stopPropagation()}>
+            <header>What if…</header>
+            <div className="reveal-form">
+              <span className="hint">
+                One sentence about {whatIf.frame.title}. An agent tries it on a draft branch, and the
+                result lands beside the original as a live variant — the real app, changed.
+              </span>
+              <div className="reveal-form-row">
+                <input
+                  autoFocus
+                  placeholder="warmer palette · collapse the nav · first-time user view"
+                  value={whatIfPrompt}
+                  onChange={(e) => setWhatIfPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void fireWhatIf();
+                    if (e.key === "Escape") setWhatIf(null);
+                  }}
+                />
+                <button className="btn primary" disabled={!whatIfPrompt.trim()} onClick={() => void fireWhatIf()}>
+                  Try it
+                </button>
+              </div>
+              <span className="hint">
+                Costs an agent session (the $5 ceiling applies). Variants A/B-test against the
+                original from the Tests panel.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
       {signInHint && (
         <div className="nudge-banner">
           <span>
@@ -2368,6 +2495,20 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           annotations={annotationData?.annotations
             .filter((a) => a.status === "approved")
             .map((a) => ({ _id: a._id, frameId: a.frameId, text: a.text, inferred: a.citations.length === 0 }))}
+          branchPreviewPattern={project.branchPreviewPattern}
+          reactions={reactionsByFrame}
+          votes={votesData?.byFrame}
+          onReact={(frameId, emoji) =>
+            void toggleReaction({ frameId, emoji, userId: me._id, sessionToken: sessionToken() }).catch(() => {})
+          }
+          onVote={(frameId) =>
+            void toggleVote({ frameId, userId: me._id, sessionToken: sessionToken() })
+              .then((r) => {
+                if (r && "budgetSpent" in r && r.budgetSpent) alert("All five of your dots are spent — take one back first.");
+              })
+              .catch(() => {})
+          }
+          onWhatIf={project.gitRemote || repoPath ? (frame) => setWhatIf({ frame }) : undefined}
         />
       ) : (
         <PrototypeView

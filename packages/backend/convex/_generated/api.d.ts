@@ -29,6 +29,7 @@ import type * as metrics from "../metrics.js";
 import type * as presence from "../presence.js";
 import type * as previewLogic from "../previewLogic.js";
 import type * as projects from "../projects.js";
+import type * as reactions from "../reactions.js";
 import type * as repoLinks from "../repoLinks.js";
 import type * as siteUrl from "../siteUrl.js";
 import type * as slack from "../slack.js";
@@ -66,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   presence: typeof presence;
   previewLogic: typeof previewLogic;
   projects: typeof projects;
+  reactions: typeof reactions;
   repoLinks: typeof repoLinks;
   siteUrl: typeof siteUrl;
   slack: typeof slack;

@@ -394,12 +394,42 @@ export default defineSchema({
     stateLabel: v.optional(v.string()),
     // kind=state: where it came from — a browser crawl or a person.
     stateOrigin: v.optional(v.union(v.literal("crawl"), v.literal("manual"))),
+    // What-if variants (exploration): this frame renders the same route from
+    // an agent draft branch instead of the project preview. variantOf points
+    // at the original; the prompt is the what-if a person typed; the branch
+    // names where the draft lives, resolved through branchPreviewPattern.
+    variantOf: v.optional(v.id("frames")),
+    variantPrompt: v.optional(v.string()),
+    variantBranch: v.optional(v.string()),
     // Canvas placement.
     x: v.number(),
     y: v.number(),
     width: v.number(),
     height: v.number(),
   }).index("by_project", ["projectId"]),
+
+  // One-click judgment: a stamp on a frame. One row per (frame, user, emoji);
+  // toggling off deletes. Cheaper than a thread on purpose — most PM judgment
+  // dies unexpressed when the only tool is an essay.
+  reactions: defineTable({
+    projectId: v.id("projects"),
+    frameId: v.id("frames"),
+    userId: v.id("users"),
+    emoji: v.string(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_frame_user", ["frameId", "userId"]),
+
+  // Dot-voting: each member gets a small budget per project, spent one dot
+  // per frame. The workshop ritual, except the things being voted on run.
+  frameVotes: defineTable({
+    projectId: v.id("projects"),
+    frameId: v.id("frames"),
+    userId: v.id("users"),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_user", ["projectId", "userId"])
+    .index("by_frame_user", ["frameId", "userId"]),
 
   threads: defineTable({
     projectId: v.id("projects"),

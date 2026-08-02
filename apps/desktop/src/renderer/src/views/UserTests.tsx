@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import { timeAgo, sessionToken } from "../lib/session";
 import { usePublicSiteUrl } from "../lib/publicUrl";
+import { playFirstResult } from "../lib/sounds";
 import Icon from "../components/icons";
 
 /**
@@ -305,6 +306,14 @@ function TestResults({
   const site = useSiteUrl();
   const sessions = data?.sessions ?? [];
   const completed = sessions.filter((s) => s.completedAt);
+  // The first stranger finishing your test is a small occasion. Only the
+  // zero-to-one transition speaks; results two through n arrive silently
+  // and the heatmap is their reward.
+  const prevCompleted = useRef(completed.length);
+  useEffect(() => {
+    if (prevCompleted.current === 0 && completed.length > 0) playFirstResult();
+    prevCompleted.current = completed.length;
+  }, [completed.length]);
   const anyInstrumented = sessions.some((s) => s.instrumented);
 
   return (
