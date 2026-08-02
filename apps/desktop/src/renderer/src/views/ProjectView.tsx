@@ -20,6 +20,7 @@ import { getConvexUrl, initials, sessionToken, timeAgo } from "../lib/session";
 import { usePublicSiteUrl } from "../lib/publicUrl";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { playConnected, playDraftReady, playProposals } from "../lib/sounds";
+import { claimSurface, useSurfaceExclusivity } from "../lib/surfaces";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
 import { flowPositions } from "../lib/flowLayout";
@@ -1235,6 +1236,10 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     if (key) {
       setSidePanelRaw(null);
       setDeviceMenuOpen(false);
+      // Also silence the global titlebar menus (inbox, team, …): the
+      // one-surface rule holds across ownership boundaries, not just within
+      // this component's own popovers.
+      claimSurface("project-setting");
     }
   };
   const setSidePanel = (panel: SidePanel | null) => {
@@ -1242,8 +1247,12 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     if (panel) {
       setOpenSettingRaw(null);
       setDeviceMenuOpen(false);
+      claimSurface("project-panel");
     }
   };
+  // And the mirror: a global menu opening closes this component's surfaces.
+  useSurfaceExclusivity("project-setting", openSetting !== null, () => setOpenSettingRaw(null));
+  useSurfaceExclusivity("project-panel", sidePanel !== null, () => setSidePanelRaw(null));
   const toggleSidePanel = (panel: SidePanel) =>
     setSidePanel(sidePanelRef.current === panel ? null : panel);
   // Approved annotations back the canvas Notes layer; drafts stay in the panel.

@@ -1467,6 +1467,9 @@ button.workspace-toggle:hover {
   animation: panel-in-right var(--dur-med) var(--ease-out);
   position: fixed;
   top: 96px; /* titlebar (44px) + subnav (40px) + gutter — panels live in the canvas, never over the chrome */
+  /* Contextual, not constant: the home has no subnav, so the same panel
+     hangs 52px too low there — it looked reserved for chrome that view
+     doesn't have. :has() keys the offset off the chrome actually present. */
   right: 12px;
   bottom: 12px;
   width: 380px;
@@ -1477,6 +1480,9 @@ button.workspace-toggle:hover {
   display: flex;
   flex-direction: column;
   z-index: 30;
+}
+.app:not(:has(.subnav)) .agent-panel {
+  top: 56px;
 }
 .agent-panel header {
   display: flex;

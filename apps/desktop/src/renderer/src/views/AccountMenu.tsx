@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc } from "@commons/backend/convex/_generated/dataModel";
 import { initials, sessionToken } from "../lib/session";
+import { useSurfaceExclusivity } from "../lib/surfaces";
 import { useClickOutside } from "../lib/useClickOutside";
 import { effectiveTheme, onSystemThemeChange, setThemePreference } from "../lib/theme";
 import { registerShortcut } from "../lib/shortcuts";
@@ -13,6 +14,7 @@ import { registerShortcut } from "../lib/shortcuts";
  */
 export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSignOut: () => void }) {
   const [open, setOpen] = useState(false);
+  useSurfaceExclusivity("account", open, () => setOpen(false));
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);

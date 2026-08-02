@@ -4,6 +4,7 @@ import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import type { DevServerStatus } from "@commons/shared";
 import { useClickOutside } from "../lib/useClickOutside";
+import { useSurfaceExclusivity } from "../lib/surfaces";
 import { useMachineId } from "../lib/machine";
 import { sessionToken } from "../lib/session";
 import Icon from "../components/icons";
@@ -31,6 +32,7 @@ export default function ServersMenu({
   onOpenProject?: (projectId: Id<"projects">) => void;
 }) {
   const [open, setOpen] = useState(false);
+  useSurfaceExclusivity("servers", open, () => setOpen(false));
   const [servers, setServers] = useState<ServerRow[]>([]);
   const machineId = useMachineId();
   const wrapRef = useRef<HTMLDivElement>(null);

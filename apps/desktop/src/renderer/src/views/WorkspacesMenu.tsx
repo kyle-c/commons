@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import { initials, sessionToken } from "../lib/session";
+import { useSurfaceExclusivity } from "../lib/surfaces";
 import { playConnected } from "../lib/sounds";
 import { useClickOutside } from "../lib/useClickOutside";
 import Icon from "../components/icons";
@@ -119,6 +120,7 @@ function GithubPanel({ me, workspace }: { me: Doc<"users">; workspace: Workspace
  */
 export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
   const [open, setOpen] = useState(false);
+  useSurfaceExclusivity("workspaces", open, () => setOpen(false));
   const workspaces = useQuery(api.workspaces.mine, open ? { userId: me._id, sessionToken: sessionToken() } : "skip");
   const createWorkspace = useMutation(api.workspaces.create);
   const addMember = useMutation(api.workspaces.addMember);

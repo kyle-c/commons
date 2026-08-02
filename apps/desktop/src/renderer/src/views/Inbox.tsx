@@ -4,6 +4,7 @@ import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc } from "@commons/backend/convex/_generated/dataModel";
 import type { Nav } from "../App";
 import { sessionToken, timeAgo } from "../lib/session";
+import { useSurfaceExclusivity } from "../lib/surfaces";
 import { registerShortcut } from "../lib/shortcuts";
 import { playMention } from "../lib/sounds";
 import Icon from "../components/icons";
@@ -28,6 +29,11 @@ export default function Inbox({
   const [selfOpen, setSelfOpen] = useState(false);
   const open = controlledOpen ?? selfOpen;
   const setOpen = onOpenChange ?? setSelfOpen;
+  // Only the uncontrolled inbox (the home titlebar) speaks for itself on the
+  // surface bus. Controlled by ProjectView, the same panel is claimed as
+  // "project-panel" by its owner — a second claim from in here made the two
+  // ids fight and the panel close itself in the same breath it opened.
+  useSurfaceExclusivity("inbox", controlledOpen === undefined && open, () => setOpen(false));
   const items = useQuery(api.comments.inbox, { userId: me._id, sessionToken: sessionToken() }) ?? [];
   const markRead = useMutation(api.comments.markRead);
   const unread = items.filter((i) => !i.readAt).length;
