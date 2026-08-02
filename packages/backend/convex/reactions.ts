@@ -254,3 +254,40 @@ export const gifsForProject = query({
     return byFrame;
   },
 });
+
+/**
+ * Giphy search plumbing. The key is workspace-level, admin-pasted in the GIF
+ * modal at the moment search is first wanted — the same trust posture as the
+ * Figma token, and a client-side key by Giphy's own design. Members of any
+ * of the project's workspace get to read it; that is what it is for.
+ */
+export const giphyKeyFor = query({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const viewerId = await resolveViewer(ctx, args);
+    const project = viewerId ? await accessibleProject(ctx, args.projectId, viewerId) : null;
+    if (!project?.workspaceId) return { key: null, canSet: false };
+    const workspace = await ctx.db.get(project.workspaceId);
+    return { key: workspace?.giphyKey ?? null, canSet: true };
+  },
+});
+
+export const setGiphyKey = mutation({
+  args: {
+    projectId: v.id("projects"),
+    key: v.string(),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const viewerId = await requireViewer(ctx, args);
+    const project = await accessibleProject(ctx, args.projectId, viewerId);
+    if (!project?.workspaceId) throw new Error("This project has no workspace.");
+    await ctx.db.patch(project.workspaceId, { giphyKey: args.key.trim() || undefined });
+    return null;
+  },
+});

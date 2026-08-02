@@ -1086,6 +1086,57 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const [editNote, setEditNote] = useState<{ _id: string; text: string } | null>(null);
   const [gifFor, setGifFor] = useState<Doc<"frames"> | null>(null);
   const [gifAnchor, setGifAnchor] = useState<{ fx: number; fy: number } | null>(null);
+  const giphy = useQuery(
+    api.reactions.giphyKeyFor,
+    gifFor ? { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() } : "skip"
+  );
+  const setGiphyKey = useMutation(api.reactions.setGiphyKey);
+  const [giphyResults, setGiphyResults] = useState<{ url: string; preview: string }[]>([]);
+  const searchGiphy = async (q: string) => {
+    if (!giphy?.key || !q.trim()) return;
+    try {
+      const res = await fetch(
+        `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(giphy.key)}&q=${encodeURIComponent(q)}&limit=8&rating=pg-13`
+      );
+      const body = (await res.json()) as { data?: { images?: { fixed_height?: { url?: string }; fixed_height_small?: { url?: string } } }[] };
+      setGiphyResults(
+        (body.data ?? [])
+          .map((g) => ({
+            url: g.images?.fixed_height?.url ?? "",
+            preview: g.images?.fixed_height_small?.url ?? g.images?.fixed_height?.url ?? "",
+          }))
+          .filter((g) => g.url)
+      );
+    } catch {
+      setGifNote("Giphy didn't answer — check the key or the network.");
+    }
+  };
+  /** A pasted or dropped image file becomes an uploaded sticker. */
+  const uploadGifFile = async (file: File) => {
+    if (!gifFor) return;
+    if (!/image\/(gif|webp)/.test(file.type)) {
+      setGifNote("Stickers move — paste or drop a GIF or animated WebP.");
+      return;
+    }
+    const url = await generateUploadUrl({ userId: me._id, sessionToken: sessionToken() });
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": file.type }, body: file });
+    const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+    const result = await addGifMutation({
+      frameId: gifFor._id,
+      storageId,
+      fx: gifAnchor?.fx,
+      fy: gifAnchor?.fy,
+      userId: me._id,
+      sessionToken: sessionToken(),
+    }).catch(() => ({ ok: false as const, reason: "not_a_gif" as const }));
+    if (result.ok) {
+      playThrow();
+      setGifFor(null);
+      setGiphyResults([]);
+    } else {
+      setGifNote(result.reason === "frame_full" ? "This screen already wears eight stickers." : "That upload didn't take.");
+    }
+  };
   /** The reaction palette, bloomed at the cursor by a right-click on a frame. */
   const [bloom, setBloom] = useState<{ frame: Doc<"frames">; x: number; y: number; fx: number; fy: number } | null>(null);
   const [gifUrl, setGifUrl] = useState("");
@@ -1103,9 +1154,11 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
       sessionToken: sessionToken(),
     }).catch(() => ({ ok: false as const, reason: "not_a_gif" as const }));
     if (result.ok) {
+      playThrow();
       setGifFor(null);
       setGifUrl("");
       setGifNote(null);
+      setGiphyResults([]);
     } else {
       setGifNote(
         result.reason === "frame_full"
@@ -2408,29 +2461,107 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         <div className="overlay-scrim" onMouseDown={() => setGifFor(null)}>
           <div className="overlay-card" onMouseDown={(e) => e.stopPropagation()}>
             <header>Drop a GIF on {gifFor.title}</header>
-            <div className="reveal-form">
+            <div
+              className="reveal-form"
+              onPaste={(e) => {
+                const file = e.clipboardData?.files?.[0];
+                if (file) {
+                  e.preventDefault();
+                  void uploadGifFile(file);
+                }
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const file = e.dataTransfer?.files?.[0];
+                if (file) void uploadGifFile(file);
+              }}
+            >
               <span className="hint">
-                Paste a GIF link — in Giphy, Share → Copy GIF Link. One sticker per person per
-                screen; adding another replaces yours.
+                {giphy?.key
+                  ? "Search, paste a copied GIF, drop a file, or paste a link. One per person per screen; a new one replaces yours."
+                  : "Paste a copied GIF, drop a file, or paste a link (Giphy: Share → Copy GIF Link). One per person per screen."}
               </span>
               <div className="reveal-form-row">
                 <input
                   autoFocus
-                  placeholder="https://media.giphy.com/…"
+                  placeholder={giphy?.key ? "Search Giphy, or paste a link…" : "https://media.giphy.com/…"}
                   value={gifUrl}
                   onChange={(e) => {
                     setGifUrl(e.target.value);
                     setGifNote(null);
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") void submitGif();
+                    if (e.key === "Enter") {
+                      if (giphy?.key && !/^https?:/.test(gifUrl.trim())) void searchGiphy(gifUrl);
+                      else void submitGif();
+                    }
                     if (e.key === "Escape") setGifFor(null);
                   }}
                 />
-                <button className="btn primary" disabled={!gifUrl.trim()} onClick={() => void submitGif()}>
-                  Stick it
+                <button
+                  className="btn primary"
+                  disabled={!gifUrl.trim()}
+                  onClick={() => {
+                    if (giphy?.key && !/^https?:/.test(gifUrl.trim())) void searchGiphy(gifUrl);
+                    else void submitGif();
+                  }}
+                >
+                  {giphy?.key && !/^https?:/.test(gifUrl.trim()) ? "Search" : "Stick it"}
                 </button>
               </div>
+              {giphyResults.length > 0 && (
+                <div className="giphy-grid">
+                  {giphyResults.map((g) => (
+                    <img
+                      key={g.url}
+                      src={g.preview}
+                      alt=""
+                      onClick={() => {
+                        setGifUrl(g.url);
+                        setGiphyResults([]);
+                        void (async () => {
+                          const result = await addGifMutation({
+                            frameId: gifFor._id,
+                            url: g.url,
+                            fx: gifAnchor?.fx,
+                            fy: gifAnchor?.fy,
+                            userId: me._id,
+                            sessionToken: sessionToken(),
+                          }).catch(() => ({ ok: false as const, reason: "not_a_gif" as const }));
+                          if (result.ok) {
+                            playThrow();
+                            setGifFor(null);
+                            setGifUrl("");
+                          } else {
+                            setGifNote(result.reason === "frame_full" ? "This screen already wears eight stickers." : "Giphy handed back something unusable.");
+                          }
+                        })();
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+              {giphy && !giphy.key && giphy.canSet && (
+                <span className="hint">
+                  Want search in here? Paste a free Giphy API key once for the whole workspace:{" "}
+                  <button
+                    className="btn ghost quiet-action"
+                    onClick={async () => {
+                      const key = gifUrl.trim();
+                      if (!key || /^https?:/.test(key)) {
+                        setGifNote("Type the key in the box above, then click here.");
+                        return;
+                      }
+                      await setGiphyKey({ projectId: nav.projectId, key, userId: me._id, sessionToken: sessionToken() }).catch(() => {});
+                      setGifUrl("");
+                      setGifNote(null);
+                    }}
+                  >
+                    save what's in the box as the key
+                  </button>
+                </span>
+              )}
               {gifNote && <span className="form-error">{gifNote}</span>}
             </div>
           </div>
