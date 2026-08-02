@@ -15,6 +15,7 @@ import type * as auth from "../auth.js";
 import type * as cloudAgents from "../cloudAgents.js";
 import type * as comments from "../comments.js";
 import type * as config from "../config.js";
+import type * as crons from "../crons.js";
 import type * as emails from "../emails.js";
 import type * as errors from "../errors.js";
 import type * as figma from "../figma.js";
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   cloudAgents: typeof cloudAgents;
   comments: typeof comments;
   config: typeof config;
+  crons: typeof crons;
   emails: typeof emails;
   errors: typeof errors;
   figma: typeof figma;
