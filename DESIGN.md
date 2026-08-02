@@ -137,6 +137,20 @@ states, and both are skipped entirely under reduced motion:
 Nothing else gets a bespoke duration. If a third exception seems necessary, it probably
 belongs in the shared scale instead.
 
+## Sound
+
+A three-word vocabulary (`lib/sounds.ts`), synthesized in Web Audio, nothing in the
+bundle: **serverUp** (two notes rising a fourth) when a dev server reaches ready,
+**serverDown** (the mirror, darker, through a lowpass) when a ready server stops, and
+**connected** (a rolled major triad with a bell tail) when GitHub, Slack, or Figma
+plugs in — one success sound shared by all three, because a chime per service is a
+zoo and the act is the same. Quieter than the archive vacuum on purpose (peaks around
+0.07): these mark half-asked-for state changes and should be felt more than heard.
+Per-effect throttling makes a burst of events sound like one thing happening. Only true
+transitions speak: a cancelled start, an error, and a mount with state already present
+are all silence. New sounds must justify joining the vocabulary the way new titlebar
+items justify their permanent cost.
+
 ## Perceived speed
 
 The app should feel faster than it is:

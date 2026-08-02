@@ -14,6 +14,7 @@ import { clearStoredSession, getStoredSession, initials, type StoredSession } fr
 import { getRecents } from "./lib/recents";
 import { applyStoredPreviewAppearance } from "./lib/previewAppearance";
 import { initPanelGlow } from "./lib/panelGlow";
+import { playServerDown, playServerUp } from "./lib/sounds";
 import { loadTabs, saveTabs, type ProjectTab } from "./lib/tabs";
 import TabBar from "./components/TabBar";
 
@@ -122,6 +123,23 @@ export default function App() {
   // A deep-linked or restored project gets its tab on first render.
   // Cursor-following warmth on panels and popovers (one delegated listener).
   useEffect(() => initPanelGlow(), []);
+
+  // Server sounds live at the app root, not in a view: ports start and stop
+  // while any screen is showing (grace-timer releases, archive stops), and
+  // the sound belongs to the event, not to whichever panel happens to be
+  // open. Only true transitions speak — up when a server reaches ready,
+  // down when a *ready* server stops. A cancelled start and an error both
+  // stay silent: nothing succeeded, so there is nothing to announce.
+  useEffect(() => {
+    if (!window.commons?.onDevServerStatus) return;
+    const prev = new Map<string, string>();
+    return window.commons.onDevServerStatus((repoPath, status) => {
+      const was = prev.get(repoPath);
+      prev.set(repoPath, status.state);
+      if (status.state === "ready" && was !== "ready") playServerUp();
+      else if (status.state === "stopped" && was === "ready") playServerDown();
+    });
+  }, []);
 
   useEffect(() => {
     if (nav.screen === "project") {

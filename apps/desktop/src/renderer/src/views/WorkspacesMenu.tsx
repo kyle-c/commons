@@ -1,8 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import { initials, sessionToken } from "../lib/session";
+import { playConnected } from "../lib/sounds";
 import { useClickOutside } from "../lib/useClickOutside";
 import Icon from "../components/icons";
 import { InlineField } from "../components/popover";
@@ -44,6 +45,16 @@ function GithubPanel({ me, workspace }: { me: Doc<"users">; workspace: Workspace
   const disconnect = useMutation(api.github.disconnect);
   const [notice, setNotice] = useState<string | null>(null);
   const accounts = workspace.githubAccounts;
+
+  // The GitHub connect finishes in the browser, so the app's first sight of
+  // success is this list growing while the menu is open. That reactive
+  // arrival is the moment worth marking; a mount with accounts already
+  // present is history, not news.
+  const prevAccounts = useRef(accounts.length);
+  useEffect(() => {
+    if (accounts.length > prevAccounts.current) playConnected();
+    prevAccounts.current = accounts.length;
+  }, [accounts.length]);
 
   const connect = async () => {
     const result = await startConnect({ workspaceId: workspace._id, userId: me._id, sessionToken: sessionToken() });
@@ -284,6 +295,7 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
                           sessionToken: sessionToken(),
                           webhookUrl: url,
                         });
+                        playConnected();
                         setNotice("Slack channel saved.");
                       }}
                       secondaryLabel={workspace.slackConnected ? "Disconnect" : undefined}

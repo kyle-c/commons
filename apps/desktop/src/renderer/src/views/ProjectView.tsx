@@ -19,6 +19,7 @@ import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessi
 import { getConvexUrl, initials, sessionToken, timeAgo } from "../lib/session";
 import { usePublicSiteUrl } from "../lib/publicUrl";
 import { resolveFrameUrl } from "../lib/frameUrl";
+import { playConnected } from "../lib/sounds";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
 import { flowPositions } from "../lib/flowLayout";
@@ -233,6 +234,7 @@ function FigmaSettingBody({ project, me }: { project: Doc<"projects">; me: Doc<"
                 sessionToken: sessionToken(),
                 figmaToken: token.trim(),
               });
+              playConnected();
               setToken("");
             }}
           >
