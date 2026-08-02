@@ -69,10 +69,6 @@ export default defineSchema({
     acceptedAt: v.optional(v.number()),
   }).index("by_email", ["email"]),
 
-  // Isolation boundary: you see a project only if you're a member of its
-  // workspace. "team" workspaces are created explicitly (optionally with a
-  // corporate domain — matching sign-ins auto-join); every user also gets a
-  // "personal" playground workspace at first sign-in.
   /**
    * One row per project ever auto-created from a deploy — written at
    * creation, never deleted. This is what stops a deleted project from
@@ -90,6 +86,10 @@ export default defineSchema({
     projectId: v.string(),
   }).index("by_install_repo", ["installationId", "repoFullName"]),
 
+  // Isolation boundary: you see a project only if you're a member of its
+  // workspace. "team" workspaces are created explicitly (optionally with a
+  // corporate domain — matching sign-ins auto-join); every user also gets a
+  // "personal" playground workspace at first sign-in.
   workspaces: defineTable({
     name: v.string(),
     kind: v.union(v.literal("team"), v.literal("personal")),
@@ -217,7 +217,8 @@ export default defineSchema({
     branch: v.optional(v.string()),
   })
     .index("by_project", ["projectId"])
-    .index("by_host", ["hostUserId"]),
+    .index("by_host", ["hostUserId"])
+    .index("by_status", ["status"]),
 
   // Ordered transcript of a mirrored agent session (AgentSessionEvent payloads).
   agentEvents: defineTable({

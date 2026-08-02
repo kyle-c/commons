@@ -362,6 +362,9 @@ export const handleDeployment = internalMutation({
       if (allProjects.some(matchesRepo)) return { matched: 0, reason: "archived_project" };
       const repoFullName =
         args.repoUrls.find((u) => /^[^/]+\/[^/]+$/.test(u)) ?? normalizeRemote(args.repoUrls[0] ?? "");
+      // A payload with no usable repo identity must not become a project
+      // named "" with a "" tombstone — refuse, as everywhere else here.
+      if (!repoFullName) return { matched: 0, reason: "no_repo_identity" };
       const tombstone = await ctx.db
         .query("githubAutoProjects")
         .withIndex("by_install_repo", (q) =>

@@ -166,10 +166,13 @@ const STALL_MS = 15 * 60 * 1000;
 export const finalizeStalled = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const active = await ctx.db
-      .query("agentSessions")
-      .filter((q) => q.or(q.eq(q.field("status"), "starting"), q.eq(q.field("status"), "running")))
-      .collect();
+    // Indexed, not filtered: sessions accumulate forever, and a cron that
+    // full-scans a growing table every 10 minutes is a slow leak. The index
+    // keeps this proportional to the handful of live sessions.
+    const active = [
+      ...(await ctx.db.query("agentSessions").withIndex("by_status", (q) => q.eq("status", "starting")).collect()),
+      ...(await ctx.db.query("agentSessions").withIndex("by_status", (q) => q.eq("status", "running")).collect()),
+    ];
     const cutoff = Date.now() - STALL_MS;
     for (const session of active) {
       const lastEvent = await ctx.db
