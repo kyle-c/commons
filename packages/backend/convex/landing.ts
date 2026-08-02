@@ -7,6 +7,14 @@
  * anywhere, so it renders instantly and survives any CSP. The product shots
  * are drawn in CSS (crisp at every density); swap in real screenshots by
  * replacing a .shot block with an <img>.
+ *
+ * The premium pass (2026-08-02) is presentation only — same claims, same
+ * sections. What changed is the material system: a layered shadow-and-
+ * hairline treatment on every raised surface (shots get a top highlight, a
+ * ring, and a soft halo), a centered hero with a staged product shot, serif
+ * numerals on the steps, gradient-faded rules between sections, and a real
+ * footer. Every number in the type scale sits on a shared rhythm now, which
+ * is most of what "premium" is.
  */
 
 const APP_URL = "/app";
@@ -16,7 +24,7 @@ const APP_URL = "/app";
 const DOWNLOAD_URL = "/download";
 
 export function landingHtml(version?: string): string {
-  const buildLabel = version ? `Version ${version} · Apple silicon` : "Apple silicon";
+  const buildLabel = version ? `v${version} · Apple silicon` : "Apple silicon";
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -42,7 +50,7 @@ export function landingHtml(version?: string): string {
     --ink-3: #8f8d80;
     --accent: #1f7a6e;
     --accent-hover: #16665c;
-    --accent-soft: rgba(31, 122, 110, 0.12);
+    --accent-soft: rgba(31, 122, 110, 0.1);
     --dark: #1a1b17;
     --dark-panel: #21221d;
     --dark-line: #2a2b24;
@@ -54,123 +62,231 @@ export function landingHtml(version?: string): string {
     --bronze: #b0722f;
     --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    --shadow: 0 1px 2px rgba(50, 45, 25, 0.04), 0 12px 32px rgba(50, 45, 25, 0.08);
-    --shadow-lg: 0 2px 4px rgba(50, 45, 25, 0.05), 0 32px 64px rgba(50, 45, 25, 0.14);
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    /* Raised-surface material: ambient + key + a hairline of sky caught on
+       the top edge. One recipe everywhere, which is what makes it a material
+       rather than a set of drop shadows. */
+    --shadow-sm: 0 1px 2px rgba(50, 45, 25, 0.05), 0 6px 18px rgba(50, 45, 25, 0.06);
+    --shadow: 0 1px 2px rgba(50, 45, 25, 0.05), 0 10px 28px rgba(50, 45, 25, 0.07), 0 28px 56px rgba(50, 45, 25, 0.07);
+    --shadow-lg: 0 2px 4px rgba(50, 45, 25, 0.06), 0 24px 48px rgba(50, 45, 25, 0.1), 0 64px 128px rgba(50, 45, 25, 0.12);
+    --shot-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body {
     margin: 0; background: var(--paper); color: var(--ink);
     font: 17px/1.65 var(--sans); -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* The hero halo deliberately bleeds past the content column; clip (not
+       hidden) so that never becomes a horizontal scroll, without turning body
+       into a scroll container — hidden here breaks position: sticky. */
+    overflow-x: clip;
   }
-  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 0 28px; }
   a { color: var(--accent); }
+
+  /* Rules between sections fade at both ends: a hairline that starts and
+     stops feels drawn; one that runs edge-to-edge feels like a table. */
+  .rule { height: 1px; border: 0; margin: 0;
+          background: linear-gradient(90deg, transparent, var(--line-mid) 18%, var(--line-mid) 82%, transparent); }
 
   /* ── Nav ─────────────────────────────────────────────── */
   nav {
     position: sticky; top: 0; z-index: 20;
-    background: rgba(243, 240, 232, 0.86);
-    backdrop-filter: saturate(160%) blur(12px);
+    background: rgba(243, 240, 232, 0.82);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
     border-bottom: 1px solid transparent;
-    transition: border-color 200ms ease;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
   }
-  nav.stuck { border-bottom-color: var(--line); }
-  nav .wrap { display: flex; align-items: center; gap: 28px; height: 68px; }
+  nav.stuck { border-bottom-color: var(--line); box-shadow: 0 6px 24px rgba(50, 45, 25, 0.05); }
+  nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
   .brand { font-family: var(--serif); font-size: 21px; font-weight: 600; letter-spacing: -0.01em;
            color: var(--ink); text-decoration: none; display: flex; align-items: center; gap: 9px; }
   .brand svg { display: block; }
-  nav .links { display: flex; gap: 26px; margin-left: auto; }
-  nav .links a { color: var(--ink-2); text-decoration: none; font-size: 15px; }
-  nav .links a:hover { color: var(--ink); }
+  nav .links { display: flex; gap: 4px; margin-left: auto; }
+  nav .links a {
+    color: var(--ink-2); text-decoration: none; font-size: 14.5px; font-weight: 500;
+    padding: 7px 12px; border-radius: 8px; transition: color 140ms ease, background 140ms ease;
+  }
+  nav .links a:hover { color: var(--ink); background: rgba(38, 37, 30, 0.05); }
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     font: inherit; font-size: 15px; font-weight: 500; text-decoration: none;
-    padding: 10px 18px; border-radius: 10px; border: 1px solid transparent; cursor: pointer;
-    transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+    padding: 9px 17px; border-radius: 10px; border: 1px solid transparent; cursor: pointer;
+    transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
   }
-  .btn.primary { background: var(--accent); color: #fff; }
+  .btn:active { transform: scale(0.98); }
+  .btn.primary {
+    background: var(--accent); color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 1px 2px rgba(22, 102, 92, 0.35);
+  }
   .btn.primary:hover { background: var(--accent-hover); }
-  .btn.ghost { background: var(--panel); color: var(--ink); border-color: var(--line-mid); }
+  .btn.ghost { background: var(--panel); color: var(--ink); border-color: var(--line-mid); box-shadow: var(--shadow-sm); }
   .btn.ghost:hover { background: var(--raised); border-color: var(--ink-3); }
-  .btn.lg { padding: 14px 24px; font-size: 16.5px; border-radius: 12px; }
+  .btn.lg { padding: 14px 26px; font-size: 16.5px; border-radius: 12px; }
+  .btn.lg.primary { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 6px rgba(22, 102, 92, 0.3), 0 12px 28px rgba(22, 102, 92, 0.18); }
 
-  /* ── Sections ────────────────────────────────────────── */
-  section { padding: 92px 0; }
-  .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+  /* ── Type ────────────────────────────────────────────── */
+  section { padding: 108px 0; }
+  .eyebrow { font-size: 12.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
              color: var(--accent); margin: 0 0 18px; }
-  h1 { font-family: var(--serif); font-size: clamp(38px, 6vw, 62px); line-height: 1.06;
-       letter-spacing: -0.022em; margin: 0 0 22px; font-weight: 600; }
-  h2 { font-family: var(--serif); font-size: clamp(28px, 3.6vw, 40px); line-height: 1.14;
-       letter-spacing: -0.018em; margin: 0 0 16px; font-weight: 600; }
+  h1 { font-family: var(--serif); font-size: clamp(40px, 6.4vw, 68px); line-height: 1.04;
+       letter-spacing: -0.024em; margin: 0 0 22px; font-weight: 600; text-wrap: balance; }
+  h2 { font-family: var(--serif); font-size: clamp(28px, 3.6vw, 42px); line-height: 1.12;
+       letter-spacing: -0.018em; margin: 0 0 16px; font-weight: 600; text-wrap: balance; }
   h3 { font-size: 19px; line-height: 1.35; margin: 0 0 8px; font-weight: 600; letter-spacing: -0.005em; }
-  .lede { font-size: clamp(18px, 2.1vw, 21px); line-height: 1.55; color: var(--ink-2); margin: 0 0 32px; max-width: 46ch; }
-  .sub { color: var(--ink-2); margin: 0; }
-
-  /* ── Hero ────────────────────────────────────────────── */
-  .hero { padding: 76px 0 40px; }
-  .hero .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-  .hero .fine { margin: 16px 0 0; font-size: 14.5px; color: var(--ink-3); }
-  .hero-shot { margin-top: 60px; }
-
-  /* ── Feature rows ────────────────────────────────────── */
-  .row { display: grid; grid-template-columns: 1fr 1.15fr; gap: 64px; align-items: center; }
-  .row + .row { margin-top: 104px; }
-  .row.flip .copy { order: 2; }
-  .row h2 { font-size: clamp(25px, 2.9vw, 33px); }
-  .row p { color: var(--ink-2); margin: 0 0 14px; }
-  .row ul { margin: 18px 0 0; padding: 0; list-style: none; }
-  .row li { position: relative; padding-left: 26px; margin-bottom: 9px; color: var(--ink-2); font-size: 16px; }
-  .row li::before {
-    content: ""; position: absolute; left: 4px; top: 9px; width: 7px; height: 7px;
-    border-radius: 50%; background: var(--accent); opacity: 0.75;
-  }
-
-  /* ── Cards ───────────────────────────────────────────── */
-  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 44px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 26px; }
-  .card .n { font-family: var(--serif); font-size: 15px; color: var(--accent); margin-bottom: 12px; }
-  .card p { margin: 0; color: var(--ink-2); font-size: 15.5px; }
-
-  .band { background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .lede { font-size: clamp(18px, 2.1vw, 20.5px); line-height: 1.6; color: var(--ink-2); margin: 0 0 32px; max-width: 52ch; text-wrap: pretty; }
   .center { text-align: center; }
   .center .lede { margin-left: auto; margin-right: auto; }
 
-  /* ── Access tiers ────────────────────────────────────── */
-  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 40px; }
-  .tier { border: 1px solid var(--line-mid); border-radius: 16px; padding: 24px; background: var(--paper); }
-  .tier .who { font-weight: 600; margin-bottom: 6px; }
-  .tier .how { font-size: 14px; color: var(--ink-3); margin-bottom: 14px; }
-  .tier ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 15px; }
-  .tier li { margin-bottom: 6px; }
+  /* ── Hero ────────────────────────────────────────────── */
+  .hero { padding: 84px 0 0; text-align: center; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px; margin-bottom: 26px;
+    padding: 6px 14px; border: 1px solid var(--line-mid); border-radius: 999px;
+    background: var(--panel); box-shadow: var(--shadow-sm);
+    font-size: 13.5px; font-weight: 500; color: var(--ink-2);
+  }
+  .badge b { color: var(--accent); font-weight: 600; }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .hero h1 { max-width: 21ch; margin-left: auto; margin-right: auto; }
+  .hero .lede { margin: 0 auto 34px; }
+  .hero .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; }
+  .hero .fine { margin: 18px 0 0; font-size: 14px; color: var(--ink-3); }
+  .hero .fine span + span::before { content: "·"; margin: 0 9px; color: var(--line-mid); }
+
+  /* The stage: the product sits in a pool of its own light. The halo is the
+     one gradient flourish on the page, and it earns its place — a dark shot
+     dropped straight onto paper reads pasted-on; lit from behind it reads
+     placed. */
+  .stage { position: relative; margin-top: 68px; padding-bottom: 96px; }
+  .stage::before {
+    content: ""; position: absolute; inset: -8% -12% 0;
+    background: radial-gradient(ellipse 62% 54% at 50% 42%, rgba(69, 168, 152, 0.16), rgba(176, 114, 47, 0.05) 58%, transparent 74%);
+    pointer-events: none;
+  }
+  .stage .shot { position: relative; }
+
+  /* ── Works-with strip ────────────────────────────────── */
+  .with { padding: 34px 0 30px; }
+  .with .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 8px; }
+  .with .label { font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin-right: 10px; }
+  .chip {
+    padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--panel); font-size: 14px; font-weight: 500; color: var(--ink-2);
+  }
+
+  /* ── The shift ───────────────────────────────────────── */
+  .shift { padding: 118px 0; }
+  .shift h2 { font-size: clamp(30px, 4.2vw, 48px); max-width: 22ch; margin: 0 auto 18px; }
+  .shift .lede { max-width: 56ch; margin-bottom: 0; }
+
+  /* ── Feature rows ────────────────────────────────────── */
+  .row { display: grid; grid-template-columns: 1fr 1.15fr; gap: 72px; align-items: center; }
+  .row + .row { margin-top: 132px; }
+  .row.flip .copy { order: 2; }
+  .row h2 { font-size: clamp(25px, 2.9vw, 34px); }
+  .row p { color: var(--ink-2); margin: 0 0 14px; text-wrap: pretty; }
+  .row ul { margin: 20px 0 0; padding: 0; list-style: none; }
+  .row li { position: relative; padding-left: 28px; margin-bottom: 10px; color: var(--ink-2); font-size: 16px; }
+  .row li::before {
+    content: ""; position: absolute; left: 2px; top: 7px; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--accent-soft);
+    box-shadow: inset 0 0 0 1px rgba(31, 122, 110, 0.35);
+  }
+  .row li::after {
+    content: ""; position: absolute; left: 6px; top: 11px; width: 4px; height: 4px;
+    border-radius: 50%; background: var(--accent);
+  }
+
+  /* ── Steps ───────────────────────────────────────────── */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 52px;
+           counter-reset: step; position: relative; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 30px 28px 26px;
+    box-shadow: var(--shadow-sm); position: relative;
+  }
+  .card::before {
+    counter-increment: step; content: counter(step, decimal-leading-zero);
+    display: block; font-family: var(--serif); font-size: 44px; line-height: 1;
+    color: var(--accent); opacity: 0.28; margin-bottom: 18px; letter-spacing: -0.02em;
+  }
+  .card p { margin: 0; color: var(--ink-2); font-size: 15.5px; }
+
+  .band { background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+
+  /* ── Role + access tiers ─────────────────────────────── */
+  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 52px; }
+  .tier {
+    border: 1px solid var(--line-mid); border-radius: 18px; padding: 28px 26px; background: var(--panel);
+    box-shadow: var(--shadow-sm); text-align: left;
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  }
+  .tier:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--ink-3); }
+  .tier .who { font-family: var(--serif); font-size: 21px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 6px; }
+  .tier .how { font-size: 14px; color: var(--accent); font-weight: 500; margin-bottom: 16px; }
+  .tier ul { margin: 0; padding: 0; list-style: none; }
+  .tier li { position: relative; padding-left: 22px; margin-bottom: 9px; color: var(--ink-2); font-size: 15px; }
+  .tier li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 5px; height: 5px;
+                     border-radius: 50%; background: var(--accent); opacity: 0.6; }
 
   /* ── FAQ ─────────────────────────────────────────────── */
-  .faq { max-width: 780px; margin: 40px auto 0; }
-  details { border-bottom: 1px solid var(--line); padding: 18px 0; }
-  summary { cursor: pointer; font-weight: 600; font-size: 17px; list-style: none; display: flex; gap: 12px; }
+  .faq { max-width: 780px; margin: 44px auto 0; }
+  details { border-bottom: 1px solid var(--line); }
+  summary { cursor: pointer; font-weight: 600; font-size: 17px; list-style: none;
+            display: flex; gap: 12px; align-items: baseline; padding: 20px 4px;
+            transition: color 140ms ease; }
+  summary:hover { color: var(--accent-hover); }
   summary::-webkit-details-marker { display: none; }
-  summary::after { content: "+"; margin-left: auto; color: var(--ink-3); font-weight: 400; }
-  details[open] summary::after { content: "–"; }
-  details p { color: var(--ink-2); margin: 12px 0 0; font-size: 16px; }
+  summary::after { content: "+"; margin-left: auto; color: var(--ink-3); font-weight: 400;
+                   font-size: 20px; line-height: 1; transition: transform 200ms ease; }
+  details[open] summary::after { transform: rotate(45deg); }
+  details p { color: var(--ink-2); margin: 0 4px 20px; font-size: 16px; max-width: 62ch; }
 
   /* ── Closing CTA + footer ────────────────────────────── */
-  .close-cta { background: var(--dark); color: var(--dark-ink); border-radius: 22px; padding: 68px 40px; text-align: center; }
+  .close-cta {
+    position: relative; overflow: hidden;
+    background: var(--dark); color: var(--dark-ink); border: 1px solid var(--dark-line-2);
+    border-radius: 24px; padding: 76px 40px; text-align: center; box-shadow: var(--shadow-lg);
+  }
+  .close-cta::before {
+    /* The app's own canvas: dot grid with a soft pool of teal, the same
+       figure/ground the product uses. */
+    content: ""; position: absolute; inset: 0;
+    background-image: radial-gradient(circle, #34352d 1.1px, transparent 1.1px);
+    background-size: 22px 22px;
+  }
+  .close-cta::after {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(ellipse 58% 68% at 50% 100%, rgba(69, 168, 152, 0.14), transparent 70%);
+  }
+  .close-cta > * { position: relative; z-index: 1; }
   .close-cta h2 { color: var(--dark-ink); }
-  .close-cta p { color: var(--dark-ink-2); max-width: 44ch; margin: 0 auto 30px; }
-  .close-cta .btn.ghost { background: transparent; color: var(--dark-ink); border-color: var(--dark-line-2); }
-  .close-cta .btn.ghost:hover { background: rgba(255,255,255,0.06); border-color: var(--dark-ink-3); }
-  footer { padding: 44px 0 60px; color: var(--ink-3); font-size: 14.5px; }
-  footer .wrap { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+  .close-cta p { color: var(--dark-ink-2); max-width: 46ch; margin: 0 auto 32px; }
+  .close-cta .btn.ghost { background: transparent; color: var(--dark-ink); border-color: var(--dark-line-2); box-shadow: none; }
+  .close-cta .btn.ghost:hover { background: rgba(255, 255, 255, 0.06); border-color: var(--dark-ink-3); }
+
+  footer { padding: 56px 0 64px; color: var(--ink-3); font-size: 14.5px; }
+  footer .top { display: flex; flex-wrap: wrap; gap: 32px 64px; align-items: flex-start; }
+  footer .brandcol { max-width: 300px; }
+  footer .brandcol .brand { margin-bottom: 10px; }
+  footer .tagline { margin: 0; color: var(--ink-3); font-size: 14px; line-height: 1.55; }
+  footer .col { display: flex; flex-direction: column; gap: 9px; min-width: 130px; }
+  footer .col .h { font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 3px; }
   footer a { color: var(--ink-2); text-decoration: none; }
   footer a:hover { color: var(--ink); }
-  footer .sp { margin-left: auto; }
+  footer .meta { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 40px; padding-top: 22px;
+                 border-top: 1px solid var(--line); font-size: 13.5px; }
+  footer .meta .sp { margin-left: auto; }
 
   /* ── Dark product illustrations ──────────────────────── */
   .shot {
-    background: var(--dark); border: 1px solid var(--dark-line-2); border-radius: 14px;
-    box-shadow: var(--shadow-lg); overflow: hidden; color: var(--dark-ink);
+    background: var(--dark); border: 1px solid var(--dark-line-2); border-radius: 16px;
+    box-shadow: var(--shot-highlight), var(--shadow); overflow: hidden; color: var(--dark-ink);
     font-size: 12px; line-height: 1.4;
   }
-  .shot.big { border-radius: 18px; }
+  .shot.big { border-radius: 20px; box-shadow: var(--shot-highlight), var(--shadow-lg); }
   .s-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--dark-line); }
   .s-lights { display: flex; gap: 6px; }
   .s-lights i { width: 10px; height: 10px; border-radius: 50%; background: var(--dark-line-2); display: block; }
@@ -193,7 +309,7 @@ export function landingHtml(version?: string): string {
   .s-frame-head { display: flex; gap: 7px; align-items: center; padding: 6px 9px; border-bottom: 1px solid var(--dark-line);
                   font-size: 10.5px; color: var(--dark-ink-2); }
   .s-frame-head b { color: var(--dark-ink); font-weight: 600; }
-  .s-frame-head .rt { color: var(--dark-ink-3); font-family: ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; }
+  .s-frame-head .rt { color: var(--dark-ink-3); font-family: var(--mono); font-size: 9.5px; }
   .s-body { padding: 12px; display: grid; gap: 7px; }
   .s-l { height: 8px; border-radius: 4px; background: #2e2f28; }
   .s-l.w70 { width: 70%; } .s-l.w50 { width: 50%; } .s-l.w85 { width: 85%; } .s-l.w40 { width: 40%; }
@@ -204,6 +320,7 @@ export function landingHtml(version?: string): string {
     position: absolute; width: 22px; height: 22px; border-radius: 11px 11px 11px 3px;
     background: #7c9cf5; color: #14151a; font-size: 9.5px; font-weight: 700;
     display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
   }
   .s-note {
     background: var(--dark-panel); border: 1px solid var(--dark-line);
@@ -218,7 +335,7 @@ export function landingHtml(version?: string): string {
   .s-who { font-size: 11px; font-weight: 600; color: #7c9cf5; margin-bottom: 5px; }
   .s-txt { color: var(--dark-ink-2); font-size: 11.5px; }
   .s-run { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--dark-ink-3);
-           font-family: ui-monospace, SFMono-Regular, monospace; }
+           font-family: var(--mono); }
   .s-run .tick { color: var(--teal); }
   .s-cta { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 8px;
            background: var(--teal); color: #10231f; font-size: 11.5px; font-weight: 600; }
@@ -232,23 +349,37 @@ export function landingHtml(version?: string): string {
   .s-avatars i { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--dark); margin-left: -6px; display: block; }
 
   /* ── Motion (respectful) ─────────────────────────────── */
-  .reveal { opacity: 0; transform: translateY(14px); transition: opacity 620ms ease, transform 620ms ease; }
+  .reveal { opacity: 0; transform: translateY(16px); transition: opacity 640ms ease, transform 640ms ease; }
   .reveal.in { opacity: 1; transform: none; }
+  /* Grids arrive as a cascade, not a block — one reveal, staggered children. */
+  .reveal .tier, .reveal .card { opacity: 0; transform: translateY(10px);
+    transition: opacity 520ms ease, transform 520ms ease; }
+  .reveal.in .tier, .reveal.in .card { opacity: 1; transform: none; }
+  .reveal.in > :nth-child(2) { transition-delay: 70ms; }
+  .reveal.in > :nth-child(3) { transition-delay: 140ms; }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
-    .reveal { opacity: 1; transform: none; transition: none; }
+    .reveal, .reveal .tier, .reveal .card { opacity: 1; transform: none; transition: none; }
+    .tier:hover { transform: none; }
   }
 
   /* ── Responsive ──────────────────────────────────────── */
   @media (max-width: 900px) {
-    section { padding: 64px 0; }
-    .row { grid-template-columns: 1fr; gap: 32px; }
+    section { padding: 68px 0; }
+    /* One CTA is the premium move on a phone; two buttons plus a wordmark is
+       a squeeze. Download still lives in the hero, the close CTA, and the
+       footer. */
+    nav .btn.ghost { display: none; }
+    .shift { padding: 76px 0; }
+    .row { grid-template-columns: 1fr; gap: 34px; }
     .row.flip .copy { order: 0; }
-    .row + .row { margin-top: 64px; }
+    .row + .row { margin-top: 76px; }
     .cards, .tiers { grid-template-columns: 1fr; }
     nav .links { display: none; }
-    .hero { padding: 48px 0 24px; }
-    .close-cta { padding: 48px 22px; border-radius: 18px; }
+    .hero { padding: 52px 0 0; }
+    .stage { margin-top: 44px; padding-bottom: 56px; }
+    .close-cta { padding: 52px 22px; border-radius: 18px; }
+    footer .top { gap: 28px; }
   }
 </style>
 </head>
@@ -270,6 +401,7 @@ export function landingHtml(version?: string): string {
       <a href="#how">How it works</a>
       <a href="#faq">FAQ</a>
     </div>
+    <a class="btn ghost" href="${DOWNLOAD_URL}">Download</a>
     <a class="btn primary" href="${APP_URL}">Open Commons</a>
   </div>
 </nav>
@@ -277,7 +409,7 @@ export function landingHtml(version?: string): string {
 <!-- ── Hero ─────────────────────────────────────────────── -->
 <section class="hero">
   <div class="wrap">
-    <p class="eyebrow">One canvas for the whole team</p>
+    <p class="badge"><span class="dot"></span> Free while in preview · <b>no invite needed</b></p>
     <h1>Design on the product,<br />not pictures of it.</h1>
     <p class="lede">
       Commons puts your running app on a shared canvas. Your team comments on the real
@@ -288,9 +420,9 @@ export function landingHtml(version?: string): string {
       <a class="btn primary lg" href="${APP_URL}">Open Commons in your browser</a>
       <a class="btn ghost lg" href="${DOWNLOAD_URL}">Download for Mac</a>
     </div>
-    <p class="fine">Free while in preview. Sign in with Google or an email link, no invite needed. ${buildLabel}.</p>
+    <p class="fine"><span>Sign in with Google or an email link</span><span>Full canvas in the browser</span><span>${buildLabel}</span></p>
 
-    <div class="hero-shot reveal">
+    <div class="stage reveal">
       <div class="shot big">
         <div class="s-bar">
           <div class="s-lights"><i></i><i></i><i></i></div>
@@ -354,8 +486,24 @@ export function landingHtml(version?: string): string {
   </div>
 </section>
 
+<!-- ── Works with ───────────────────────────────────────── -->
+<div class="with">
+  <div class="wrap">
+    <span class="label">Works with</span>
+    <span class="chip">Next.js</span>
+    <span class="chip">Expo</span>
+    <span class="chip">Vite</span>
+    <span class="chip">GitHub</span>
+    <span class="chip">Vercel</span>
+    <span class="chip">Figma</span>
+    <span class="chip">Slack</span>
+    <span class="chip">Claude Code</span>
+  </div>
+</div>
+<hr class="rule" />
+
 <!-- ── The shift ────────────────────────────────────────── -->
-<section class="band">
+<section class="shift">
   <div class="wrap center">
     <h2>Mocks go stale the moment code lands.</h2>
     <p class="lede">
@@ -367,7 +515,7 @@ export function landingHtml(version?: string): string {
 </section>
 
 <!-- ── Roles ────────────────────────────────────────────── -->
-<section id="roles">
+<section id="roles" class="band">
   <div class="wrap">
     <div class="center">
       <p class="eyebrow">Who it's for</p>
@@ -378,7 +526,7 @@ export function landingHtml(version?: string): string {
         Commons is the same live app for all three.
       </p>
     </div>
-    <div class="tiers">
+    <div class="tiers reveal">
       <div class="tier">
         <div class="who">Product designers</div>
         <div class="how">Critique the build, not a picture of it</div>
@@ -617,9 +765,8 @@ export function landingHtml(version?: string): string {
       <p class="eyebrow">How it works</p>
       <h2>Two minutes to a shared canvas</h2>
     </div>
-    <div class="cards">
+    <div class="cards reveal">
       <div class="card">
-        <div class="n">Step one</div>
         <h3>Point Commons at your app</h3>
         <p>
           On the Mac app, choose your repo and Commons finds your routes and puts every screen
@@ -628,7 +775,6 @@ export function landingHtml(version?: string): string {
         </p>
       </div>
       <div class="card">
-        <div class="n">Step two</div>
         <h3>Bring the team in</h3>
         <p>
           Teammates sign in on the web and see the same screens with no install. For anyone
@@ -636,7 +782,6 @@ export function landingHtml(version?: string): string {
         </p>
       </div>
       <div class="card">
-        <div class="n">Step three</div>
         <h3>Comment, draft, ship</h3>
         <p>
           Feedback becomes a thread, a thread becomes an agent draft, and the draft becomes a
@@ -658,7 +803,7 @@ export function landingHtml(version?: string): string {
         and nothing is shared wider than you chose.
       </p>
     </div>
-    <div class="tiers">
+    <div class="tiers reveal">
       <div class="tier">
         <div class="who">Your team</div>
         <div class="how">Signed in, in your workspace</div>
@@ -775,9 +920,35 @@ export function landingHtml(version?: string): string {
 
 <footer>
   <div class="wrap">
-    <span>Commons</span>
-    <span class="sp"><a href="${APP_URL}">Sign in</a></span>
-    <a href="${DOWNLOAD_URL}">Download</a>
+    <div class="top">
+      <div class="brandcol">
+        <a class="brand" href="/">
+          <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true">
+            <rect width="32" height="32" rx="8" fill="#1a1b17"/>
+            <path d="M21.5 11.5a6 6 0 1 0 0 9" fill="none" stroke="#45a898" stroke-width="3" stroke-linecap="round"/>
+            <path d="M14 11.5a6 6 0 1 0 0 9" fill="none" stroke="#a3a195" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+          </svg>
+          Commons
+        </a>
+        <p class="tagline">One shared canvas showing the app that actually runs, for the whole team that argues about it.</p>
+      </div>
+      <div class="col">
+        <span class="h">Product</span>
+        <a href="${APP_URL}">Open Commons</a>
+        <a href="${DOWNLOAD_URL}">Download for Mac</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <div class="col">
+        <span class="h">Explore</span>
+        <a href="#roles">Who it's for</a>
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+      </div>
+    </div>
+    <div class="meta">
+      <span>Commons · design on the product</span>
+      <span class="sp">${buildLabel}</span>
+    </div>
   </div>
 </footer>
 
