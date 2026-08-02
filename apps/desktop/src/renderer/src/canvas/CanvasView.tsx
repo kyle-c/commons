@@ -103,6 +103,8 @@ interface Props {
   gifs?: Record<string, { src: string; mine: boolean; by: string }[]>;
   onAddGif?: (frame: Doc<"frames">) => void;
   onRemoveGif?: (frameId: Id<"frames">) => void;
+  /** Members can rewrite an approved note where it stands; edits are logged. */
+  onEditNote?: (note: { _id: string; text: string }) => void;
 }
 
 /**
@@ -543,6 +545,7 @@ export default function CanvasView({
   gifs,
   onAddGif,
   onRemoveGif,
+  onEditNote,
   projectId,
   frames,
   threads,
@@ -1288,6 +1291,15 @@ export default function CanvasView({
               >
                 {notes.map((note) => (
                   <div key={note._id} className="frame-note">
+                    {onEditNote && (
+                      <button
+                        className="note-edit"
+                        title="Edit this note (the change is logged)"
+                        onClick={() => onEditNote(note)}
+                      >
+                        <Icon name="pen" size={11} />
+                      </button>
+                    )}
                     {note.text}
                     {note.inferred && (
                       <span className="citation inferred" title="No evidence in the record. The designer approved this as their read">
