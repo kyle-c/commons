@@ -769,9 +769,9 @@ export function landingHtml(version?: string): string {
       <div class="card">
         <h3>Point Commons at your app</h3>
         <p>
-          On the Mac app, choose your repo and Commons finds your routes and puts every screen
-          on the canvas. A monorepo asks which app you meant. No repo on hand? Paste your
-          deployed preview URL instead.
+          Connect GitHub and your deployed repos appear as projects on their own. Or point the
+          Mac app at a repo: routes are found and every screen lands on the canvas. A monorepo
+          asks which app you meant. No repo, no GitHub? Paste a preview URL.
         </p>
       </div>
       <div class="card">
@@ -877,10 +877,12 @@ export function landingHtml(version?: string): string {
       <details>
         <summary>What does connecting GitHub actually give you?</summary>
         <p>
-          Deploy events, so preview links fill themselves in instead of being pasted, and a
-          place to run agents when no laptop is awake. Commons reads the deploys of repos you
-          picked during install, and matches them only inside the workspace that installed it.
-          You can run everything without it and paste preview URLs by hand.
+          Your deployed repos appear as projects on their own — the next production deploy of
+          a repo Commons has never seen becomes a project, preview link and all. Deploy events
+          keep those links current, and agents get a place to run when no laptop is awake.
+          Commons reads only the repos you picked during install, matches them only inside the
+          workspace that installed it, and never recreates a project a person archived or
+          deleted. You can run everything without it and paste preview URLs by hand.
         </p>
       </details>
       <details>

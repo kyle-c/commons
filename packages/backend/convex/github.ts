@@ -4,7 +4,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { accessibleProject, requireViewer, resolveViewer, randomToken, isWorkspaceMember } from "./access";
 import { internal } from "./_generated/api";
-import { normalizeRemote, slugifyBranch, inferBranchPattern, vercelAliasCandidates, isProductionDeploy } from "./previewLogic";
+import { normalizeRemote, slugifyBranch, inferBranchPattern, vercelAliasCandidates, isProductionDeploy, chooseAutoWorkspace } from "./previewLogic";
 import type { DeploySample } from "./previewLogic";
 
 /**
@@ -338,16 +338,84 @@ export const handleDeployment = internalMutation({
     if (workspaceIds.size === 0) return { matched: 0, reason: "unbound_installation" };
 
     const wanted = new Set(args.repoUrls.map(normalizeRemote));
-    const projects = (await ctx.db.query("projects").collect()).filter((p) => {
-      if (!p.gitRemote || p.archivedAt) return false;
-      if (!p.workspaceId || !workspaceIds.has(p.workspaceId)) return false;
+    const matchesRepo = (p: Doc<"projects">): boolean => {
+      if (!p.gitRemote || !p.workspaceId || !workspaceIds.has(p.workspaceId)) return false;
       const mine = normalizeRemote(p.gitRemote);
       // full_name ("kyle-c/commons") matches the tail of a remote URL too.
       return [...wanted].some((w) => w === mine || mine.endsWith(`/${w}`) || w.endsWith(mine));
-    });
-    if (projects.length === 0) return { matched: 0, reason: "no_project" };
+    };
+    const allProjects = await ctx.db.query("projects").collect();
+    let projects = allProjects.filter((p) => !p.archivedAt && matchesRepo(p));
 
     const production = isProductionDeploy(args.environment, args.branch, args.defaultBranch);
+
+    if (projects.length === 0) {
+      // The zero-setup door (2026-08-02): a production deploy for a covered
+      // repo that has no project *becomes* one, so connecting GitHub is the
+      // whole setup. Guarded three ways, each a refusal to guess:
+      // - production deploys only — a branch preview is not a product;
+      // - an archived match means the humans put this repo away, and a
+      //   tombstone row means they deleted it — both verdicts stand;
+      // - the workspace must be unambiguous (one team, or one total), or
+      //   the deploy is dropped as ambiguous rather than landed somewhere.
+      if (!production) return { matched: 0, reason: "no_project" };
+      if (allProjects.some(matchesRepo)) return { matched: 0, reason: "archived_project" };
+      const repoFullName =
+        args.repoUrls.find((u) => /^[^/]+\/[^/]+$/.test(u)) ?? normalizeRemote(args.repoUrls[0] ?? "");
+      const tombstone = await ctx.db
+        .query("githubAutoProjects")
+        .withIndex("by_install_repo", (q) =>
+          q.eq("installationId", args.installationId).eq("repoFullName", repoFullName)
+        )
+        .first();
+      if (tombstone) return { matched: 0, reason: "previously_offered" };
+
+      const linkRows = await Promise.all(
+        links.map(async (l) => ({ link: l, workspace: await ctx.db.get(l.workspaceId) }))
+      );
+      const workspaceId = chooseAutoWorkspace(
+        linkRows
+          .filter((r) => r.workspace)
+          .map((r) => ({ workspaceId: r.link.workspaceId, kind: r.workspace!.kind }))
+      ) as Id<"workspaces"> | null;
+      if (!workspaceId) return { matched: 0, reason: "ambiguous_workspace" };
+
+      // Attributed to whoever connected this workspace's GitHub — a real
+      // member who chose to open this door, never a synthetic user.
+      const creator = links.find((l) => l.workspaceId === workspaceId)?.linkedBy;
+      if (!creator) return { matched: 0, reason: "ambiguous_workspace" };
+
+      const gitRemote =
+        args.repoUrls.find((u) => u.startsWith("https://")) ?? `https://github.com/${repoFullName}`;
+      const projectId = await ctx.db.insert("projects", {
+        name: repoFullName.split("/").pop() ?? repoFullName,
+        createdBy: creator,
+        workspaceId,
+        visibility: "team",
+        gitRemote,
+      });
+      // One frame — the deployed root — so the canvas opens as the product,
+      // not a void. Route discovery fills in the rest when someone with the
+      // repo opens the project; the snapshot pipeline fills the pixels from
+      // the deploy meanwhile.
+      await ctx.db.insert("frames", {
+        projectId,
+        kind: "route",
+        title: "Home",
+        routePath: "/",
+        x: 120,
+        y: 120,
+        width: 1280,
+        height: 800,
+      });
+      await ctx.db.insert("githubAutoProjects", { installationId: args.installationId, repoFullName, projectId });
+      const created = await ctx.db.get(projectId);
+      if (!created) return { matched: 0, reason: "create_failed" };
+      projects = [created];
+      // Fall through: the deploy that created the project also applies to it,
+      // so previewUrl, the deploy log, and snapshot staleness all land in the
+      // same transaction and the card is live from its first second.
+    }
     for (const project of projects) {
       await applyDeploy(ctx, project, {
         url,

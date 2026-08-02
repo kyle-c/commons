@@ -112,3 +112,25 @@ export function isProductionDeploy(environment: string | undefined, ref: string,
   return env.includes("production") || ref === defaultBranch;
 }
 
+
+/**
+ * Which workspace should a project born from a deploy land in?
+ *
+ * An installation can feed several workspaces, and creating the project in
+ * all of them is spam while picking one at random is invention. The rule,
+ * in order, deterministic and explainable in a sentence:
+ *
+ * 1. Exactly one linked team workspace → that one. Teams are where shared
+ *    repos live; a personal playground linked alongside is someone's sandbox.
+ * 2. Otherwise, exactly one linked workspace of any kind → that one.
+ * 3. Otherwise null: genuinely ambiguous, so no project is created and the
+ *    deploy is recorded as dropped-for-ambiguity rather than guessed at.
+ */
+export function chooseAutoWorkspace(
+  linked: { workspaceId: string; kind: "team" | "personal" }[]
+): string | null {
+  const teams = linked.filter((l) => l.kind === "team");
+  if (teams.length === 1) return teams[0].workspaceId;
+  if (linked.length === 1) return linked[0].workspaceId;
+  return null;
+}

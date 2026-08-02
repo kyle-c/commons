@@ -76,7 +76,7 @@ Every frame and the prototype share one browser session, so signing in once cove
 
 ## 9. Habits that make it sing
 
-- **Connect GitHub once** and stop pasting URLs. Deploy events fill in the preview link, infer the `{branch}` draft pattern from two or more branch deploys, and refresh every snapshot when production deploys. A pattern is only accepted when it reproduces every URL actually observed, so one disagreement rejects it rather than guessing. Anything you type by hand is never overwritten.
+- **Connect GitHub once** and stop pasting URLs — or doing anything at all: a covered repo's next production deploy creates its project by itself. Deploy events fill in the preview link, infer the `{branch}` draft pattern from two or more branch deploys, and refresh every snapshot when production deploys. A pattern is only accepted when it reproduces every URL actually observed, so one disagreement rejects it rather than guessing. Anything you type by hand is never overwritten.
 - Set the **preview link** early if you are not connecting GitHub: it's what unlocks teammates without the repo, and user tests.
 - Use **project status** on the home card (Exploring, In review, Testing) so people know what feedback you want while the agent iterates.
 - **Narrate** after a milestone: the annotation pass mines your threads, tests, and commits into stakeholder-ready rationale, with citations. It runs on a machine that has the repo, and drafts land in a review queue for a person to approve.

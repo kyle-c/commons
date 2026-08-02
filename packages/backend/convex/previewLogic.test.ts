@@ -5,6 +5,7 @@ import {
   inferBranchPattern,
   vercelAliasCandidates,
   isProductionDeploy,
+  chooseAutoWorkspace,
 } from "./previewLogic";
 
 describe("normalizeRemote", () => {
@@ -101,5 +102,32 @@ describe("isProductionDeploy", () => {
   });
   it("a feature branch with no environment is not production", () => {
     expect(isProductionDeploy(undefined, "feat-x", "main")).toBe(false);
+  });
+});
+
+describe("chooseAutoWorkspace", () => {
+  const team = (id: string) => ({ workspaceId: id, kind: "team" as const });
+  const personal = (id: string) => ({ workspaceId: id, kind: "personal" as const });
+
+  it("prefers the single team workspace over a personal one linked alongside", () => {
+    // Kyle's real shape: one installation feeding a personal playground and
+    // the felixpago team. Repos deploy for the team, not the sandbox.
+    expect(chooseAutoWorkspace([personal("p1"), team("t1")])).toBe("t1");
+  });
+
+  it("uses the only linked workspace even when personal", () => {
+    expect(chooseAutoWorkspace([personal("p1")])).toBe("p1");
+  });
+
+  it("refuses to guess between two teams", () => {
+    expect(chooseAutoWorkspace([team("t1"), team("t2")])).toBeNull();
+  });
+
+  it("refuses to guess between two personals", () => {
+    expect(chooseAutoWorkspace([personal("p1"), personal("p2")])).toBeNull();
+  });
+
+  it("returns null for an unlinked installation", () => {
+    expect(chooseAutoWorkspace([])).toBeNull();
   });
 });

@@ -48,7 +48,7 @@ pnpm build
 
 **Sharing.** Share links open the same canvas for people with no account, who can read and comment with just a name. Invites sent from a project's Share menu carry the project: the email says what Commons is, opens in the browser with no install, and lands the invitee on that canvas.
 
-**GitHub App.** Connect once and deploy events fill in preview URLs, infer the per-branch draft preview pattern, and refresh snapshots when production deploys.
+**GitHub App.** Connect once and deploy events fill in preview URLs, infer the per-branch draft preview pattern, and refresh snapshots when production deploys. Repos with no project yet become projects on their own the next time they deploy to production — landing in the connected team workspace, attributed to whoever connected GitHub, refused rather than guessed when the workspace would be ambiguous, and never recreated after a human archives or deletes one.
 
 **Updates.** The app checks hourly and everything speaks through one chip: it appears on its own when a release starts downloading, and "Check for Updates…" answers there too, never with a dialog.
 

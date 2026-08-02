@@ -73,6 +73,23 @@ export default defineSchema({
   // workspace. "team" workspaces are created explicitly (optionally with a
   // corporate domain — matching sign-ins auto-join); every user also gets a
   // "personal" playground workspace at first sign-in.
+  /**
+   * One row per project ever auto-created from a deploy — written at
+   * creation, never deleted. This is what stops a deleted project from
+   * resurrecting on the repo's next deploy: existence of the row means
+   * "already offered once, the human's verdict stands".
+   *
+   * projectId is deliberately a plain string, not v.id("projects"): the row
+   * must outlive the project (that is its whole job), so it must NOT join
+   * the delete cascade — and typing it as a project reference would make
+   * the cascade-coverage test correctly demand that it does.
+   */
+  githubAutoProjects: defineTable({
+    installationId: v.number(),
+    repoFullName: v.string(),
+    projectId: v.string(),
+  }).index("by_install_repo", ["installationId", "repoFullName"]),
+
   workspaces: defineTable({
     name: v.string(),
     kind: v.union(v.literal("team"), v.literal("personal")),
