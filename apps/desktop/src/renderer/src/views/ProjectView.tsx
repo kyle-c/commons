@@ -2250,6 +2250,26 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                 One sentence about {whatIf.frame.title}. An agent tries it on a draft branch, and the
                 result lands beside the original as a live variant — the real app, changed.
               </span>
+              {/* The prerequisite is stated BEFORE the session is spent. A
+                  variant without the draft-preview pattern has no address:
+                  the agent would run, the money would go, and the new frame
+                  would render nothing with no way to fix it from there. */}
+              {!project.branchPreviewPattern && (
+                <span className="form-error">
+                  Variants render from draft branches, and this project has no draft preview
+                  pattern yet — the variant would have no address.{" "}
+                  <button
+                    className="btn ghost quiet-action"
+                    onClick={() => {
+                      setWhatIf(null);
+                      setOpenSetting("drafts");
+                    }}
+                  >
+                    Set the pattern…
+                  </button>{" "}
+                  Connecting GitHub fills it in from your deploys.
+                </span>
+              )}
               <div className="reveal-form-row">
                 <input
                   autoFocus
@@ -2261,7 +2281,11 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                     if (e.key === "Escape") setWhatIf(null);
                   }}
                 />
-                <button className="btn primary" disabled={!whatIfPrompt.trim()} onClick={() => void fireWhatIf()}>
+                <button
+                  className="btn primary"
+                  disabled={!whatIfPrompt.trim() || !project.branchPreviewPattern}
+                  onClick={() => void fireWhatIf()}
+                >
                   Try it
                 </button>
               </div>

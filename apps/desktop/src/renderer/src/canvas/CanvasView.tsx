@@ -418,6 +418,13 @@ const FrameLayer = memo(function FrameLayer({
                       {!loaded &&
                         (frame.snapshotUrl ? (
                           <img className="frame-underlay" src={frame.snapshotUrl} alt="" />
+                        ) : frame.variantBranch ? (
+                          // A fresh variant has no pixels until its branch
+                          // deploy finishes (minutes). Say so — an unexplained
+                          // shimmer during peak attention reads as broken.
+                          <div className="frame-booting variant-booting">
+                            <span>The draft is deploying — pixels arrive when the build finishes.</span>
+                          </div>
                         ) : (
                           <div className="frame-booting" />
                         ))}
@@ -436,7 +443,9 @@ const FrameLayer = memo(function FrameLayer({
                 <img className="frame-snapshot" src={frame.snapshotUrl} alt={frame.title} title="Snapshot — no live preview right now" />
               ) : (
                 <div className="frame-placeholder">
-                  {frame.kind === "figma"
+                  {frame.variantBranch
+                    ? `This variant lives on ${frame.variantBranch} and needs the project's draft preview pattern (the branch icon in the toolbar) before it has an address.`
+                    : frame.kind === "figma"
                     ? "Render arriving from Figma…"
                     : devStatus.state === "starting"
                       ? "Dev server starting…"

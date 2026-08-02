@@ -3808,6 +3808,16 @@ kbd {
   color: var(--accent);
 }
 
+.variant-booting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
 /* ── Exploration layer ───────────────────────────────────────────────────
    Stamps, dots, and the what-if spark on frame headers. Present stamps show
    always; the add-palette reveals on header hover, so a quiet canvas stays

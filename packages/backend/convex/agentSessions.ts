@@ -184,14 +184,14 @@ export const finalizeStalled = internalMutation({
       if (lastSeen > cutoff) continue;
       await ctx.db.patch(session._id, {
         status: "error",
-        error: "No activity for 15 minutes — the runner went away without saying so.",
+        error: "No activity for 15 minutes — the runner went away without saying so. A cloud run leaves its log in the repository's Actions tab; running the prompt again is safe.",
       });
       await ctx.db.insert("agentEvents", {
         sessionId: session._id,
         event: {
           type: "status",
           status: "error",
-          error: "No activity for 15 minutes — the runner went away without saying so.",
+          error: "No activity for 15 minutes — the runner went away without saying so. A cloud run leaves its log in the repository's Actions tab; running the prompt again is safe.",
         },
       });
     }
