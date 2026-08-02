@@ -888,6 +888,13 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
    * wrong-project case unrepresentable rather than merely handled.
    */
   const liveStatus: DevServerStatus = repoPath ? devStatus : { state: "stopped" };
+  /**
+   * Is there a running app to sign in to at all? Frames, the prototype and
+   * this all resolve through the same function, so the sign-in path is offered
+   * exactly when the canvas has something to show — dev server or deployed
+   * preview, whichever the frames are already using.
+   */
+  const signInTarget = resolveFrameUrl("/", liveStatus, project?.previewUrl) !== null;
   const [openSetting, setOpenSettingRaw] = useState<SettingKey | null>(null);
   /**
    * Freshness marker: everything Convex-backed is live, so the only thing
@@ -1922,8 +1929,15 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             learnedAt={project.lastDeployAt}
             connection={previewConnectionNote}
             onDiagnose={() => setConnectionOpen(true)}
+            // Offered whenever there is anything to sign in to, which is not
+            // the same as having a preview URL. Gating this on previewUrl was
+            // wrong: a project rendering from a local dev server has the same
+            // shared session and the same problem, and gets the same fix — but
+            // the button never appeared, so an auth-gated app just looked
+            // broken with no way out. Prototype resolves through the same
+            // resolveFrameUrl, so it lands on whichever source the frames use.
             onSignIn={
-              project.previewUrl
+              signInTarget
                 ? () => {
                     setOpenSetting(null);
                     setNav({ ...nav, view: "prototype" });
