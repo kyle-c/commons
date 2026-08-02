@@ -137,7 +137,10 @@ export default function App() {
       const was = prev.get(repoPath);
       prev.set(repoPath, status.state);
       if (status.state === "ready" && was !== "ready") playServerUp();
-      else if (status.state === "stopped" && was === "ready") playServerDown();
+      // Any known live state → stopped speaks: stopping a server that was
+      // still starting is as deliberate as stopping a ready one. Unknown →
+      // stopped stays silent (state that was already history at subscribe).
+      else if (status.state === "stopped" && (was === "ready" || was === "starting")) playServerDown();
     });
   }, []);
 

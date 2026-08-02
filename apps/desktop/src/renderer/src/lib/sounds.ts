@@ -25,6 +25,9 @@
 let audio: AudioContext | null = null;
 function ctx(): AudioContext | null {
   try {
+    // The escape hatch every ambient effect gets (same as commons.dotGlow):
+    // one localStorage key silences the whole vocabulary.
+    if (localStorage.getItem("commons.sounds") === "off") return null;
     if (!audio) audio = new AudioContext();
     if (audio.state === "suspended") void audio.resume();
     return audio;
@@ -72,7 +75,7 @@ function note(
   if (darken) {
     const lp = audioCtx.createBiquadFilter();
     lp.type = "lowpass";
-    lp.frequency.value = 900;
+    lp.frequency.value = 1600;
     gain.connect(lp);
     head = lp;
   }
@@ -115,11 +118,14 @@ export function playServerDown(): void {
   try {
     const audioCtx = ctx();
     if (!audioCtx) return;
-    const out = master(audioCtx, 0.11);
+    // Matched to the up sound's level on purpose. The first cut sat quieter
+    // and darker (0.11 master, 900Hz lowpass) and disappeared in a real
+    // room — a mirror that cannot be heard is not a mirror.
+    const out = master(audioCtx, 0.15);
     const t0 = audioCtx.currentTime + 0.03;
     const base = 392 + Math.random() * 14;
-    note(audioCtx, out, base, t0, 0.14, 0.45, true);
-    note(audioCtx, out, base * (3 / 4), t0 + 0.11, 0.22, 0.45, true); // down a fourth
+    note(audioCtx, out, base, t0, 0.14, 0.5, true);
+    note(audioCtx, out, base * (3 / 4), t0 + 0.11, 0.28, 0.5, true); // down a fourth, settling
   } catch {
     // As above.
   }
