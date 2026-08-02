@@ -1074,6 +1074,38 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   );
   const toggleReaction = useMutation(api.reactions.toggle);
   const toggleVote = useMutation(api.reactions.toggleVote);
+  const gifsByFrame =
+    useQuery(
+      api.reactions.gifsForProject,
+      nav.view === "canvas" ? { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() } : "skip"
+    ) ?? {};
+  const addGifMutation = useMutation(api.reactions.addGif);
+  const removeGif = useMutation(api.reactions.removeGif);
+  const [gifFor, setGifFor] = useState<Doc<"frames"> | null>(null);
+  const [gifUrl, setGifUrl] = useState("");
+  const [gifNote, setGifNote] = useState<string | null>(null);
+  const submitGif = async () => {
+    if (!gifFor) return;
+    const url = gifUrl.trim();
+    if (!url) return;
+    const result = await addGifMutation({
+      frameId: gifFor._id,
+      url,
+      userId: me._id,
+      sessionToken: sessionToken(),
+    }).catch(() => ({ ok: false as const, reason: "not_a_gif" as const }));
+    if (result.ok) {
+      setGifFor(null);
+      setGifUrl("");
+      setGifNote(null);
+    } else {
+      setGifNote(
+        result.reason === "frame_full"
+          ? "This screen already wears eight stickers — someone has to take one back first."
+          : "That link isn't a GIF. In Giphy: Share → Copy GIF Link."
+      );
+    }
+  };
 
   // What-if variants: a prompt on a frame becomes an agent draft, and the
   // draft becomes a sibling frame rendering the branch preview. The request
@@ -2254,6 +2286,38 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           </button>
         </div>
       )}
+      {gifFor && (
+        <div className="overlay-scrim" onMouseDown={() => setGifFor(null)}>
+          <div className="overlay-card" onMouseDown={(e) => e.stopPropagation()}>
+            <header>Drop a GIF on {gifFor.title}</header>
+            <div className="reveal-form">
+              <span className="hint">
+                Paste a GIF link — in Giphy, Share → Copy GIF Link. One sticker per person per
+                screen; adding another replaces yours.
+              </span>
+              <div className="reveal-form-row">
+                <input
+                  autoFocus
+                  placeholder="https://media.giphy.com/…"
+                  value={gifUrl}
+                  onChange={(e) => {
+                    setGifUrl(e.target.value);
+                    setGifNote(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void submitGif();
+                    if (e.key === "Escape") setGifFor(null);
+                  }}
+                />
+                <button className="btn primary" disabled={!gifUrl.trim()} onClick={() => void submitGif()}>
+                  Stick it
+                </button>
+              </div>
+              {gifNote && <span className="form-error">{gifNote}</span>}
+            </div>
+          </div>
+        </div>
+      )}
       {whatIf && (
         <div className="overlay-scrim" onMouseDown={() => setWhatIf(null)}>
           <div className="overlay-card" onMouseDown={(e) => e.stopPropagation()}>
@@ -2555,6 +2619,13 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               .catch(() => {})
           }
           onWhatIf={project.gitRemote || repoPath ? (frame) => setWhatIf({ frame }) : undefined}
+          gifs={gifsByFrame}
+          onAddGif={(frame) => {
+            setGifFor(frame);
+            setGifUrl("");
+            setGifNote(null);
+          }}
+          onRemoveGif={(frameId) => void removeGif({ frameId, userId: me._id, sessionToken: sessionToken() })}
         />
       ) : (
         <PrototypeView

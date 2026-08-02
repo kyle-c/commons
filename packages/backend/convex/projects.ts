@@ -653,6 +653,19 @@ export const cascadeDeleteProject = internalMutation({
     }
     if (exhausted()) return void (await reschedule(ctx, projectId));
 
+    // GIF reactions own storage when uploaded; delete blob-first like
+    // messages' images, so nothing is stranded unreachable.
+    const gifRows = await ctx.db
+      .query("gifReactions")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .take(BUDGET - spent);
+    for (const gif of gifRows) {
+      if (gif.storageId) await ctx.storage.delete(gif.storageId).catch(() => {});
+      await ctx.db.delete(gif._id);
+      spent += 1;
+    }
+    if (exhausted()) return void (await reschedule(ctx, projectId));
+
     // Each thunk carries a literal table name so Convex resolves its by_project
     // index; a dynamic string would erase that typing.
     const directQueries = [
@@ -849,6 +862,38 @@ export const addVariant = mutation({
       width: original.width,
       height: original.height,
     });
+  },
+});
+
+/**
+ * What a pasted share link shows the room (Slack, Notion, iMessage): the
+ * project's name and the home screen's latest snapshot. The unfurl is the
+ * product's first impression in most channels it will ever appear in.
+ */
+export const ogForShareToken = internalQuery({
+  args: { shareToken: v.string() },
+  handler: async (ctx, { shareToken }) => {
+    const project = await ctx.db
+      .query("projects")
+      .withIndex("by_share_token", (q) => q.eq("shareToken", shareToken))
+      .unique();
+    if (!project || project.archivedAt) return null;
+    const frames = await ctx.db
+      .query("frames")
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
+      .collect();
+    const home =
+      frames.find((f) => f.kind === "route" && (f.routePath ?? "") === "/") ??
+      frames.find((f) => f.kind === "route");
+    let imageUrl: string | null = null;
+    if (home) {
+      const snapshot = await ctx.db
+        .query("frameSnapshots")
+        .withIndex("by_frame", (q) => q.eq("frameId", home._id))
+        .unique();
+      if (snapshot) imageUrl = await ctx.storage.getUrl(snapshot.storageId);
+    }
+    return { name: project.name, imageUrl };
   },
 });
 

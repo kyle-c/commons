@@ -100,6 +100,9 @@ interface Props {
   onReact?: (frameId: Id<"frames">, emoji: string) => void;
   onVote?: (frameId: Id<"frames">) => void;
   onWhatIf?: (frame: Doc<"frames">) => void;
+  gifs?: Record<string, { src: string; mine: boolean; by: string }[]>;
+  onAddGif?: (frame: Doc<"frames">) => void;
+  onRemoveGif?: (frameId: Id<"frames">) => void;
 }
 
 /**
@@ -262,6 +265,9 @@ const FrameLayer = memo(function FrameLayer({
   onReact,
   onVote,
   onWhatIf,
+  gifs,
+  onAddGif,
+  onRemoveGif,
 }: {
   frames: CanvasFrame[];
   localPos: Record<string, { x: number; y: number }>;
@@ -286,6 +292,9 @@ const FrameLayer = memo(function FrameLayer({
   onReact?: (frameId: Id<"frames">, emoji: string) => void;
   onVote?: (frameId: Id<"frames">) => void;
   onWhatIf?: (frame: Doc<"frames">) => void;
+  gifs?: Record<string, { src: string; mine: boolean; by: string }[]>;
+  onAddGif?: (frame: Doc<"frames">) => void;
+  onRemoveGif?: (frameId: Id<"frames">) => void;
 }) {
   return (
     <>
@@ -393,6 +402,18 @@ const FrameLayer = memo(function FrameLayer({
                       ●
                     </button>
                   )}
+                  {onAddGif && (
+                    <button
+                      className="stamp ghost"
+                      title="Drop a GIF on this screen"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddGif(frame);
+                      }}
+                    >
+                      🎞️
+                    </button>
+                  )}
                   {onWhatIf && frame.kind === "route" && !frame.variantBranch && (
                     <button
                       className="stamp ghost whatif"
@@ -460,6 +481,23 @@ const FrameLayer = memo(function FrameLayer({
                               : "Waiting for a preview — ask a teammate with the repo to publish one"}
                 </div>
               )}
+              {(gifs?.[frame._id]?.length ?? 0) > 0 && (
+                <div className="gif-stack" onMouseDown={(e) => e.stopPropagation()}>
+                  {gifs![frame._id].slice(0, 4).map((g, i) => (
+                    <img
+                      key={i}
+                      src={g.src}
+                      className={`gif-sticker ${g.mine ? "mine" : ""}`}
+                      title={g.mine ? "Yours — click to remove" : `From ${g.by}`}
+                      onClick={() => {
+                        if (g.mine) onRemoveGif?.(frame._id);
+                      }}
+                      alt=""
+                    />
+                  ))}
+                  {gifs![frame._id].length > 4 && <span className="gif-more">+{gifs![frame._id].length - 4}</span>}
+                </div>
+              )}
               {heatmap && frame.routePath && (
                 <div className="heatmap-layer">
                   {Object.entries(heatmap.clicksByRoute)
@@ -502,6 +540,9 @@ export default function CanvasView({
   onReact,
   onVote,
   onWhatIf,
+  gifs,
+  onAddGif,
+  onRemoveGif,
   projectId,
   frames,
   threads,
@@ -1227,6 +1268,9 @@ export default function CanvasView({
           onReact={onReact}
           onVote={onVote}
           onWhatIf={onWhatIf}
+          gifs={gifs}
+          onAddGif={onAddGif}
+          onRemoveGif={onRemoveGif}
           {...stableFrameHandlers}
         />
 

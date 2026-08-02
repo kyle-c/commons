@@ -11,8 +11,8 @@ import { internalAction } from "./_generated/server";
  * copyable text under the message.
  */
 export const post = internalAction({
-  args: { text: v.string(), webhookUrl: v.optional(v.string()) },
-  handler: async (_ctx, { text, webhookUrl }) => {
+  args: { text: v.string(), webhookUrl: v.optional(v.string()), blocks: v.optional(v.any()) },
+  handler: async (_ctx, { text, webhookUrl, blocks }) => {
     // Per-workspace webhook wins; the env var is the pre-workspace fallback.
     const webhook = webhookUrl ?? process.env.SLACK_WEBHOOK_URL;
     if (!webhook) return;
@@ -20,7 +20,8 @@ export const post = internalAction({
       const res = await fetch(webhook, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        // text stays as the notification fallback when blocks render.
+        body: JSON.stringify(blocks ? { text, blocks } : { text }),
       });
       if (!res.ok) console.error("slack webhook failed", res.status, await res.text());
     } catch (err) {

@@ -431,6 +431,24 @@ export default defineSchema({
     .index("by_project", ["projectId"])
     .index("by_frame_user", ["frameId", "userId"]),
 
+  // GIF reactions: the fun register, distinct from stamps (judgment) and
+  // threads (argument). A small sticker on a frame's corner — pasted from a
+  // link (Giphy's copy-GIF-link works) or uploaded. One per person per frame
+  // (adding again replaces); capped per frame so a popular screen doesn't
+  // become a zoetrope. No third-party API on purpose: Commons holds no
+  // service keys it can avoid.
+  gifReactions: defineTable({
+    projectId: v.id("projects"),
+    frameId: v.id("frames"),
+    userId: v.id("users"),
+    // Exactly one of these: a remote GIF/WebP URL, or an uploaded blob.
+    url: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_frame", ["frameId"])
+    .index("by_frame_user", ["frameId", "userId"]),
+
   // Dot-voting: each member gets a small budget per project, spent one dot
   // per frame. The workshop ritual, except the things being voted on run.
   frameVotes: defineTable({

@@ -1,6 +1,7 @@
 import { mutation, query, internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { siteUrl } from "./siteUrl";
 import { buildDeepLink } from "@commons/shared";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
@@ -75,9 +76,44 @@ async function scheduleSlackPost(
     args.kind === "agent"
       ? `⚡ Agent draft ready on *${project.name}* (via ${author?.name ?? "a teammate"})`
       : `💬 ${author?.name ?? (args.guestName ? `${args.guestName} (guest)` : "A teammate")} started a thread on *${project.name}*`;
+  // The prototype rides along: a screenshot of the thread's screen when one
+  // exists, and buttons that open the live thing — the share page for anyone,
+  // the web app for teammates. Slack cannot run an iframe; a real image plus
+  // a one-click door is the embed it can do.
+  const thread = await ctx.db.get(args.threadId);
+  let imageUrl: string | null = null;
+  let imageTitle = project.name;
+  if (thread?.frameId) {
+    const frame = await ctx.db.get(thread.frameId);
+    if (frame) {
+      imageTitle = frame.title;
+      const snapshot = await ctx.db
+        .query("frameSnapshots")
+        .withIndex("by_frame", (q) => q.eq("frameId", frame._id))
+        .unique();
+      if (snapshot) imageUrl = await ctx.storage.getUrl(snapshot.storageId);
+    }
+  }
+  const site = siteUrl();
+  const webUrl = project.shareToken ? `${site}/g/${project.shareToken}` : `${site}/app#p=${args.projectId}&view=prototype`;
+  const blocks: unknown[] = [
+    { type: "section", text: { type: "mrkdwn", text: `${headline}\n> ${snippet.replace(/\n/g, "\n> ")}` } },
+  ];
+  if (imageUrl) blocks.push({ type: "image", image_url: imageUrl, alt_text: imageTitle });
+  blocks.push({
+    type: "actions",
+    elements: [
+      {
+        type: "button",
+        text: { type: "plain_text", text: project.shareToken ? "Open the prototype ↗" : "Open in the browser ↗" },
+        url: webUrl,
+      },
+    ],
+  });
   await ctx.scheduler.runAfter(0, internal.slack.post, {
     text: `${headline}\n> ${snippet.replace(/\n/g, "\n> ")}\nOpen in Commons: ${link}`,
     webhookUrl,
+    blocks,
   });
 }
 

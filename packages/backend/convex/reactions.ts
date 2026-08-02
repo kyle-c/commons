@@ -136,3 +136,97 @@ export const votesForProject = query({
     return { byFrame, votesLeft: Math.max(0, VOTE_BUDGET - mine) };
   },
 });
+
+/** Remote GIF sources we'll render. Anything else is a link, not a sticker. */
+const GIF_URL = /^https:\/\/[^\s]+\.(gif|webp)(\?[^\s]*)?$|^https:\/\/media\d*\.giphy\.com\//i;
+const GIFS_PER_FRAME = 8;
+
+/**
+ * The fun register: a GIF sticker on a frame's corner. One per person per
+ * frame — adding again replaces, so enthusiasm updates instead of stacking.
+ * Capped per frame; refusing beats a zoetrope. No Giphy API on purpose:
+ * paste the link Giphy's own Share button copies, or upload a file.
+ */
+export const addGif = mutation({
+  args: {
+    frameId: v.id("frames"),
+    url: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { frameId, url, storageId, ...viewer }) => {
+    const userId = await requireViewer(ctx, viewer);
+    const frame = await ctx.db.get(frameId);
+    if (!frame || !(await accessibleProject(ctx, frame.projectId, userId))) {
+      throw new Error("You don't have access to this project.");
+    }
+    if (!url === !storageId) throw new Error("A sticker is a link or an upload, exactly one.");
+    if (url && !GIF_URL.test(url.trim())) {
+      return { ok: false as const, reason: "not_a_gif" as const };
+    }
+    const existing = await ctx.db
+      .query("gifReactions")
+      .withIndex("by_frame", (q) => q.eq("frameId", frameId))
+      .collect();
+    const mine = existing.find((g) => g.userId === userId);
+    if (mine) {
+      if (mine.storageId) await ctx.storage.delete(mine.storageId).catch(() => {});
+      await ctx.db.delete(mine._id);
+    } else if (existing.length >= GIFS_PER_FRAME) {
+      if (storageId) await ctx.storage.delete(storageId).catch(() => {});
+      return { ok: false as const, reason: "frame_full" as const };
+    }
+    await ctx.db.insert("gifReactions", {
+      projectId: frame.projectId,
+      frameId,
+      userId,
+      url: url?.trim(),
+      storageId,
+    });
+    return { ok: true as const };
+  },
+});
+
+export const removeGif = mutation({
+  args: { frameId: v.id("frames"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, { frameId, ...viewer }) => {
+    const userId = await requireViewer(ctx, viewer);
+    const mine = await ctx.db
+      .query("gifReactions")
+      .withIndex("by_frame_user", (q) => q.eq("frameId", frameId).eq("userId", userId))
+      .unique();
+    if (!mine) return;
+    if (mine.storageId) await ctx.storage.delete(mine.storageId).catch(() => {});
+    await ctx.db.delete(mine._id);
+  },
+});
+
+/** Every sticker in the project, resolved to renderable URLs, per frame. */
+export const gifsForProject = query({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const viewerId = await resolveViewer(ctx, args);
+    if (!(await accessibleProject(ctx, args.projectId, viewerId))) return {};
+    const rows = await ctx.db
+      .query("gifReactions")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    const byFrame: Record<string, { src: string; mine: boolean; by: string }[]> = {};
+    for (const row of rows) {
+      const src = row.url ?? (row.storageId ? await ctx.storage.getUrl(row.storageId) : null);
+      if (!src) continue;
+      const author = await ctx.db.get(row.userId);
+      (byFrame[row.frameId] ??= []).push({
+        src,
+        mine: row.userId === viewerId,
+        by: author?.name ?? "someone",
+      });
+    }
+    return byFrame;
+  },
+});

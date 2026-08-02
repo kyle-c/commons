@@ -143,10 +143,40 @@ http.route({
 http.route({
   pathPrefix: "/g/",
   method: "GET",
-  handler: httpAction(async (ctx) => {
+  handler: httpAction(async (ctx, request) => {
+    const rest = new URL(request.url).pathname.slice("/g/".length);
+    // The unfurl image: /g/<token>/og.png answers with the home screen's
+    // latest snapshot. Slack and friends fetch this from the og:image tag.
+    if (rest.endsWith("/og.png")) {
+      const token = rest.slice(0, -"/og.png".length).replace(/\/+$/, "");
+      const og = await ctx.runQuery(internal.projects.ogForShareToken, { shareToken: token });
+      if (!og?.imageUrl) return new Response("no snapshot yet", { status: 404 });
+      return new Response(null, {
+        status: 302,
+        headers: { Location: og.imageUrl, "Cache-Control": "no-store" },
+      });
+    }
     const bundle = await ctx.runQuery(internal.updates.latestWebApp, {});
     if (!bundle) return page("Not published", "The Commons web app hasn't been published yet.");
-    return new Response(bundle.indexHtml, {
+    // A pasted share link should unfurl into a card that sells the click:
+    // the project's name, what the page is, and a real screenshot. This is
+    // the prototype embedded in Slack, to the extent Slack allows embedding —
+    // the card is the demo, the click is the product.
+    const token = rest.replace(/\/+$/, "");
+    const og = token ? await ctx.runQuery(internal.projects.ogForShareToken, { shareToken: token }) : null;
+    let html = bundle.indexHtml;
+    if (og) {
+      const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+      const tags = [
+        `<meta property="og:title" content="${esc(og.name)} — a live canvas on Commons" />`,
+        `<meta property="og:description" content="Pan the real screens, click into the running prototype, and leave comments. No account needed." />`,
+        `<meta property="og:type" content="website" />`,
+        og.imageUrl ? `<meta property="og:image" content="${siteUrl()}/g/${esc(token)}/og.png" />` : "",
+        og.imageUrl ? `<meta name="twitter:card" content="summary_large_image" />` : `<meta name="twitter:card" content="summary" />`,
+      ].join("\n");
+      html = html.replace("<head>", `<head>\n${tags}`);
+    }
+    return new Response(html, {
       status: 200,
       // The token is in the path, so this must never be cached as one page.
       headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },

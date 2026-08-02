@@ -3896,6 +3896,37 @@ kbd {
   color: var(--accent);
 }
 
+.gif-stack {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  z-index: 4;
+}
+.gif-sticker {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--bg-panel);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  cursor: default;
+  transform: rotate(2deg);
+}
+.gif-sticker:nth-child(odd) {
+  transform: rotate(-2deg);
+}
+.gif-sticker.mine {
+  cursor: pointer;
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--bg-panel));
+}
+.gif-more {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
 .coverage-body {
   flex: 1;
   overflow-y: auto;
