@@ -1402,6 +1402,13 @@ button.workspace-toggle:hover {
   box-shadow: var(--shadow-panel);
   font-size: var(--text-sm);
   z-index: 60;
+  animation: pop-in var(--dur-med) var(--ease-out);
+}
+/* Informational states (checking, up to date, couldn't reach the feed):
+   no button, so the pill keeps even padding and a quieter voice. */
+.update-chip.quiet {
+  padding: 8px 16px;
+  color: var(--text-secondary);
 }
 
 .canvas-toolbar .zoom-step {

@@ -1,4 +1,4 @@
-import { app, dialog, Menu, shell, type BrowserWindow, type MenuItemConstructorOptions } from "electron";
+import { app, Menu, shell, type BrowserWindow, type MenuItemConstructorOptions } from "electron";
 import type { MenuAction } from "@commons/shared";
 import * as updater from "./updater";
 
@@ -25,31 +25,19 @@ function send(action: MenuAction): void {
   win.webContents.send("menu-action", action);
 }
 
-async function checkForUpdates(): Promise<void> {
-  const outcome = await updater.checkNow();
-  const win = getWindow() ?? undefined;
-  if (outcome.result === "ready") {
-    const { response } = await dialog.showMessageBox(win!, {
-      type: "info",
-      message: `Commons ${outcome.version} is ready to install.`,
-      detail: "The update was already downloaded in the background.",
-      buttons: ["Restart Now", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-    });
-    if (response === 0) updater.installNow();
-    return;
+/**
+ * "Check for Updates…" answers through the update chip, not a dialog — the
+ * same surface that speaks when a release arrives on its own, so there is one
+ * update UI regardless of who started the check. Focus the window first: the
+ * chip is the answer, and it must be somewhere the person is looking.
+ */
+function checkForUpdates(): void {
+  const win = getWindow();
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.focus();
   }
-  const text =
-    outcome.result === "dev"
-      ? { message: "Updates only apply to installed builds.", detail: "This is a development run from source." }
-      : outcome.result === "downloading"
-        ? {
-            message: `Commons ${outcome.version} is on its way.`,
-            detail: "It's downloading in the background — a restart chip appears in the titlebar when it's ready.",
-          }
-        : { message: `You're up to date.`, detail: `Commons ${app.getVersion()} is the latest version.` };
-  await dialog.showMessageBox(win!, { type: "info", buttons: ["OK"], ...text });
+  updater.checkNow();
 }
 
 function template(): MenuItemConstructorOptions[] {
@@ -59,7 +47,7 @@ function template(): MenuItemConstructorOptions[] {
       label: "Commons",
       submenu: [
         { role: "about" },
-        { label: "Check for Updates…", click: () => void checkForUpdates() },
+        { label: "Check for Updates…", click: () => checkForUpdates() },
         { type: "separator" },
         { label: "Settings…", accelerator: "CmdOrCtrl+,", click: () => send({ type: "settings" }) },
         { type: "separator" },

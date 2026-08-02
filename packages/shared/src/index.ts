@@ -248,7 +248,21 @@ export interface GitSetupStatus {
 }
 
 /** Auto-update state relayed to the renderer ("ready" shows the restart chip). */
-export type UpdateStatus = { state: "none" } | { state: "ready"; version: string };
+/**
+ * Everything the update chip can say. "ready" is the only sticky state; the
+ * rest are moments in a check. "current", "error", and "dev" only ever follow
+ * a menu-triggered check — the background loop stays silent unless it has an
+ * actual release in hand, so the chip never pops up every few hours to say
+ * nothing happened.
+ */
+export type UpdateStatus =
+  | { state: "none" }
+  | { state: "checking" }
+  | { state: "downloading"; version: string }
+  | { state: "ready"; version: string }
+  | { state: "current"; version: string }
+  | { state: "error" }
+  | { state: "dev" };
 
 /** Payload of the commons:// callback that ends a system-browser OAuth flow. */
 export interface AuthCallback {
