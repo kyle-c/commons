@@ -17,6 +17,7 @@ import Icon from "../components/icons";
 import RibbonCover from "../components/RibbonCover";
 import { AppChoice } from "./AppChoice";
 import { vacuumFrom } from "../lib/celebrate";
+import { useFlip } from "../lib/flip";
 
 /** Shared lifecycle labels: what kind of feedback a project wants right now. */
 const STATUSES = [
@@ -218,6 +219,17 @@ export default function ProjectList({
       .map(([key, section]) => ({ key, ...section }));
   })();
 
+  // Cards glide into the gap an archived project leaves, rather than jumping
+  // into it. The signature is every card in render order: archiving, pinning,
+  // restoring and searching all reorder the grid, and each is a move worth
+  // showing. Section folds change it too, which is why it includes the
+  // archived rows only when they are on screen.
+  useFlip(
+    sections
+      .map((s) => [s.key, ...s.projects.map((p) => p._id), ...(archivedOpen[s.key] ? s.archived.map((p) => `archived-${p._id}`) : [])].join(","))
+      .join("|")
+  );
+
   // "Needs you": projects where teammates opened threads since your last
   // visit. Self-clearing — going back to the project advances your visit
   // marker and the entry drops out.
@@ -368,6 +380,7 @@ export default function ProjectList({
             {section.projects.map((project) => (
           <div
             key={project._id}
+            data-flip-id={project._id}
             className="project-card"
             role="button"
             tabIndex={0}
@@ -583,6 +596,11 @@ export default function ProjectList({
                   {section.archived.map((project) => (
                     <div
                       key={project._id}
+                      // Deliberately a different id from the same project's
+                      // live card: archiving is not a move. Sharing the id
+                      // would make the card fly from the grid into the
+                      // archived section while the vacuum is still eating it.
+                      data-flip-id={`archived-${project._id}`}
                       className="project-card archived"
                       role="button"
                       tabIndex={0}
