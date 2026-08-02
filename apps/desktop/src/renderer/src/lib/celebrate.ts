@@ -22,10 +22,24 @@
  *   AudioContext must never break archiving.
  */
 
-// Tuned for snap: the card is gone by ~300ms and the void closes by 400ms.
-// Past roughly half a second a confirmation animation stops reading as
-// responsive and starts reading as a wait.
-const DURATION_MS = 400;
+/**
+ * The card is drawn in over DURATION_MS and the void shuts shortly after.
+ *
+ * The first pass ran 400ms on a steep `cubic-bezier(0.7, 0, 0.9, 0.35)`, which
+ * was meant to make the card commit to the void early but did the reverse: the
+ * card was still at 83% size at 320ms and then collapsed to nothing in the
+ * last 80ms. Four-fifths of the movement landed in one-fifth of the time, so
+ * it hung and then snapped — read as a jolt rather than a pull.
+ *
+ * The shape is now carried by the keyframes instead of an extreme curve:
+ * `scale = 1 - 0.98 * u^1.8` sampled on linear time. It starts moving
+ * immediately, accelerates the whole way (a vacuum should), and never jumps —
+ * the worst single frame moves the scale 0.055 instead of 0.25. That costs
+ * some length, hence 520ms; the audio below is timed to match.
+ */
+const DURATION_MS = 520;
+/** The void hangs on a beat after the card is gone, then shuts. */
+const VOID_EXTRA_MS = 130;
 const FLECKS = 12;
 
 function reducedMotion(): boolean {
@@ -68,8 +82,9 @@ function audioCtx(): AudioContext | null {
 /**
  * The cartoon vacuum, in four parts: the slurp (a rising glide with a little
  * vibrato, the recognizable "sucked up"), air rushing in behind it, the void
- * closing with a low thup, and one high blip as a wink. ~0.5s, sized to the
- * animation.
+ * closing with a low thup, and one high blip as a wink. ~0.7s, sized to the
+ * animation: the slurp runs the length of the pull and the thup lands on the
+ * frame the void shuts, so retiming one means retiming the other.
  */
 function playVacuum(): void {
   try {
@@ -84,7 +99,7 @@ function playVacuum(): void {
     const slurp = ctx.createOscillator();
     slurp.type = "triangle";
     slurp.frequency.setValueAtTime(210 + Math.random() * 40, t0);
-    slurp.frequency.exponentialRampToValueAtTime(1150, t0 + 0.3);
+    slurp.frequency.exponentialRampToValueAtTime(1150, t0 + 0.42);
     const vibrato = ctx.createOscillator();
     vibrato.frequency.value = 26;
     const vibratoDepth = ctx.createGain();
@@ -95,16 +110,16 @@ function playVacuum(): void {
     slurpTone.frequency.value = 2400;
     const slurpGain = ctx.createGain();
     slurpGain.gain.setValueAtTime(0.0001, t0);
-    slurpGain.gain.exponentialRampToValueAtTime(0.42, t0 + 0.16);
-    slurpGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.34);
+    slurpGain.gain.exponentialRampToValueAtTime(0.42, t0 + 0.2);
+    slurpGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.46);
     slurp.connect(slurpTone).connect(slurpGain).connect(master);
     slurp.start(t0);
-    slurp.stop(t0 + 0.36);
+    slurp.stop(t0 + 0.48);
     vibrato.start(t0);
-    vibrato.stop(t0 + 0.36);
+    vibrato.stop(t0 + 0.48);
 
     // Air rushing in with it.
-    const noiseBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.34), ctx.sampleRate);
+    const noiseBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.46), ctx.sampleRate);
     const channel = noiseBuffer.getChannelData(0);
     for (let i = 0; i < channel.length; i += 1) channel[i] = Math.random() * 2 - 1;
     const noise = ctx.createBufferSource();
@@ -113,41 +128,41 @@ function playVacuum(): void {
     airFilter.type = "bandpass";
     airFilter.Q.value = 1.2;
     airFilter.frequency.setValueAtTime(500, t0);
-    airFilter.frequency.exponentialRampToValueAtTime(2600, t0 + 0.3);
+    airFilter.frequency.exponentialRampToValueAtTime(2600, t0 + 0.42);
     const airGain = ctx.createGain();
     airGain.gain.setValueAtTime(0.0001, t0);
-    airGain.gain.exponentialRampToValueAtTime(0.5, t0 + 0.22);
-    airGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35);
+    airGain.gain.exponentialRampToValueAtTime(0.5, t0 + 0.28);
+    airGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.47);
     noise.connect(airFilter).connect(airGain).connect(master);
     noise.start(t0);
 
     // The void closes: a deep thup with a soft knock inside it.
     const thup = ctx.createOscillator();
     thup.type = "sine";
-    thup.frequency.setValueAtTime(135, t0 + 0.36);
-    thup.frequency.exponentialRampToValueAtTime(52, t0 + 0.47);
+    thup.frequency.setValueAtTime(135, t0 + 0.5);
+    thup.frequency.exponentialRampToValueAtTime(52, t0 + 0.61);
     const thupGain = ctx.createGain();
-    thupGain.gain.setValueAtTime(0.0001, t0 + 0.36);
-    thupGain.gain.exponentialRampToValueAtTime(0.7, t0 + 0.375);
-    thupGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.5);
+    thupGain.gain.setValueAtTime(0.0001, t0 + 0.5);
+    thupGain.gain.exponentialRampToValueAtTime(0.7, t0 + 0.515);
+    thupGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.64);
     thup.connect(thupGain).connect(master);
-    thup.start(t0 + 0.36);
-    thup.stop(t0 + 0.52);
+    thup.start(t0 + 0.5);
+    thup.stop(t0 + 0.66);
 
     // A wink on the way out.
     const blip = ctx.createOscillator();
     blip.type = "sine";
     blip.frequency.value = 1860 + Math.random() * 120;
     const blipGain = ctx.createGain();
-    blipGain.gain.setValueAtTime(0.0001, t0 + 0.46);
-    blipGain.gain.exponentialRampToValueAtTime(0.09, t0 + 0.47);
-    blipGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.54);
+    blipGain.gain.setValueAtTime(0.0001, t0 + 0.6);
+    blipGain.gain.exponentialRampToValueAtTime(0.09, t0 + 0.61);
+    blipGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.68);
     blip.connect(blipGain).connect(master);
-    blip.start(t0 + 0.46);
-    blip.stop(t0 + 0.56);
+    blip.start(t0 + 0.6);
+    blip.stop(t0 + 0.7);
 
     // Release the master chain once the tail is done; the context stays.
-    window.setTimeout(() => master.disconnect(), 900);
+    window.setTimeout(() => master.disconnect(), 1100);
   } catch {
     // No audio is an acceptable outcome; a thrown error here is not.
   }
@@ -185,11 +200,11 @@ export function vacuumFrom(el: HTMLElement, colors: string[] = []): void {
     voidDot.animate(
     [
       { transform: "translate(-50%, -50%) scale(0)", opacity: 0 },
-      { transform: "translate(-50%, -50%) scale(1)", opacity: 1, offset: 0.25 },
-      { transform: "translate(-50%, -50%) scale(1)", opacity: 1, offset: 0.82 },
+      { transform: "translate(-50%, -50%) scale(1)", opacity: 1, offset: 0.22 },
+      { transform: "translate(-50%, -50%) scale(1)", opacity: 1, offset: 0.86 },
       { transform: "translate(-50%, -50%) scale(0)", opacity: 0 },
     ],
-      { duration: DURATION_MS + 110, easing: "cubic-bezier(0.4, 0, 0.2, 1)" }
+      { duration: DURATION_MS + VOID_EXTRA_MS, easing: "cubic-bezier(0.4, 0, 0.2, 1)" }
     )
   );
 
@@ -207,14 +222,18 @@ export function vacuumFrom(el: HTMLElement, colors: string[] = []): void {
   const spin = (Math.random() < 0.5 ? -1 : 1) * (14 + Math.random() * 14);
   animations.push(() =>
     ghost.animate(
+      // Samples of scale = 1 - 0.98*u^1.8 and a twist on the same curve, so
+      // the pull accelerates evenly. Linear timing: the shape is entirely in
+      // these numbers, which is what keeps the last frames from cliff-edging.
       [
         { transform: "scale(1) rotate(0deg)", opacity: 1 },
-        { transform: `scale(0.78) rotate(${spin * 0.35}deg)`, opacity: 1, offset: 0.45 },
+        { transform: `scale(0.946) rotate(${(spin * 0.055).toFixed(2)}deg)`, opacity: 1, offset: 0.2 },
+        { transform: `scale(0.812) rotate(${(spin * 0.192).toFixed(2)}deg)`, opacity: 1, offset: 0.4 },
+        { transform: `scale(0.609) rotate(${(spin * 0.399).toFixed(2)}deg)`, opacity: 1, offset: 0.6 },
+        { transform: `scale(0.344) rotate(${(spin * 0.669).toFixed(2)}deg)`, opacity: 0.92, offset: 0.8 },
         { transform: `scale(0.02) rotate(${spin}deg)`, opacity: 0.5 },
       ],
-      // Steep-in curve: the card commits to the void early instead of
-      // drifting, which is most of what reads as "faster".
-      { duration: DURATION_MS, easing: "cubic-bezier(0.7, 0, 0.9, 0.35)", fill: "forwards" }
+      { duration: DURATION_MS, easing: "linear", fill: "forwards" }
     )
   );
 
@@ -240,10 +259,13 @@ export function vacuumFrom(el: HTMLElement, colors: string[] = []): void {
       fleck.animate(
         [
           { transform: `translate(${sx}px, ${sy}px) scale(1)`, opacity: 0 },
-          { transform: `translate(${sx * 0.66}px, ${sy * 0.66}px) scale(0.9)`, opacity: 0.9, offset: 0.28 },
+          { transform: `translate(${sx * 0.82}px, ${sy * 0.82}px) scale(0.95)`, opacity: 0.9, offset: 0.25 },
+          { transform: `translate(${sx * 0.45}px, ${sy * 0.45}px) scale(0.72)`, opacity: 0.85, offset: 0.62 },
           { transform: "translate(0, 0) scale(0.2)", opacity: 0 },
         ],
-        { duration: DURATION_MS - 80, delay, easing: "cubic-bezier(0.6, 0, 1, 0.4)", fill: "backwards" }
+        // Same accelerate-all-the-way shape as the card, for the same reason:
+        // the old curve's control point at (1, 0.4) whipped them in at the end.
+        { duration: DURATION_MS - 90, delay, easing: "cubic-bezier(0.42, 0, 0.72, 0.5)", fill: "backwards" }
       )
     );
   }
@@ -257,5 +279,5 @@ export function vacuumFrom(el: HTMLElement, colors: string[] = []): void {
     // If the archive failed, the card is still mounted and comes back; if it
     // succeeded, the node is gone and this is a no-op.
     el.style.visibility = "";
-  }, DURATION_MS + 140);
+  }, DURATION_MS + VOID_EXTRA_MS + 40);
 }
