@@ -665,6 +665,45 @@ export const redeliverDeployments = internalAction({
   },
 });
 
+/**
+ * The button for "connected, but no deploy has arrived since": ask GitHub to
+ * re-send its recent deployment_status deliveries and let the normal webhook
+ * path do the rest. Public and project-gated — redelivery only replays events
+ * GitHub already sent us, so the blast radius is a duplicate of the past.
+ * Without a repositoryId filter GitHub's window is app-wide, so a busy
+ * sibling repo could still crowd out this one; count is capped small.
+ */
+export const replayDeploys = action({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<{ ok: boolean; replayed: number }> => {
+    const project = await ctx.runQuery(internal.githubApp.accessibleProjectForViewer, {
+      projectId: args.projectId,
+      userId: args.userId,
+      sessionToken: args.sessionToken,
+    });
+    if (!project) return { ok: false, replayed: 0 };
+    const result = await ctx.runAction(internal.githubApp.redeliverDeployments, { count: 5 });
+    return { ok: true, replayed: result.redelivered.length };
+  },
+});
+
+/** Access check usable from an action: the project, if the viewer can see it. */
+export const accessibleProjectForViewer = internalQuery({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const viewerId = await resolveViewer(ctx, args);
+    return viewerId ? await accessibleProject(ctx, args.projectId, viewerId) : null;
+  },
+});
+
 // ── Diagnosis ──────────────────────────────────────────────────────────────
 
 export type Finding = {

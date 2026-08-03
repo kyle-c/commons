@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import type { AgentSessionEvent, AgentSessionInfo, DevServerStatus, GitRepoStatus } from "@commons/shared";
@@ -438,6 +438,7 @@ function UrlSettingBody({
   connection,
   onDiagnose,
   onSignIn,
+  onReplayDeploys,
   validate,
   onSave,
 }: {
@@ -454,6 +455,8 @@ function UrlSettingBody({
   onDiagnose?: () => void;
   /** Opens the app full-size so a person can sign in once for every frame. */
   onSignIn?: () => void;
+  /** Connected-but-quiet: ask GitHub to re-send its recent deploy events. */
+  onReplayDeploys?: () => Promise<number>;
   validate: (v: string) => string | null;
   onSave: (v: string) => Promise<void>;
 }) {
@@ -478,6 +481,19 @@ function UrlSettingBody({
    * and the prototype share one browser session, so signing in once anywhere
    * fixes all of them — but nothing said so, and there was no path to it.
    */
+  const [replayNote, setReplayNote] = useState<string | null>(null);
+  const replayLink = onReplayDeploys ? (
+    <button
+      className="btn ghost diagnose-link"
+      onClick={async () => {
+        setReplayNote("Asking GitHub…");
+        const n = await onReplayDeploys().catch(() => 0);
+        setReplayNote(n > 0 ? `Replaying ${n} past deploy${n === 1 ? "" : "s"} — give it a moment.` : "GitHub had nothing recent to replay — deploy once and it fills in.");
+      }}
+    >
+      Replay past deploys
+    </button>
+  ) : null;
   const signInLink = onSignIn ? (
     <button className="btn ghost diagnose-link" onClick={onSignIn}>
       Sign in to previews…
@@ -509,6 +525,13 @@ function UrlSettingBody({
         <>
           <span className="hint">{hint}</span>
           {connectionNote}
+          {(replayLink || signInLink) && (
+            <div className="reveal-form-row">
+              {replayLink}
+              {signInLink}
+            </div>
+          )}
+          {replayNote && <span className="hint">{replayNote}</span>}
           {error && <span className="form-error">{error}</span>}
           <div className="reveal-form-row">
             <input
@@ -584,10 +607,13 @@ function UrlSettingBody({
               Change…
             </button>
             {diagnoseLink}
+            {replayLink}
+            {signInLink}
             <button className="btn ghost quiet-action" disabled={busy} onClick={() => void save("")}>
               Remove
             </button>
           </div>
+          {replayNote && <span className="hint">{replayNote}</span>}
         </>
       )}
     </div>
@@ -1084,6 +1110,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const removeGif = useMutation(api.reactions.removeGif);
   const curateAnnotation = useMutation(api.annotations.curate);
   const setSupportsDarkMode = useMutation(api.projects.setSupportsDarkMode);
+  const replayDeploysAction = useAction(api.githubApp.replayDeploys);
   const [gifFor, setGifFor] = useState<Doc<"frames"> | null>(null);
   const [gifAnchor, setGifAnchor] = useState<{ fx: number; fy: number } | null>(null);
   const giphy = useQuery(
@@ -1218,7 +1245,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
       return `${githubStatus.accounts.join(", ")} connected, but this repo isn't in the installation. Add it under Configure.`;
     }
     if (!githubStatus.seenDeploy) {
-      return `${githubStatus.accounts.join(", ")} connected. No successful deploy yet — check it went green.`;
+      return `${githubStatus.accounts.join(", ")} connected — no deploy seen yet.`;
     }
     return null;
   })();
@@ -2215,6 +2242,18 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             learnedAt={project.lastDeployAt}
             connection={previewConnectionNote}
             onDiagnose={() => setConnectionOpen(true)}
+            onReplayDeploys={
+              githubStatus && githubStatus.repoCovered !== false && !githubStatus.seenDeploy
+                ? async () => {
+                    const result = await replayDeploysAction({
+                      projectId: nav.projectId,
+                      userId: me._id,
+                      sessionToken: sessionToken(),
+                    });
+                    return result.replayed;
+                  }
+                : undefined
+            }
             // Offered whenever there is anything to sign in to, which is not
             // the same as having a preview URL. Gating this on previewUrl was
             // wrong: a project rendering from a local dev server has the same
@@ -2664,7 +2703,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               {flowEdges === undefined
                 ? "Loading paths…"
                 : flowEdges.length === 0
-                  ? "No paths yet — they are drawn from tester sessions, from links in the code, or by hand."
+                  ? "No paths yet."
                   : `${flowEdges.length} path${flowEdges.length === 1 ? "" : "s"}`}
               {crawl?.status === "starting" || crawl?.status === "running"
                 ? ` · Crawling your preview… ${crawl.found} found`
@@ -2690,11 +2729,11 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                   if (!result.ok) {
                     setCrawlNote(
                       result.reason === "no_preview"
-                        ? "The crawl drives your deployed app, so it needs a preview link first — set one in the link popover, or connect GitHub and it fills itself in."
+                        ? "Needs a preview link — set it in the link popover."
                         : result.reason === "no_repo"
-                          ? "The crawl runs in your repo's own GitHub Actions, and this project has no GitHub repository connected."
+                          ? "Needs a GitHub repository connected."
                           : result.reason === "already_running"
-                            ? "A crawl is already out there — one at a time, so two don't race to propose the same states."
+                            ? "A crawl is already running."
                             : "You don't have access to this project."
                     );
                   }
@@ -2702,7 +2741,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                   // Anything still thrown is genuinely unexpected — say so
                   // rather than printing transport noise.
                   console.error("startCrawl failed", err);
-                  setCrawlNote("The crawl couldn't start — something unexpected went wrong on the server.");
+                  setCrawlNote("Couldn't start — something unexpected went wrong.");
                 }
               }}
             >
@@ -2722,7 +2761,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                   });
                   setCrawlNote(
                     result.sessions === 0
-                      ? "No tester sessions yet — run a user test first."
+                      ? "No tester sessions yet."
                       : `${result.edges} path${result.edges === 1 ? "" : "s"} from ${result.sessions} session${result.sessions === 1 ? "" : "s"}.`
                   );
                 } catch (err) {
@@ -2732,7 +2771,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                 }
               }}
             >
-              {deriving ? "Reading sessions…" : "Draw paths from tester sessions"}
+              {deriving ? "Reading…" : "Draw from tester sessions"}
             </button>
           </div>
           {/* Hand-drawn paths. The form only exists while wanted: an always-on
@@ -2744,9 +2783,6 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               <button className="btn ghost" onClick={() => setDrawOpen(true)}>
                 Draw a path by hand…
               </button>
-              <span className="hint">
-                For a connection the map is missing — tester sessions and code links draw the rest.
-              </span>
             </div>
           )}
           {drawOpen && (
