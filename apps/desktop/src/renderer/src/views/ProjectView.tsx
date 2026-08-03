@@ -2686,9 +2686,23 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               onClick={async () => {
                 setCrawlNote(null);
                 try {
-                  await startCrawl({ projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
+                  const result = await startCrawl({ projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() });
+                  if (!result.ok) {
+                    setCrawlNote(
+                      result.reason === "no_preview"
+                        ? "The crawl drives your deployed app, so it needs a preview link first — set one in the link popover, or connect GitHub and it fills itself in."
+                        : result.reason === "no_repo"
+                          ? "The crawl runs in your repo's own GitHub Actions, and this project has no GitHub repository connected."
+                          : result.reason === "already_running"
+                            ? "A crawl is already out there — one at a time, so two don't race to propose the same states."
+                            : "You don't have access to this project."
+                    );
+                  }
                 } catch (err) {
-                  setCrawlNote(err instanceof Error ? err.message : String(err));
+                  // Anything still thrown is genuinely unexpected — say so
+                  // rather than printing transport noise.
+                  console.error("startCrawl failed", err);
+                  setCrawlNote("The crawl couldn't start — something unexpected went wrong on the server.");
                 }
               }}
             >
