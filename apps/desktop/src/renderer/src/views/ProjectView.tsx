@@ -1165,7 +1165,23 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     }
   };
   /** The reaction palette, bloomed at the cursor by a right-click on a frame. */
-  const [bloom, setBloom] = useState<{ frame: Doc<"frames">; x: number; y: number; fx: number; fy: number } | null>(null);
+  const [bloom, setBloomRaw] = useState<{ frame: Doc<"frames">; x: number; y: number; fx: number; fy: number } | null>(null);
+  /**
+   * The bloom is a hidden gesture, and hidden gestures need one honest
+   * introduction: a line that lives until the first successful right-click
+   * (or a dismissal), then never returns. The author asked where the emojis
+   * went the morning after approving the design — that is the whole case.
+   */
+  const [bloomHintDismissed, setBloomHintDismissed] = useState(
+    () => localStorage.getItem("commons.bloomHintSeen") === "yes"
+  );
+  const setBloom: typeof setBloomRaw = (next) => {
+    if (next && !bloomHintDismissed) {
+      localStorage.setItem("commons.bloomHintSeen", "yes");
+      setBloomHintDismissed(true);
+    }
+    setBloomRaw(next);
+  };
   const [gifUrl, setGifUrl] = useState("");
   const [gifNote, setGifNote] = useState<string | null>(null);
   const submitGif = async () => {
@@ -2398,6 +2414,20 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           <span>A newer version of the app just deployed — these frames are showing the previous one.</span>
           <button className="btn" onClick={reloadFrames}>
             Reload (R)
+          </button>
+        </div>
+      )}
+      {nav.view === "canvas" && frames.length > 0 && !bloomHintDismissed && (
+        <div className="nudge-banner">
+          <span>Right-click any screen to react — stamps, dots, GIFs, and what-ifs land where you aim.</span>
+          <button
+            className="btn ghost"
+            onClick={() => {
+              localStorage.setItem("commons.bloomHintSeen", "yes");
+              setBloomHintDismissed(true);
+            }}
+          >
+            Got it
           </button>
         </div>
       )}
