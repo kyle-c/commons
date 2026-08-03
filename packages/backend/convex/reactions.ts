@@ -14,7 +14,7 @@ import { accessibleProject, requireViewer, resolveViewer } from "./access";
  */
 
 /** The whole palette. A fixed set, because an emoji picker is a rabbit hole. */
-const STAMPS = ["✨", "🔥", "❓", "😬"];
+const STAMPS = ["👍", "❤️", "✨", "🔥", "😮", "❓", "😬"];
 
 export const VOTE_BUDGET = 5;
 

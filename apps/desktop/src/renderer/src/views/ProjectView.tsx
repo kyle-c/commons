@@ -2419,7 +2419,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
       )}
       {nav.view === "canvas" && frames.length > 0 && !bloomHintDismissed && (
         <div className="nudge-banner">
-          <span>Right-click any screen to react — stamps, dots, GIFs, and what-ifs land where you aim.</span>
+          <span>Hover the 👍 under a screen to react · right-click or ⌃-click for dots, GIFs, and what-ifs.</span>
           <button
             className="btn ghost"
             onClick={() => {
@@ -2438,27 +2438,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             style={{ left: bloom.x, top: bloom.y }}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            {["✨", "🔥", "❓", "😬"].map((emoji) => (
-              <button
-                key={emoji}
-                className="bloom-item"
-                title="Throw it here"
-                onClick={() => {
-                  void toggleReaction({
-                    frameId: bloom.frame._id,
-                    emoji,
-                    fx: bloom.fx,
-                    fy: bloom.fy,
-                    userId: me._id,
-                    sessionToken: sessionToken(),
-                  });
-                  playThrow();
-                  setBloom(null);
-                }}
-              >
-                {emoji}
-              </button>
-            ))}
+            {/* Emojis moved to the hover bar under each frame (the Meta
+                pattern); the bloom keeps the aimed tools. */}
             <button
               className="bloom-item"
               title={`Dot-vote this screen (${votesData?.votesLeft ?? 0} left)`}

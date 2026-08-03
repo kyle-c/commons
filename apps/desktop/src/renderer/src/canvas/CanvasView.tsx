@@ -16,6 +16,8 @@ import { tidyPositions } from "../lib/frameLayout";
 import { registerShortcut } from "../lib/shortcuts";
 import Icon from "../components/icons";
 import PreviewAppearanceButton from "../components/PreviewAppearanceButton";
+import { burstEmoji } from "../lib/burst";
+import { playPop } from "../lib/sounds";
 
 interface Viewport {
   x: number;
@@ -331,7 +333,18 @@ const FrameLayer = memo(function FrameLayer({
             style={{ left: pos.x, top: pos.y, width: frame.width, height: frame.height + 30 }}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <div className="frame-header" onMouseDown={(e) => onFrameDrag(frame, e)}>
+            <div
+              className="frame-header"
+              onMouseDown={(e) => {
+                if (e.ctrlKey && e.button === 0 && onBloom) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onBloom(frame, e.clientX, e.clientY, 0.5, 0.08);
+                  return;
+                }
+                onFrameDrag(frame, e);
+              }}
+            >
               <span>{frame.title}</span>
               <span className="route">{frame.routePath}</span>
               {frame.kind === "state" && (
@@ -495,8 +508,20 @@ const FrameLayer = memo(function FrameLayer({
               {!focused && url && (
                 <div
                   className="frame-shield"
-                  title="Click to interact · right-click to react"
-                  onMouseDown={(e) => onShieldDown(frame, e)}
+                  title="Click to interact · right-click or ⌃-click to react"
+                  onMouseDown={(e) => {
+                    // Explicit ⌃-click path: macOS usually synthesizes a
+                    // contextmenu for it, but one-button mice and some
+                    // trackpad configs don't — this doesn't gamble.
+                    if (e.ctrlKey && e.button === 0 && onBloom) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const box = e.currentTarget.getBoundingClientRect();
+                      onBloom(frame, e.clientX, e.clientY, (e.clientX - box.left) / box.width, (e.clientY - box.top) / box.height);
+                      return;
+                    }
+                    onShieldDown(frame, e);
+                  }}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -507,6 +532,44 @@ const FrameLayer = memo(function FrameLayer({
               )}
               {commentMode && <div className="frame-shield" onMouseDown={(e) => onShieldDown(frame, e)} />}
             </div>
+            {onReact && (
+              /* The Meta pattern, asked for by name: one quiet thumbs-up
+                 under every frame, full color on hover, and after a beat the
+                 whole set slides out. Clicking explodes the emoji, pops, and
+                 the reaction animates into the frame's corner cluster. */
+              <div className="rx" onMouseDown={(e) => e.stopPropagation()}>
+                <button className="rx-trigger" title="React">
+                  👍
+                </button>
+                <div className="rx-bar">
+                  {(
+                    [
+                      ["👍", "Like"],
+                      ["❤️", "Love"],
+                      ["✨", "Polish"],
+                      ["🔥", "Fire"],
+                      ["😮", "Whoa"],
+                      ["❓", "Question"],
+                      ["😬", "Yikes"],
+                    ] as const
+                  ).map(([emoji, name]) => (
+                    <button
+                      key={emoji}
+                      className="rx-emoji"
+                      title={name}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        burstEmoji(e.clientX, e.clientY, emoji);
+                        playPop();
+                        onReact(frame._id, emoji);
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
       })}

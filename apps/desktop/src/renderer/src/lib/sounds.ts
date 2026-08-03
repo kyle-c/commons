@@ -236,3 +236,19 @@ export function playThrow(): void {
     // Silence is an acceptable outcome.
   }
 }
+
+/** A reaction bursts: a bright little pop, the celebratory cousin of the throw. */
+export function playPop(): void {
+  if (throttled("pop")) return;
+  try {
+    const audioCtx = ctx();
+    if (!audioCtx) return;
+    const out = master(audioCtx, 0.13);
+    const t0 = audioCtx.currentTime + 0.02;
+    const base = 740 + Math.random() * 80;
+    note(audioCtx, out, base, t0, 0.07, 0.55);
+    note(audioCtx, out, base * 2, t0 + 0.05, 0.12, 0.35);
+  } catch {
+    // Silence is an acceptable outcome.
+  }
+}
