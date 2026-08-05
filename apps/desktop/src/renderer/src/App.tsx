@@ -290,7 +290,7 @@ export default function App() {
     <>
       <ProjectList me={me} setNav={setNav} onSignOut={doSignOut} tabStrip={tabStrip} />
       <ShortcutsHelp />
-      <Welcome name={me.name} />
+      <Welcome me={me} />
       <CommandPalette me={me} setNav={setNav} />
       <UpdateChip />
     </>

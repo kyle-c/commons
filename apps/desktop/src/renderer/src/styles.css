@@ -3940,6 +3940,68 @@ kbd {
   color: var(--accent);
 }
 
+/* ── Getting started (first-run checklist) ───────────────────────────────
+   Self-completing: checks come from lib/firsts marks at the real action
+   sites, never from a Next button. Lives at the head of the home grid,
+   retires itself when done or dismissed. */
+.getting-started {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+}
+.gs-step {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.gs-step.done {
+  opacity: 0.55;
+}
+.gs-step .hint {
+  display: block;
+}
+.gs-check {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Welcome doors ─────────────────────────────────────────────────── */
+.welcome-doors {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+.welcome-door {
+  text-align: left;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.welcome-door:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+.welcome-door span {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
 /* ── The reaction bar (the Meta pattern) ─────────────────────────────────
    One quiet thumbs-up below every frame; full color on hover; hold the
    hover a beat and the whole set slides out, each emoji bouncing on its
@@ -4171,7 +4233,69 @@ kbd {
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out);
 }
-.frame-note:hover /* ── The reaction bar (the Meta pattern) ─────────────────────────────────
+.frame-note:hover /* ── Getting started (first-run checklist) ───────────────────────────────
+   Self-completing: checks come from lib/firsts marks at the real action
+   sites, never from a Next button. Lives at the head of the home grid,
+   retires itself when done or dismissed. */
+.getting-started {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+}
+.gs-step {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.gs-step.done {
+  opacity: 0.55;
+}
+.gs-step .hint {
+  display: block;
+}
+.gs-check {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Welcome doors ─────────────────────────────────────────────────── */
+.welcome-doors {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+.welcome-door {
+  text-align: left;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.welcome-door:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+.welcome-door span {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* ── The reaction bar (the Meta pattern) ─────────────────────────────────
    One quiet thumbs-up below every frame; full color on hover; hold the
    hover a beat and the whole set slides out, each emoji bouncing on its
    own hover with its name in a tooltip. Clicking explodes it (lib/burst),

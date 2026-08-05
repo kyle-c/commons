@@ -97,3 +97,16 @@ export const resetAvatar = mutation({
     await ctx.db.patch(userId, { avatarStorageId: undefined, avatarUrl: user.googleAvatarUrl });
   },
 });
+
+/** First-run role choice; tunes the getting-started checklist. */
+export const setOrientation = mutation({
+  args: {
+    orientation: v.union(v.literal("designer"), v.literal("pm"), v.literal("engineer")),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireViewer(ctx, args);
+    await ctx.db.patch(userId, { orientation: args.orientation });
+  },
+});

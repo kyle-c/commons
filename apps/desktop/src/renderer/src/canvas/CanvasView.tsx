@@ -17,6 +17,7 @@ import { registerShortcut } from "../lib/shortcuts";
 import Icon from "../components/icons";
 import PreviewAppearanceButton from "../components/PreviewAppearanceButton";
 import { burstEmoji } from "../lib/burst";
+import { markFirst } from "../lib/firsts";
 import { playPop } from "../lib/sounds";
 
 interface Viewport {
@@ -561,6 +562,7 @@ const FrameLayer = memo(function FrameLayer({
                         e.stopPropagation();
                         burstEmoji(e.clientX, e.clientY, emoji);
                         playPop();
+                        markFirst("reaction");
                         onReact(frame._id, emoji);
                       }}
                     >
@@ -1172,6 +1174,7 @@ export default function CanvasView({
     try {
       if (!me) return;
       const threadId = await createThread({ projectId, createdBy: me._id, body, mentions, sessionToken: sessionToken(), ...coords });
+      markFirst("comment");
       setPendingPin((p) => (p ? { ...p, threadId } : p));
       setSelectedThread(threadId);
     } catch {

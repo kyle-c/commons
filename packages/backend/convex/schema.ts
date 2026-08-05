@@ -18,6 +18,9 @@ export default defineSchema({
     googleId: v.optional(v.string()),
     // The user's own playground workspace (kind "personal"), created at sign-in.
     personalWorkspaceId: v.optional(v.id("workspaces")),
+    // First-run answer to "what brings you here" — tunes the getting-started
+    // checklist (and later, defaults). Absent = never asked or skipped.
+    orientation: v.optional(v.union(v.literal("designer"), v.literal("pm"), v.literal("engineer"))),
   }).index("by_email", ["email"]),
 
   // A signed-in device. The token is held by the desktop app and passed to

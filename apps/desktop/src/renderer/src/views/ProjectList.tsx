@@ -16,6 +16,7 @@ import AccountMenu from "./AccountMenu";
 import Icon from "../components/icons";
 import RibbonCover from "../components/RibbonCover";
 import { AppChoice } from "./AppChoice";
+import GettingStarted from "./GettingStarted";
 import { vacuumFrom } from "../lib/celebrate";
 import { useFlip } from "../lib/flip";
 
@@ -319,6 +320,7 @@ export default function ProjectList({
       </div>
 
       <GitSetupBanner me={me} probeRemote={(projects ?? []).find((p) => p.gitRemote)?.gitRemote} />
+      <GettingStarted me={me} hasProjects={(projects ?? []).some((p) => !p.archivedAt)} />
 
       {projects === undefined && (
         // Perceived speed: the grid's shape lands before the data does.

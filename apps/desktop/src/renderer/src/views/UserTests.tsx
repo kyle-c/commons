@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import { timeAgo, sessionToken } from "../lib/session";
+import { markFirst } from "../lib/firsts";
 import { usePublicSiteUrl } from "../lib/publicUrl";
 import { playFirstResult } from "../lib/sounds";
 import Icon from "../components/icons";
@@ -91,6 +92,7 @@ function NewTestForm({
   const submit = async () => {
     setSaving(true);
     try {
+      markFirst("test");
       await create({
         projectId: project._id,
         userId: me._id,

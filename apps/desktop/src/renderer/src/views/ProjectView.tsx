@@ -20,6 +20,7 @@ import { getConvexUrl, initials, sessionToken, timeAgo } from "../lib/session";
 import { usePublicSiteUrl } from "../lib/publicUrl";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { playConnected, playDraftReady, playProposals, playThrow } from "../lib/sounds";
+import { markFirst } from "../lib/firsts";
 import { claimSurface, useSurfaceExclusivity } from "../lib/surfaces";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
@@ -1082,6 +1083,10 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const [connectionOpen, setConnectionOpen] = useState(false);
   // Shown after "Sign in to previews…" sends someone to the full-size app.
   const [signInHint, setSignInHint] = useState(false);
+  // First-run milestone: seeing the prototype counts when the view opens.
+  useEffect(() => {
+    if (nav.view === "prototype") markFirst("prototype");
+  }, [nav.view]);
   // Flow view: edges from recorded tester navigation; positions computed as
   // a layered left-to-right graph. Only queried while the view is open.
   // State frames (Flow v2) live only in the flow view; keep them off the
@@ -1806,6 +1811,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
    * the variant only needs the pattern to resolve, not this machine.
    */
   const fireWhatIf = async () => {
+    markFirst("whatif");
     const frame = whatIf?.frame;
     const prompt = whatIfPrompt.trim();
     if (!frame || !prompt) return;
@@ -1829,6 +1835,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   };
 
   const sendThreadToAgent = async (thread: ThreadWithMessages) => {
+    markFirst("agent");
     const frame = thread.frameId ? frames.find((f) => f._id === thread.frameId) : undefined;
     const firstBody = thread.messages[0]?.body ?? "Comment thread";
     const title = firstBody.length > 60 ? `${firstBody.slice(0, 57)}…` : firstBody;

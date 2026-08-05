@@ -1,48 +1,64 @@
 import { useState } from "react";
+import { useMutation } from "convex/react";
+import { api } from "@commons/backend/convex/_generated/api";
+import type { Doc } from "@commons/backend/convex/_generated/dataModel";
+import { sessionToken } from "../lib/session";
 
 const SEEN_KEY = "commons.welcomeSeen";
 
 /**
- * One-time orientation card after the first sign-in on this machine. Three
- * beats, each one thought: wander, react, go deeper. Copy stays universal
- * across desktop and the browser app (everything mentioned works in both).
+ * First run asks exactly one question — what brings you here — because the
+ * fastest path to value is different for the three people Commons serves.
+ * The answer tunes the getting-started card on home (and stores on the
+ * user, so later surfaces can default sensibly). No tour, no steps: each
+ * door is one sentence of promise, and the real teaching happens where the
+ * features live.
  */
-export default function Welcome({ name }: { name: string }) {
+export default function Welcome({ me }: { me: Doc<"users"> }) {
   const [seen, setSeen] = useState(() => localStorage.getItem(SEEN_KEY) === "1");
-  if (seen) return null;
+  const setOrientation = useMutation(api.users.setOrientation);
+  if (seen || me.orientation) return null;
+
+  const close = () => {
+    localStorage.setItem(SEEN_KEY, "1");
+    setSeen(true);
+  };
+  const choose = (orientation: "designer" | "pm" | "engineer") => {
+    void setOrientation({ orientation, userId: me._id, sessionToken: sessionToken() }).catch(() => {});
+    close();
+  };
 
   return (
     <div className="overlay-scrim">
       <div className="overlay-card welcome">
         <header>
-          <span>Welcome, {name.split(" ")[0]} 👋</span>
+          <span>Welcome, {me.name.split(" ")[0]} 👋</span>
         </header>
         <div className="welcome-body">
-          <p className="welcome-lead">Everything here is the real product, running live.</p>
-          <ul>
-            <li>
-              <strong>Wander.</strong> Pan like a map. Click a screen to try it, <kbd>Esc</kbd> steps out.
-            </li>
-            <li>
-              <strong>React.</strong> Press <kbd>C</kbd>, click anywhere, say the thing.
-            </li>
-            <li>
-              <strong>Go deeper.</strong> The Prototype tab runs the app full-size.
-            </li>
-          </ul>
+          <p className="welcome-lead">
+            Everything on the canvas is the real product, running live. What brings you here?
+          </p>
+          <div className="welcome-doors">
+            <button className="welcome-door" onClick={() => choose("designer")}>
+              <strong>I design it</strong>
+              <span>Mark up live screens, and ask an agent for working variants.</span>
+            </button>
+            <button className="welcome-door" onClick={() => choose("pm")}>
+              <strong>I steer it</strong>
+              <span>Review the real thing, react in one click, prove it with user tests.</span>
+            </button>
+            <button className="welcome-door" onClick={() => choose("engineer")}>
+              <strong>I build it</strong>
+              <span>Point Commons at a repo and every screen lands live on a shared canvas.</span>
+            </button>
+          </div>
           <p className="hint">
-            <kbd>?</kbd> shows every shortcut.
+            <kbd>?</kbd> shows every shortcut, whoever you are.
           </p>
         </div>
         <div className="welcome-actions">
-          <button
-            className="btn primary"
-            onClick={() => {
-              localStorage.setItem(SEEN_KEY, "1");
-              setSeen(true);
-            }}
-          >
-            Look around
+          <button className="btn ghost" onClick={close}>
+            Just looking
           </button>
         </div>
       </div>
