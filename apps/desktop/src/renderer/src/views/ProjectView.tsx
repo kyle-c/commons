@@ -2331,9 +2331,18 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             onSignIn={
               signInTarget
                 ? () => {
-                    setOpenSetting(null);
-                    setNav({ ...nav, view: "prototype" });
-                    setSignInHint(true);
+                    const url = resolveFrameUrl("/", liveStatus, project?.previewUrl)?.url;
+                    if (window.commons?.openSignInWindow && url) {
+                      // The window shares the frames' cookie session, and a
+                      // real window survives what an iframe cannot: OAuth
+                      // redirects, popups, 2FA.
+                      setOpenSetting(null);
+                      void window.commons.openSignInWindow(url).then(() => reloadFrames());
+                    } else {
+                      setOpenSetting(null);
+                      setNav({ ...nav, view: "prototype" });
+                      setSignInHint(true);
+                    }
                   }
                 : undefined
             }

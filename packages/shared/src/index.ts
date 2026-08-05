@@ -346,6 +346,8 @@ export interface CommonsApi {
     unresolvedDynamic: string[];
   }>;
   onSurveyProgress(cb: (p: { visited: number; total: number; current: string }) => void): () => void;
+  /** A real browser window sharing the frames' session, for auth an iframe breaks (OAuth, 2FA). Resolves on close. */
+  openSignInWindow(url: string): Promise<boolean>;
   /** Everything a commit-everything would sweep up, so the user sees it first. */
   pendingChanges(repoPath: string): Promise<{
     ok: boolean;

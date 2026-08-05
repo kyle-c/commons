@@ -208,6 +208,35 @@ app.whenReady().then(() => {
   ipcMain.handle("inspect-repo", (_e, repoPath: string) => inspectRepo(repoPath));
   ipcMain.handle("list-repo-apps", (_e, fromPath: string) => listRepoApps(fromPath));
   ipcMain.handle("discover-route-links", (_e, repoPath: string) => discoverRouteLinks(repoPath));
+  /**
+   * A real window for signing in to previews. The prototype-iframe route
+   * breaks on exactly the auth that matters: OAuth redirects refuse to be
+   * framed (X-Frame-Options), popups from iframes are blocked by the
+   * navigation lockdown, and 2FA flows lean on both. This window shares the
+   * default session with the canvas iframes — same cookie jar — so a
+   * sign-in completed here signs in every frame. Resolves when the person
+   * closes it; the renderer reloads frames then.
+   */
+  ipcMain.handle("open-signin-window", (_e, url: string) => {
+    if (!/^https?:\/\//.test(url)) return false;
+    return new Promise<boolean>((resolve) => {
+      const win = new BrowserWindow({
+        width: 520,
+        height: 720,
+        title: "Sign in to previews",
+        webPreferences: { sandbox: true },
+      });
+      // Auth popups (OAuth chooser windows) are the point — allow them, in
+      // this window's session, sized like the popups they are.
+      win.webContents.setWindowOpenHandler(() => ({
+        action: "allow",
+        overrideBrowserWindowOptions: { width: 480, height: 640, webPreferences: { sandbox: true } },
+      }));
+      win.on("closed", () => resolve(true));
+      void win.loadURL(url);
+    });
+  });
+
   ipcMain.handle("survey-app", (e, baseUrl: string, routes: { path: string; dynamic: boolean }[]) =>
     surveyApp(baseUrl, routes, (p) => e.sender.send("survey-progress", p))
   );
