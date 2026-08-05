@@ -439,6 +439,8 @@ function UrlSettingBody({
   onDiagnose,
   onSignIn,
   onReplayDeploys,
+  onBuildPreview,
+  buildStatus,
   validate,
   onSave,
 }: {
@@ -457,6 +459,9 @@ function UrlSettingBody({
   onSignIn?: () => void;
   /** Connected-but-quiet: ask GitHub to re-send its recent deploy events. */
   onReplayDeploys?: () => Promise<number>;
+  /** Commons mints the link: build statically in the repo's CI, serve from here. */
+  onBuildPreview?: () => Promise<{ ok: boolean; reason?: string }>;
+  buildStatus?: { status: string; ref: string; error: string | null } | null;
   validate: (v: string) => string | null;
   onSave: (v: string) => Promise<void>;
 }) {
@@ -494,6 +499,31 @@ function UrlSettingBody({
       Replay past deploys
     </button>
   ) : null;
+  const [buildNote, setBuildNote] = useState<string | null>(null);
+  const buildLink = onBuildPreview ? (
+    <button
+      className="btn ghost diagnose-link"
+      onClick={async () => {
+        setBuildNote("Asking your repo's Actions to build…");
+        const result = await onBuildPreview().catch(() => ({ ok: false }));
+        setBuildNote(
+          result.ok
+            ? "Building — the link writes itself here when it's done."
+            : "reason" in result && result.reason === "already_building"
+              ? "A build is already running."
+              : "Couldn't start — is the commons-agent workflow installed?"
+        );
+      }}
+    >
+      Build a preview on Commons
+    </button>
+  ) : null;
+  const buildStatusNote =
+    buildStatus?.status === "building"
+      ? "A Commons preview is building in your repo's Actions…"
+      : buildStatus?.status === "error"
+        ? `The last build didn't make it: ${buildStatus.error ?? "unknown"}`
+        : null;
   const signInLink = onSignIn ? (
     <button className="btn ghost diagnose-link" onClick={onSignIn}>
       Sign in to previews…
@@ -525,13 +555,16 @@ function UrlSettingBody({
         <>
           <span className="hint">{hint}</span>
           {connectionNote}
-          {(replayLink || signInLink) && (
+          {(replayLink || signInLink || buildLink) && (
             <div className="reveal-form-row">
+              {buildLink}
               {replayLink}
               {signInLink}
             </div>
           )}
           {replayNote && <span className="hint">{replayNote}</span>}
+          {buildNote && <span className="hint">{buildNote}</span>}
+          {buildStatusNote && <span className="hint">{buildStatusNote}</span>}
           {error && <span className="form-error">{error}</span>}
           <div className="reveal-form-row">
             <input
@@ -1111,6 +1144,11 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const curateAnnotation = useMutation(api.annotations.curate);
   const setSupportsDarkMode = useMutation(api.projects.setSupportsDarkMode);
   const replayDeploysAction = useAction(api.githubApp.replayDeploys);
+  const startPreviewBuild = useMutation(api.previews.startBuild);
+  const previewBuildStatus = useQuery(
+    api.previews.status,
+    openSetting === "preview" ? { projectId: nav.projectId, userId: me._id, sessionToken: sessionToken() } : "skip"
+  );
   const [gifFor, setGifFor] = useState<Doc<"frames"> | null>(null);
   const [gifAnchor, setGifAnchor] = useState<{ fx: number; fy: number } | null>(null);
   const giphy = useQuery(
@@ -2258,6 +2296,19 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             learnedAt={project.lastDeployAt}
             connection={previewConnectionNote}
             onDiagnose={() => setConnectionOpen(true)}
+            onBuildPreview={
+              project.gitRemote && (!project.previewUrl || project.previewSource === "commons")
+                ? async () => {
+                    const result = await startPreviewBuild({
+                      projectId: nav.projectId,
+                      userId: me._id,
+                      sessionToken: sessionToken(),
+                    });
+                    return result;
+                  }
+                : undefined
+            }
+            buildStatus={previewBuildStatus}
             onReplayDeploys={
               githubStatus && githubStatus.repoCovered !== false && !githubStatus.seenDeploy
                 ? async () => {

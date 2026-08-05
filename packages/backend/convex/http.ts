@@ -472,6 +472,92 @@ http.route({
 // The two files cloud-agent setup asks a human to look at. Served with the
 // product so they version with it, and so the workflow can fetch the runner
 // fresh at run time (fixes ship without touching anyone's repo).
+// ── Commons-hosted previews ────────────────────────────────────────────────
+// The build's upload path (token-gated, authorize-before-store like the
+// crawl ingest) and the public serving path (302-to-storage like /app/).
+
+http.route({
+  path: "/api/preview/file",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const params = new URL(request.url).searchParams;
+    const buildId = request.headers.get("X-Commons-Build") ?? params.get("buildId") ?? "";
+    const runToken = request.headers.get("X-Commons-Token") ?? params.get("token") ?? "";
+    const path = params.get("path") ?? "";
+    if (!path || path.includes("..")) return json({ ok: false, error: "bad path" }, 400);
+    const build = await ctx.runQuery(internal.previews.buildTokenOk, { buildId, runToken });
+    if (!build) return json({ ok: false, error: "forbidden" }, 403);
+    const blob = await request.blob();
+    if (blob.size > 8 * 1024 * 1024) return json({ ok: false, error: "file too large" }, 413);
+    const storageId = await ctx.storage.store(blob);
+    try {
+      const result = await ctx.runMutation(internal.previews.appendFile, { buildId: build.id, path, storageId });
+      if (!result.ok) return json({ ok: false, error: "build closed" }, 409);
+    } catch (error) {
+      await ctx.storage.delete(storageId).catch(() => {});
+      throw error;
+    }
+    return json({ ok: true });
+  }),
+});
+
+http.route({
+  path: "/api/preview/finish",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    let body: { buildId?: string; runToken?: string; indexHtml?: string; defaultRef?: boolean; error?: string };
+    try {
+      body = await request.json();
+    } catch {
+      return json({ ok: false, error: "bad json" }, 400);
+    }
+    const build = await ctx.runQuery(internal.previews.buildTokenOk, {
+      buildId: body.buildId ?? "",
+      runToken: body.runToken ?? "",
+    });
+    if (!build) return json({ ok: false, error: "forbidden" }, 403);
+    if (body.indexHtml && body.indexHtml.length > 900_000) {
+      return json({ ok: false, error: "index too large" }, 413);
+    }
+    await ctx.runMutation(internal.previews.finishBuild, {
+      buildId: build.id,
+      runToken: body.runToken ?? "",
+      indexHtml: body.indexHtml,
+      defaultRef: body.defaultRef,
+      error: body.error,
+    });
+    return json({ ok: true });
+  }),
+});
+
+http.route({
+  pathPrefix: "/preview/",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const rest = new URL(request.url).pathname.slice("/preview/".length);
+    const [previewToken, refRaw, ...pathParts] = rest.split("/");
+    const ref = decodeURIComponent(refRaw ?? "");
+    if (!previewToken || !refRaw) return new Response("not found", { status: 404 });
+    const build = await ctx.runQuery(internal.previews.buildForServing, { previewToken, ref });
+    if (!build) return new Response("No preview built here yet.", { status: 404 });
+    const path = decodeURIComponent(pathParts.join("/"));
+    const file = path ? build.files.find((f) => f.path === path) : null;
+    if (file) {
+      const fileUrl = await ctx.storage.getUrl(file.storageId);
+      if (fileUrl) {
+        // no-store: a superseding build deletes old blobs; a cached redirect
+        // would 404 (the web-app route learned this first).
+        return new Response(null, { status: 302, headers: { Location: fileUrl, "Cache-Control": "no-store" } });
+      }
+    }
+    // SPA fallback: the shell for anything unmatched, so client routing works.
+    return new Response(build.indexHtml ?? "", {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" },
+    });
+  }),
+});
+
 http.route({
   path: "/setup/commons-agent.yml",
   method: "GET",

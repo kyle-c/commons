@@ -144,7 +144,7 @@ export default defineSchema({
     // decision and the GitHub listener never overwrites it; "github" was
     // learned from deployment_status events and may be refined as more
     // deploys arrive. Absent = manual (every pre-GitHub-App row).
-    previewSource: v.optional(v.union(v.literal("manual"), v.literal("github"))),
+    previewSource: v.optional(v.union(v.literal("manual"), v.literal("github"), v.literal("commons"))),
     branchPatternSource: v.optional(v.union(v.literal("manual"), v.literal("github"))),
     // Last successful production deploy seen for this project's repo.
     lastDeployAt: v.optional(v.number()),
@@ -171,6 +171,8 @@ export default defineSchema({
     supportsDarkMode: v.optional(v.boolean()),
     // Custom uploaded card cover (Convex storage); beats the brand gradient.
     coverImageId: v.optional(v.id("_storage")),
+    // Unguessable key for Commons-hosted preview URLs (/preview/<token>/…).
+    previewToken: v.optional(v.string()),
     // Web share (SNAP-4/DL-3 lite): anyone with /p/<shareToken> gets the
     // read-only snapshot canvas + threads. Minted/revoked in Sharing.
     shareToken: v.optional(v.string()),
@@ -186,7 +188,8 @@ export default defineSchema({
         v.literal("parked")
       )
     ),
-  }).index("by_share_token", ["shareToken"]),
+  }).index("by_share_token", ["shareToken"])
+    .index("by_preview_token", ["previewToken"]),
 
   // Where each teammate's working copy of a project lives, per machine —
   // paths only mean something on the device that created them (a stale
@@ -548,6 +551,25 @@ export default defineSchema({
   // The web app (renderer bundle) served at /app for non-repo personas —
   // clients on Windows, PMs, anyone without the desktop install. Published
   // by scripts/publish-webapp.mjs; newest row wins.
+  /**
+   * Commons-hosted previews: static builds produced in the customer's own
+   * CI and served from storage — the link Commons mints when nobody has
+   * Vercel. Files append during upload; index lands inline at finish (same
+   * shape the web app bundle proved). One row per (project, ref) build;
+   * newer builds supersede, old rows are pruned at finish.
+   */
+  previewBuilds: defineTable({
+    projectId: v.id("projects"),
+    ref: v.string(),
+    status: v.union(v.literal("building"), v.literal("ready"), v.literal("error")),
+    runToken: v.string(),
+    files: v.array(v.object({ path: v.string(), storageId: v.id("_storage") })),
+    indexHtml: v.optional(v.string()),
+    error: v.optional(v.string()),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_ref", ["projectId", "ref"]),
+
   webApp: defineTable({
     indexHtml: v.string(),
     files: v.array(v.object({ name: v.string(), storageId: v.id("_storage") })),

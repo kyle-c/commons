@@ -28,6 +28,7 @@ import type * as landing from "../landing.js";
 import type * as metrics from "../metrics.js";
 import type * as presence from "../presence.js";
 import type * as previewLogic from "../previewLogic.js";
+import type * as previews from "../previews.js";
 import type * as projects from "../projects.js";
 import type * as reactions from "../reactions.js";
 import type * as repoLinks from "../repoLinks.js";
@@ -66,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   metrics: typeof metrics;
   presence: typeof presence;
   previewLogic: typeof previewLogic;
+  previews: typeof previews;
   projects: typeof projects;
   reactions: typeof reactions;
   repoLinks: typeof repoLinks;

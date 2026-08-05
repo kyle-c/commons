@@ -653,6 +653,18 @@ export const cascadeDeleteProject = internalMutation({
     }
     if (exhausted()) return void (await reschedule(ctx, projectId));
 
+    // Preview builds own a manifest of storage blobs each; blob-first.
+    const buildRows = await ctx.db
+      .query("previewBuilds")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .take(Math.max(1, Math.floor((BUDGET - spent) / 8)));
+    for (const build of buildRows) {
+      for (const file of build.files) await ctx.storage.delete(file.storageId).catch(() => {});
+      await ctx.db.delete(build._id);
+      spent += 1 + build.files.length / 8;
+    }
+    if (exhausted()) return void (await reschedule(ctx, projectId));
+
     // GIF reactions own storage when uploaded; delete blob-first like
     // messages' images, so nothing is stranded unreachable.
     const gifRows = await ctx.db

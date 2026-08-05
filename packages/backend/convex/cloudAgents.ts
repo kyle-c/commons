@@ -360,6 +360,80 @@ const payload = JSON.parse(process.env.COMMONS_PAYLOAD);
 // Flow v2: a crawl reuses this same workflow/event. Hand off to the browser
 // crawler (fetched fresh from Commons) and exit; the code-agent path below
 // only runs for ordinary agent dispatches.
+if (payload.mode === "preview") {
+  // Static preview build: detect, build, upload, report. Everything speaks
+  // through finish — success carries index.html, failure carries the reason
+  // in plain words, and either way the row never hangs in "building".
+  const finish = async (body) => {
+    await fetch(payload.callback + "/api/preview/finish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ buildId: payload.buildId, runToken: payload.runToken, ...body }),
+    });
+  };
+  try {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    if (payload.ref) {
+      execFileSync("git", ["fetch", "origin", payload.ref], { stdio: "inherit" });
+      execFileSync("git", ["checkout", payload.ref], { stdio: "inherit" });
+    }
+    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+    let outDir = null;
+    execFileSync("npm", ["install", "--no-fund", "--no-audit"], { stdio: "inherit" });
+    if (deps.vite) {
+      execFileSync("npx", ["vite", "build"], { stdio: "inherit" });
+      outDir = "dist";
+    } else if (deps.expo) {
+      execFileSync("npx", ["expo", "export", "--platform", "web"], { stdio: "inherit" });
+      outDir = "dist";
+    } else if (deps.next) {
+      const config = ["next.config.js", "next.config.mjs", "next.config.ts"]
+        .map((f) => { try { return fs.readFileSync(f, "utf8"); } catch { return ""; } })
+        .join("");
+      if (!/output\s*:\s*["']export["']/.test(config)) {
+        await finish({ error: "This Next.js app isn't configured for static export (output: 'export'), so it needs a server — paste a deployed URL instead." });
+        process.exit(0);
+      }
+      execFileSync("npx", ["next", "build"], { stdio: "inherit" });
+      outDir = "out";
+    } else {
+      await finish({ error: "No static build recognized here (Vite, Expo web, or export-configured Next) — paste a deployed URL instead." });
+      process.exit(0);
+    }
+    const files = [];
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else files.push(full);
+      }
+    };
+    walk(outDir);
+    let index = "";
+    let uploaded = 0;
+    for (const file of files) {
+      const rel = path.relative(outDir, file).split(path.sep).join("/");
+      if (rel === "index.html") { index = fs.readFileSync(file, "utf8"); continue; }
+      if (rel.endsWith(".map") || fs.statSync(file).size > 8 * 1024 * 1024) continue;
+      if (uploaded >= 190) break;
+      await fetch(payload.callback + "/api/preview/file?path=" + encodeURIComponent(rel), {
+        method: "POST",
+        headers: { "X-Commons-Build": payload.buildId, "X-Commons-Token": payload.runToken },
+        body: fs.readFileSync(file),
+      });
+      uploaded += 1;
+    }
+    const defaultBranch = process.env.GITHUB_REF_NAME || "";
+    await finish({ indexHtml: index, defaultRef: !payload.ref || payload.ref === defaultBranch });
+  } catch (error) {
+    await finish({ error: String(error && error.message || error).slice(0, 500) });
+    process.exit(0);
+  }
+  process.exit(0);
+}
+
 if (payload.mode === "crawl") {
   // Playwright isn't in the agent runner's deps; install it and its browser
   // just for the crawl. The crawler is written into /tmp/commons/ so its own
