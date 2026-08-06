@@ -14,4 +14,6 @@ const crons = cronJobs();
 // is days of a spinner nobody can stop. Cloud sessions have no host at all.
 crons.interval("finalize stalled agent sessions", { minutes: 10 }, internal.agentSessions.finalizeStalled, {});
 
+crons.interval("sweep stalled preview builds", { minutes: 10 }, internal.previews.sweepStalled, {});
+
 export default crons;

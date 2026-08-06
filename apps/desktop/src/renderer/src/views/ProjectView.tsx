@@ -498,7 +498,7 @@ function UrlSettingBody({
         setReplayNote(n > 0 ? `Replaying ${n} past deploy${n === 1 ? "" : "s"} — give it a moment.` : "GitHub had nothing recent to replay — deploy once and it fills in.");
       }}
     >
-      Replay past deploys
+      Replay deploys
     </button>
   ) : null;
   const [buildNote, setBuildNote] = useState<string | null>(null);
@@ -510,19 +510,19 @@ function UrlSettingBody({
         const result = await onBuildPreview().catch(() => ({ ok: false }));
         setBuildNote(
           result.ok
-            ? "Building — the link writes itself here when it's done."
+            ? null
             : "reason" in result && result.reason === "already_building"
               ? "A build is already running."
               : "Couldn't start — is the commons-agent workflow installed?"
         );
       }}
     >
-      Build a preview on Commons
+      Build a preview
     </button>
   ) : null;
   const buildStatusNote =
     buildStatus?.status === "building"
-      ? "A Commons preview is building in your repo's Actions…"
+      ? "Building in your repo's Actions — the link writes itself here."
       : buildStatus?.status === "error"
         ? `The last build didn't make it: ${buildStatus.error ?? "unknown"}`
         : null;
@@ -1315,7 +1315,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
       return `${githubStatus.accounts.join(", ")} connected, but this repo isn't in the installation. Add it under Configure.`;
     }
     if (!githubStatus.seenDeploy) {
-      return `${githubStatus.accounts.join(", ")} connected — no deploy seen yet.`;
+      return "GitHub connected — no deploy seen yet.";
     }
     return null;
   })();
@@ -2307,7 +2307,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         >
           <UrlSettingBody
             label="Preview link"
-            hint="Your deployed URL. Screens and tests fall back to it."
+            hint="Your app on the web. Screens use it when no dev server is running."
             placeholder="https://myapp.vercel.app"
             value={project.previewUrl}
             learned={project.previewSource === "github"}
@@ -2383,7 +2383,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         >
           <UrlSettingBody
             label="Draft previews"
-            hint="A live link per agent draft. Paste your host's pattern, {branch} for the name."
+            hint="Every agent draft gets its own live link the whole team can open. If your host makes per-branch URLs, paste the pattern with {branch} where the branch name goes."
             placeholder={`https://${vercelProject ?? "myapp"}-git-{branch}-team.vercel.app`}
             value={project.branchPreviewPattern}
             learned={project.branchPatternSource === "github"}
@@ -3039,6 +3039,16 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         />
       ) : (
         <PrototypeView
+          notes={(() => {
+            const byRoute: Record<string, { text: string; inferred: boolean }[]> = {};
+            for (const a of annotationData?.annotations ?? []) {
+              if (a.status !== "approved") continue;
+              const frame = frames.find((f) => f._id === a.frameId);
+              if (!frame?.routePath) continue;
+              (byRoute[frame.routePath] ??= []).push({ text: a.text, inferred: a.citations.length === 0 });
+            }
+            return byRoute;
+          })()}
           frames={canvasFrames}
           devStatus={liveStatus}
           previewUrl={project.previewUrl}

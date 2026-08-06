@@ -917,19 +917,27 @@ textarea:focus {
 }
 .proto-notes {
   position: absolute;
-  right: 14px;
-  top: 60px;
-  bottom: 20px;
-  width: 300px;
+  right: 12px;
+  top: 12px;
+  bottom: 12px;
+  width: 320px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 14px;
   z-index: 8;
-  pointer-events: none;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  padding: 12px 14px;
+  animation: panel-in-right var(--dur-med) var(--ease-out);
 }
-.proto-notes .frame-note {
-  pointer-events: auto;
+.proto-notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
 }
 .proto-stage {
   flex: 1;
@@ -989,7 +997,7 @@ textarea:focus {
 
 .user-tests {
   position: fixed;
-  top: 98px; /* titlebar + proto toolbar + gutter */
+  top: 138px; /* titlebar 44 + subnav 40 + proto toolbar 44 + gutter — never over its own button */
   right: 12px;
   bottom: 12px;
   width: 460px;
@@ -3461,11 +3469,15 @@ kbd {
 }
 
 /* Reads as a link inside the popover's prose, not a third competing button. */
+/* An action in a popover is a button, not a hyperlink cosplaying one:
+   the text-only look wrapped badly and read as prose (the author's call). */
 .diagnose-link {
   align-self: flex-start;
-  padding-left: 0;
-  padding-right: 0;
-  color: var(--accent);
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-primary);
 }
 
 /* ── Publish panel ───────────────────────────────────────────────────────

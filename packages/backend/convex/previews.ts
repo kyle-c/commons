@@ -99,6 +99,21 @@ export const dispatchBuild = internalAction({
     const { installationToken } = await import("./githubApp");
     try {
       const token = await installationToken(installationId);
+      // Preflight: repository_dispatch returns 204 whether or not any
+      // workflow listens — a repo without commons-agent.yml swallows the
+      // event and the build waits forever on a run that never starts. Ask
+      // for the file first and refuse in plain words instead.
+      const wf = await fetch(
+        `https://api.github.com/repos/${fullName}/contents/.github/workflows/commons-agent.yml`,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } }
+      );
+      if (wf.status === 404) {
+        return void (await ctx.runMutation(internal.previews.markError, {
+          buildId: args.buildId,
+          runToken: args.runToken,
+          error: "This repo doesn't have the Commons workflow yet — add it from the agent setup step, then try again.",
+        }));
+      }
       const response = await fetch(`https://api.github.com/repos/${fullName}/dispatches`, {
         method: "POST",
         headers: {
@@ -250,5 +265,26 @@ export const status = query({
       .collect();
     const newest = builds.sort((a, b) => b._creationTime - a._creationTime)[0];
     return newest ? { status: newest.status, ref: newest.ref, error: newest.error ?? null } : null;
+  },
+});
+
+/**
+ * The catch-all the preflight can't cover: a workflow that started and died
+ * without reporting (crashed runner, cancelled run, network). Building
+ * beyond 25 minutes is a corpse — the workflow itself times out at 30 —
+ * and a row stuck "building" pins the popover to a lie forever.
+ */
+export const sweepStalled = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - 25 * 60 * 1000;
+    const builds = await ctx.db.query("previewBuilds").collect();
+    for (const build of builds) {
+      if (build.status !== "building" || build._creationTime > cutoff) continue;
+      await ctx.db.patch(build._id, {
+        status: "error",
+        error: "The build never reported back — its Actions run may have failed. Check the repo's Actions tab, or try again.",
+      });
+    }
   },
 });

@@ -6,6 +6,7 @@ import { registerShortcut } from "../lib/shortcuts";
 import UserTests from "./UserTests";
 import Icon, { type IconName } from "../components/icons";
 import PreviewAppearanceButton from "../components/PreviewAppearanceButton";
+import { usePublicSiteUrl } from "../lib/publicUrl";
 
 // height > 0 marks a framed device — "Open in browser" wraps those in the
 // device-sized preview harness so the browser keeps the form factor.
@@ -56,6 +57,7 @@ export default function PrototypeView({
   const [testsOpen, setTestsOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true);
   const routeNotes = notes?.[routePath] ?? [];
+  const anyNotes = Object.keys(notes ?? {}).length > 0;
   /**
    * PRO-3: a Figma-backed project can flip the stage to the Figma prototype.
    * The embed needs no token — Figma's own viewer handles auth inside the
@@ -79,6 +81,11 @@ export default function PrototypeView({
   // Route/device switches keep the stage calm: shimmer under the incoming
   // iframe, fade it in on load — no white flash between screens.
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  const publicSite = usePublicSiteUrl();
+  // The globe opens something you can hand to anyone: the shared prototype
+  // page when the project has a share link. localhost only means anything
+  // on this machine.
+  const shareUrl = project.shareToken ? `${publicSite}/g/${project.shareToken}` : null;
   const loaded = url !== null && loadedUrl === url;
 
   return (
@@ -112,11 +119,11 @@ export default function PrototypeView({
           </button>
         )}
         {url && !figmaMode && project.supportsDarkMode && <PreviewAppearanceButton />}
-        {routeNotes.length > 0 && (
+        {anyNotes && (
           <button
             className={`btn ghost icon-btn ${notesOpen ? "active" : ""}`}
             aria-label="Design notes"
-            title="The approved rationale for this screen"
+            title="Design notes: the approved rationale, per screen"
             onClick={() => setNotesOpen((o) => !o)}
           >
             <Icon name="pen" />
@@ -138,8 +145,19 @@ export default function PrototypeView({
           <button
             className="btn ghost icon-btn"
             aria-label="Open in your browser"
-            title={device.height ? `Open in your browser, framed at ${device.width}×${device.height}` : "Open in your browser"}
+            title={
+              shareUrl
+                ? "Open the shared prototype in your browser — the link anyone can use"
+                : device.height
+                  ? `Open in your browser, framed at ${device.width}×${device.height}`
+                  : "Open in your browser"
+            }
             onClick={async () => {
+              if (shareUrl) {
+                if (window.commons) await window.commons.openExternal(shareUrl);
+                else window.open(shareUrl);
+                return;
+              }
               if (!window.commons) {
                 window.open(url);
                 return;
@@ -171,8 +189,15 @@ export default function PrototypeView({
         />
       )}
       <div className="proto-body">
-        {notesOpen && routeNotes.length > 0 && (
+        {notesOpen && anyNotes && (
           <div className="proto-notes">
+            <div className="proto-notes-head">
+              <span>Design notes</span>
+              <button className="btn ghost icon-btn" aria-label="Close" onClick={() => setNotesOpen(false)}>
+                ✕
+              </button>
+            </div>
+            {routeNotes.length === 0 && <span className="hint">No approved notes for this screen yet.</span>}
             {routeNotes.map((note, i) => (
               <div key={i} className="frame-note">
                 {note.text}
