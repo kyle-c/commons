@@ -1020,7 +1020,7 @@ ${deepLink ? `<meta http-equiv="refresh" content="0;url=${deepLink}" />` : ""}
   .card { max-width: 420px; padding: 32px; background: #21221d; border: 1px solid #2a2b24; border-radius: 12px; }
   h1 { font-size: 20px; margin: 0 0 8px; font-family: Georgia, 'Times New Roman', serif; font-weight: 600; }
   p { margin: 0; color: #a3a195; }
-  a { color: #45a898; }
+  a { color: #c8743f; }
 </style>
 </head>
 <body>
@@ -1090,7 +1090,7 @@ function testerHarnessHtml(test: TestDoc, previewUrl: string): string {
   .bar .task { flex: 1; font-size: 15px; }
   .btn { border: 1px solid #46473d; background: #2b2c25; color: #edebe0; border-radius: 8px;
          padding: 8px 14px; font: inherit; cursor: pointer; }
-  .btn.primary { background: #45a898; border-color: #45a898; color: #fff; }
+  .btn.primary { background: #c8743f; border-color: #c8743f; color: #1a1b17; }
   .btn.ghost { background: transparent; color: #a3a195; }
   .overlay { position: fixed; inset: 0; background: #1a1b17; display: flex; align-items: center;
              justify-content: center; padding: 24px; overflow: auto; z-index: 5; }
@@ -1107,9 +1107,9 @@ function testerHarnessHtml(test: TestDoc, previewUrl: string): string {
   .scale { display: flex; gap: 8px; }
   .scale button { flex: 1; padding: 10px 0; border-radius: 8px; border: 1px solid #46473d;
                   background: #2b2c25; color: #edebe0; font: inherit; cursor: pointer; }
-  .scale button.on { background: #45a898; border-color: #45a898; color: #fff; }
-  .flash { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); background: #45a898;
-           color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px; display: none; z-index: 10; }
+  .scale button.on { background: #c8743f; border-color: #c8743f; color: #1a1b17; }
+  .flash { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); background: #c8743f;
+           color: #1a1b17; padding: 10px 18px; border-radius: 999px; font-size: 14px; display: none; z-index: 10; }
   .hidden { display: none !important; }
 </style>
 </head>
