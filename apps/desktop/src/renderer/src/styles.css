@@ -4092,11 +4092,6 @@ kbd {
    pops (lib/sounds), and the reaction lands in the corner cluster. */
 .rx {
   position: absolute;
-  left: 8px;
-  /* Anchored to the frame's bottom edge and growing DOWNWARD: a negative
-     bottom anchored the pill's baseline, so the taller revealed bar rode up
-     into the frame and clipped against the app inside it. */
-  top: calc(100% + 8px);
   display: flex;
   align-items: center;
   z-index: 5;

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
@@ -328,8 +328,8 @@ const FrameLayer = memo(function FrameLayer({
               : resolveFrameUrl(frame.routePath, devStatus, previewUrl);
         const url = source?.url ?? null;
         return (
+          <Fragment key={frame._id}>
           <div
-            key={frame._id}
             className={`frame ${focused ? "focused" : ""}`}
             style={{ left: pos.x, top: pos.y, width: frame.width, height: frame.height + 30 }}
             onMouseDown={(e) => e.stopPropagation()}
@@ -533,12 +533,18 @@ const FrameLayer = memo(function FrameLayer({
               )}
               {commentMode && <div className="frame-shield commenting" onMouseDown={(e) => onShieldDown(frame, e)} />}
             </div>
+          </div>
             {onReact && (
-              /* The Meta pattern, asked for by name: one quiet thumbs-up
-                 under every frame, full color on hover, and after a beat the
-                 whole set slides out. Clicking explodes the emoji, pops, and
-                 the reaction animates into the frame's corner cluster. */
-              <div className="rx" onMouseDown={(e) => e.stopPropagation()}>
+              /* A SIBLING of .frame, not a child, positioned in canvas
+                 coordinates like the notes: .frame carries content-visibility
+                 (implying paint containment), so anything a descendant paints
+                 outside the frame's box is silently clipped — this bar spent
+                 three bug reports invisible for exactly that reason. */
+              <div
+                className="rx"
+                style={{ left: pos.x + 8, top: pos.y + frame.height + 38 }}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
                 <button className="rx-trigger" title="React">
                   👍
                 </button>
@@ -572,7 +578,7 @@ const FrameLayer = memo(function FrameLayer({
                 </div>
               </div>
             )}
-          </div>
+        </Fragment>
         );
       })}
     </>
