@@ -3771,6 +3771,19 @@ kbd {
   overflow: visible;
   pointer-events: none;
 }
+.edge-delete {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  padding: 4px 12px;
+  box-shadow: var(--shadow-panel);
+  color: var(--danger);
+  white-space: nowrap;
+}
+.flow-edge.selected .flow-edge-label {
+  font-weight: 600;
+}
 .flow-edge-label {
   fill: var(--text-secondary);
   font-size: 13px;

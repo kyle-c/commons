@@ -1108,6 +1108,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   );
   const startCrawl = useMutation(api.flows.startCrawl);
   const addFlowEdge = useMutation(api.flows.addEdge);
+  const deleteFlowEdge = useMutation(api.flows.deleteEdge);
+  const clearFlowEdges = useMutation(api.flows.clearEdges);
   const [crawlNote, setCrawlNote] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [drawOpen, setDrawOpen] = useState(false);
@@ -2891,6 +2893,17 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               <button className="btn ghost" onClick={() => setDrawOpen(true)}>
                 Draw a path by hand…
               </button>
+              {(flowEdges ?? []).some((e) => e.source === "manual") && (
+                <button
+                  className="btn ghost quiet-action"
+                  title="Remove every hand-drawn path. Tester-derived and code-declared paths stay."
+                  onClick={() =>
+                    void clearFlowEdges({ projectId: nav.projectId, source: "manual", userId: me._id, sessionToken: sessionToken() }).catch(() => {})
+                  }
+                >
+                  Clear drawn paths
+                </button>
+              )}
             </div>
           )}
           {drawOpen && (
@@ -2967,7 +2980,10 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             devStatus={{ state: "stopped" }}
             previewUrl={null}
             positionOverride={flowPos}
-            flowEdges={flowEdges ?? []}
+            onDeleteFlowEdge={(edgeId) =>
+            void deleteFlowEdge({ edgeId: edgeId as Id<"flowEdges">, userId: me._id, sessionToken: sessionToken() }).catch(() => {})
+          }
+          flowEdges={flowEdges ?? []}
             onSendToAgent={repoPath || project.gitRemote ? sendThreadToAgent : undefined}
           />
         </>

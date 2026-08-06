@@ -88,6 +88,7 @@ interface Props {
    * canvas, which is the point of rendering flows with the same component.
    */
   positionOverride?: Record<string, { x: number; y: number }>;
+  onDeleteFlowEdge?: (edgeId: string) => void;
   flowEdges?: {
     _id: string;
     fromFrameId: string;
@@ -181,6 +182,7 @@ type CanvasFrame = Props["frames"][number];
 function FlowEdgeLayer({
   edges,
   frames,
+  onDeleteEdge,
 }: {
   edges: {
     _id: string;
@@ -191,8 +193,11 @@ function FlowEdgeLayer({
     source?: "tests" | "manual" | "code";
   }[];
   frames: { id: string; x: number; y: number; width: number; height: number }[];
+  /** Members can remove a path — the builder is editable, not append-only. */
+  onDeleteEdge?: (edgeId: string) => void;
 }) {
   const byId = new Map(frames.map((f) => [f.id, f]));
+  const [selected, setSelected] = useState<string | null>(null);
   return (
     <svg className="flow-edges" width="1" height="1">
       <defs>
@@ -223,17 +228,46 @@ function FlowEdgeLayer({
         const declared = edge.source === "manual" || edge.source === "code";
         const width = declared ? 1.5 : 1.5 + Math.log2(1 + edge.weight);
         const caption = edge.label ?? (declared ? null : `${edge.weight}×`);
+        const isSelected = selected === edge._id;
         return (
-          <g key={edge._id} className="flow-edge">
+          <g key={edge._id} className={`flow-edge ${isSelected ? "selected" : ""}`}>
+            {/* A fat invisible twin makes a 1.5px curve clickable. */}
+            {onDeleteEdge && (
+              <path
+                d={path}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={16}
+                style={{ cursor: "pointer", pointerEvents: "stroke" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelected(isSelected ? null : edge._id);
+                }}
+              />
+            )}
             <path
               d={path}
               fill="none"
               stroke="var(--accent)"
-              strokeOpacity={edge.source === "code" ? 0.28 : declared ? 0.4 : 0.55}
-              strokeWidth={width}
+              strokeOpacity={isSelected ? 0.95 : edge.source === "code" ? 0.28 : declared ? 0.4 : 0.55}
+              strokeWidth={isSelected ? width + 1 : width}
               strokeDasharray={declared ? "5 4" : undefined}
               markerEnd="url(#flow-arrow)"
             />
+            {isSelected && onDeleteEdge && (
+              <foreignObject x={midX - 70} y={midY + 8} width={150} height={36}>
+                <button
+                  className="btn ghost edge-delete"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelected(null);
+                    onDeleteEdge(edge._id);
+                  }}
+                >
+                  Remove this path
+                </button>
+              </foreignObject>
+            )}
             {caption && (
               <text x={midX} y={midY - 8} textAnchor="middle" className="flow-edge-label">
                 {caption}
@@ -561,6 +595,7 @@ export default function CanvasView({
   guestToken,
   positionOverride,
   flowEdges,
+  onDeleteFlowEdge,
   branchPreviewPattern,
   reactions,
   votes,
@@ -1316,6 +1351,7 @@ export default function CanvasView({
 
         {flowEdges && (
           <FlowEdgeLayer
+            onDeleteEdge={onDeleteFlowEdge}
             edges={flowEdges}
             frames={frames.map((f) => ({
               id: f._id,
