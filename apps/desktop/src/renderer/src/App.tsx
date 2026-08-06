@@ -7,6 +7,7 @@ import GuestView from "./views/GuestView";
 import ProjectList from "./views/ProjectList";
 import ProjectView from "./views/ProjectView";
 import Welcome from "./views/Welcome";
+import { setFirstsUser } from "./lib/firsts";
 import ShortcutsHelp from "./views/ShortcutsHelp";
 import UpdateChip from "./views/UpdateChip";
 import CommandPalette from "./views/CommandPalette";
@@ -182,6 +183,10 @@ export default function App() {
     />
   );
   const me = useQuery(api.auth.validate, session ? { sessionToken: session.token } : "skip");
+  // The milestones ledger needs the user before any mark or read.
+  useEffect(() => {
+    if (me) setFirstsUser(me._id);
+  }, [me?._id]);
   const touch = useMutation(api.auth.touch);
   const signOut = useMutation(api.auth.signOut);
 

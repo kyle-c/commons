@@ -15,12 +15,14 @@ const SEEN_KEY = "commons.welcomeSeen";
  * features live.
  */
 export default function Welcome({ me }: { me: Doc<"users"> }) {
-  const [seen, setSeen] = useState(() => localStorage.getItem(SEEN_KEY) === "1");
+  // Per-user, not per-machine: the machine-wide key from the old welcome
+  // card silently skipped the question for every later account on this Mac.
+  const [seen, setSeen] = useState(() => localStorage.getItem(`${SEEN_KEY}.${me._id}`) === "1");
   const setOrientation = useMutation(api.users.setOrientation);
   if (seen || me.orientation) return null;
 
   const close = () => {
-    localStorage.setItem(SEEN_KEY, "1");
+    localStorage.setItem(`${SEEN_KEY}.${me._id}`, "1");
     setSeen(true);
   };
   const choose = (orientation: "designer" | "pm" | "engineer") => {

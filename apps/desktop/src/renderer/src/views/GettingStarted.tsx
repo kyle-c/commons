@@ -36,7 +36,7 @@ const STEPS: Record<"designer" | "pm" | "engineer", Step[]> = {
  * or when dismissed, and never returns.
  */
 export default function GettingStarted({ me, hasProjects }: { me: Doc<"users">; hasProjects: boolean }) {
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISSED_KEY) === "1");
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem(`${DISMISSED_KEY}.${me._id}`) === "1");
   const [, bump] = useState(0);
   useEffect(() => {
     const onFirst = () => bump((n) => n + 1);
@@ -58,7 +58,7 @@ export default function GettingStarted({ me, hasProjects }: { me: Doc<"users">; 
           className="btn ghost icon-btn"
           aria-label="Dismiss"
           onClick={() => {
-            localStorage.setItem(DISMISSED_KEY, "1");
+            localStorage.setItem(`${DISMISSED_KEY}.${me._id}`, "1");
             setDismissed(true);
           }}
         >

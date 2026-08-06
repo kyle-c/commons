@@ -3949,6 +3949,33 @@ kbd {
   color: var(--accent);
 }
 
+/* ── First-ever screen: one centered composition ─────────────────────────
+   A stranded tile top-left plus a floating hint saying the same thing was
+   two half-empty-states; a brand-new account gets one whole one. */
+.empty-hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  padding-bottom: 8vh;
+}
+.empty-hero h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+}
+.empty-hero .hint {
+  max-width: 46ch;
+}
+.empty-hero-tile {
+  margin-top: 14px;
+  width: 380px;
+  padding: 36px 20px;
+}
+
 /* ── Getting started (first-run checklist) ───────────────────────────────
    Self-completing: checks come from lib/firsts marks at the real action
    sites, never from a Next button. Lives at the head of the home grid,
@@ -4242,7 +4269,34 @@ kbd {
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out);
 }
-.frame-note:hover /* ── Getting started (first-run checklist) ───────────────────────────────
+.frame-note:hover /* ── First-ever screen: one centered composition ─────────────────────────
+   A stranded tile top-left plus a floating hint saying the same thing was
+   two half-empty-states; a brand-new account gets one whole one. */
+.empty-hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  padding-bottom: 8vh;
+}
+.empty-hero h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+}
+.empty-hero .hint {
+  max-width: 46ch;
+}
+.empty-hero-tile {
+  margin-top: 14px;
+  width: 380px;
+  padding: 36px 20px;
+}
+
+/* ── Getting started (first-run checklist) ───────────────────────────────
    Self-completing: checks come from lib/firsts marks at the real action
    sites, never from a Next button. Lives at the head of the home grid,
    retires itself when done or dismissed. */

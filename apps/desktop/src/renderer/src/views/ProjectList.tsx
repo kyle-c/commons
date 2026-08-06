@@ -335,11 +335,24 @@ export default function ProjectList({
         </div>
       )}
 
-      {projects && projects.length === 0 && (
-        <div className="empty-state">
-          No projects yet.
-          <br />
-          Point Commons at a local Next.js repo and its screens land on a shared canvas.
+      {projects && projects.length === 0 && !query.trim() && (
+        <div className="empty-hero">
+          <h2>Put your first product on the canvas</h2>
+          <p className="hint">
+            Pick a repo on this Mac, or connect GitHub and your deployed repos appear on their
+            own. Next.js, Expo, and Vite land screen by screen; anything that serves HTTP works.
+          </p>
+          <button
+            className="new-project-tile empty-hero-tile"
+            disabled={adding}
+            onClick={() => {
+              const home = workspaces[0];
+              if (home) void addProject(home._id);
+            }}
+          >
+            <strong>+ New project</strong>
+            <span>Point Commons at a local repo</span>
+          </button>
         </div>
       )}
 
@@ -377,7 +390,7 @@ export default function ProjectList({
         </div>
       )}
 
-      {sections.map((section) => {
+      {(projects === undefined || projects.length > 0 || query.trim() !== "") && sections.map((section) => {
         const folded = sections.length > 1 && !query.trim() && !!collapsedSections[section.key];
         return (
         <div key={section.key} className="workspace-section">
