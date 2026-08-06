@@ -1059,7 +1059,10 @@ export default function CanvasView({
   useEffect(() => {
     return registerShortcut("s", () => {
       setCommentMode(false);
-      setStickerMode((m) => !m);
+      setStickerMode((m) => {
+        if (!m) setStickersVisible(true); // placing onto a hidden layer is nonsense
+        return !m;
+      });
     }, { description: "Sticker mode: click to place the selected sticker" });
   }, []);
 
@@ -1644,6 +1647,16 @@ export default function CanvasView({
             🎞️
           </button>
           <span className="hint">click a screen to place · Esc leaves</span>
+          {hasAnyStickers && (
+            <button
+              className={`btn ghost icon-btn ${stickersVisible ? "active" : ""}`}
+              aria-label="Show placed stickers"
+              title={stickersVisible ? "Hide every placed sticker (clean review)" : "Show placed stickers"}
+              onClick={() => setStickersVisible((v) => !v)}
+            >
+              <Icon name="layers" />
+            </button>
+          )}
         </div>
       )}
       <div className="canvas-toolbar" onMouseDown={(e) => e.stopPropagation()}>
@@ -1669,22 +1682,16 @@ export default function CanvasView({
             title="Sticker mode: click to place the selected sticker (S)"
             onClick={() => {
               setCommentMode(false);
-              setStickerMode((m) => !m);
+              setStickerMode((m) => {
+                if (!m) setStickersVisible(true);
+                return !m;
+              });
             }}
           >
             <Icon name="heart" />
           </button>
         )}
-        {onReact && hasAnyStickers && (
-          <button
-            className={`btn ghost icon-btn ${stickersVisible ? "active" : ""}`}
-            aria-label="Show stickers"
-            title={stickersVisible ? "Hide stickers (clean review)" : "Show stickers"}
-            onClick={() => setStickersVisible((v) => !v)}
-          >
-            <Icon name="image" />
-          </button>
-        )}
+
         {(annotations?.length ?? 0) > 0 && (
           <button
             className={`btn ghost icon-btn ${notesOn ? "active" : ""}`}
