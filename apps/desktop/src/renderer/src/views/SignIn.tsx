@@ -92,7 +92,7 @@ export default function SignIn({ onSignedIn }: { onSignedIn: (session: StoredSes
     <div className="center-screen">
       <div className="center-card">
         <h1>Commons</h1>
-        <p>One canvas for designing in Figma and in code.</p>
+        <p className="lede">Design on the product, not pictures of it.</p>
         {state === null ? (
           <>
             <button className="btn primary" onClick={begin}>

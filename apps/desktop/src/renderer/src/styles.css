@@ -394,9 +394,18 @@ textarea:focus {
   flex-direction: column;
   gap: 14px;
 }
+/* The door wears the brand: the editorial serif that titles the home and
+   the marketing page, not the workaday sans of the tool inside. First
+   impressions are display moments by definition. */
 .center-card h1 {
-  font-size: var(--text-xl);
+  font-family: var(--font-display);
+  font-size: 27px;
   font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.center-card .lede {
+  color: var(--text-secondary);
+  margin-top: -6px;
 }
 .center-card p {
   color: var(--text-secondary);
