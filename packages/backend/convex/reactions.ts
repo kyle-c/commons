@@ -17,7 +17,7 @@ import { accessibleProject, requireViewer, resolveViewer } from "./access";
 // Critique vocabulary, not social approval: love / ship / unsure /
 // confusing / cut / idea. Older stamps in the wild keep rendering; they
 // just stop being offerable.
-const STAMPS = ["❤️", "🔥", "🤔", "😕", "✂️", "💡"];
+const STAMPS = ["❤️", "🔥", "🤔", "😕", "✂️", "💡", "🎉", "👀"];
 
 export const VOTE_BUDGET = 5;
 

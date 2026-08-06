@@ -6,6 +6,9 @@
 
 const PATHS: Record<string, React.ReactNode> = {
   zap: <path d="M13 2 4.8 13.2H11L10 22l9.2-11.2H13L13 2Z" />,
+  heart: (
+    <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8Z" />
+  ),
   home: (
     <>
       <path d="M3 10.5 12 3l9 7.5" />

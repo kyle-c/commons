@@ -4199,7 +4199,65 @@ kbd {
   border: 0;
   cursor: default;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
-  animation: sticker-drop 260ms var(--ease-out);
+  /* Squash-and-stretch landing: overshoot in, one wiggle, settle. */
+  animation: sticker-land 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.sticker-art {
+  width: 34px;
+  height: 34px;
+  display: block;
+  pointer-events: none;
+}
+.sticker.thrown .sticker-art {
+  width: 44px;
+  height: 44px;
+}
+.sticker.thrown.peeling {
+  animation: sticker-peel 240ms var(--ease-out) forwards;
+}
+@keyframes sticker-land {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -60%) scale(1.7) rotate(-14deg);
+  }
+  55% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.88) rotate(2deg);
+  }
+  75% {
+    transform: translate(-50%, -50%) scale(1.06) rotate(-7deg);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1) rotate(-4deg);
+  }
+}
+@keyframes sticker-peel {
+  0% {
+    transform: translate(-50%, -50%) rotate(-4deg) scale(1);
+    opacity: 1;
+  }
+  60% {
+    transform: translate(-50%, -62%) rotate(10deg) scale(1.12);
+    opacity: 1;
+    filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.35));
+  }
+  100% {
+    transform: translate(-50%, -110%) rotate(24deg) scale(0.6);
+    opacity: 0;
+  }
+}
+.sticker-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 80;
+  pointer-events: none;
+  opacity: 0.85;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.25));
+}
+.sticker-ghost .sticker-art {
+  width: 40px;
+  height: 40px;
 }
 .sticker.thrown:nth-child(even) {
   transform: translate(-50%, -50%) rotate(5deg);

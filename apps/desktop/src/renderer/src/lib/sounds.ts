@@ -252,3 +252,88 @@ export function playPop(): void {
     // Silence is an acceptable outcome.
   }
 }
+
+/**
+ * Each sticker speaks in its own tiny voice when placed — a heartbeat for
+ * the heart, a crackle for the flame — all synthesized, all whisper-tier,
+ * all inside the one throttle so enthusiasm never becomes percussion.
+ */
+export function playSticker(emoji: string): void {
+  if (throttled("sticker")) return;
+  try {
+    const audioCtx = ctx();
+    if (!audioCtx) return;
+    const out = master(audioCtx, 0.13);
+    const t0 = audioCtx.currentTime + 0.02;
+    switch (emoji) {
+      case "❤️": {
+        // Lub-dub.
+        note(audioCtx, out, 150, t0, 0.09, 0.6, true);
+        note(audioCtx, out, 110, t0 + 0.12, 0.12, 0.5, true);
+        break;
+      }
+      case "🔥": {
+        // A crackle: three fast filtered ticks stepping down.
+        note(audioCtx, out, 900, t0, 0.03, 0.4, true);
+        note(audioCtx, out, 640, t0 + 0.045, 0.03, 0.45, true);
+        note(audioCtx, out, 440, t0 + 0.095, 0.05, 0.4, true);
+        break;
+      }
+      case "🤔": {
+        // Rising hmm.
+        note(audioCtx, out, 220, t0, 0.1, 0.4, true);
+        note(audioCtx, out, 277, t0 + 0.09, 0.16, 0.4, true);
+        break;
+      }
+      case "😕": {
+        // A wobble: minor second down, unsettled.
+        note(audioCtx, out, 330, t0, 0.1, 0.4);
+        note(audioCtx, out, 311, t0 + 0.09, 0.16, 0.4, true);
+        break;
+      }
+      case "✂️": {
+        // Snip snip.
+        note(audioCtx, out, 1400, t0, 0.025, 0.5, true);
+        note(audioCtx, out, 1400, t0 + 0.08, 0.025, 0.5, true);
+        break;
+      }
+      case "💡": {
+        // The ding.
+        note(audioCtx, out, 1180, t0, 0.3, 0.35);
+        break;
+      }
+      case "🎉": {
+        // A little fanfare: fast major arpeggio up.
+        note(audioCtx, out, 523, t0, 0.08, 0.4);
+        note(audioCtx, out, 659, t0 + 0.06, 0.08, 0.4);
+        note(audioCtx, out, 784, t0 + 0.12, 0.18, 0.45);
+        break;
+      }
+      case "👀": {
+        // Two quick identical blinks.
+        note(audioCtx, out, 740, t0, 0.05, 0.4);
+        note(audioCtx, out, 740, t0 + 0.09, 0.05, 0.4);
+        break;
+      }
+      default:
+        note(audioCtx, out, 620, t0, 0.09, 0.5, true);
+    }
+  } catch {
+    // Silence is an acceptable outcome.
+  }
+}
+
+/** Taking a sticker back: a soft downward plop, the throw in reverse. */
+export function playUnstick(): void {
+  if (throttled("unstick")) return;
+  try {
+    const audioCtx = ctx();
+    if (!audioCtx) return;
+    const out = master(audioCtx, 0.1);
+    const t0 = audioCtx.currentTime + 0.02;
+    note(audioCtx, out, 500, t0, 0.06, 0.45, true);
+    note(audioCtx, out, 290, t0 + 0.07, 0.12, 0.4, true);
+  } catch {
+    // As above.
+  }
+}

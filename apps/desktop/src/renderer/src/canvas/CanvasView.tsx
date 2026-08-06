@@ -18,7 +18,8 @@ import Icon from "../components/icons";
 import PreviewAppearanceButton from "../components/PreviewAppearanceButton";
 import { burstEmoji } from "../lib/burst";
 import { markFirst } from "../lib/firsts";
-import { playPop } from "../lib/sounds";
+import { STICKER_SET, STICKER_ART, STICKER_NAMES } from "../lib/stickers";
+import { playPop, playSticker, playUnstick } from "../lib/sounds";
 
 interface Viewport {
   x: number;
@@ -435,14 +436,24 @@ const FrameLayer = memo(function FrameLayer({
                         key={`${r.emoji}-${i}`}
                         className={`sticker thrown ${r.mine ? "mine" : ""}`}
                         style={{ left: `${r.fx * 100}%`, top: `${r.fy * 100}%` }}
-                        title={r.mine ? "Yours — click to take it back" : "Thrown by a teammate"}
+                        title={r.mine ? "Yours — click to peel it off" : "A teammate's"}
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (r.mine) onReact?.(frame._id, r.emoji);
+                          if (!r.mine) return;
+                          // Peel first, mutate after: the exit is part of the
+                          // fun, and reactivity would yank it mid-animation.
+                          const el = e.currentTarget;
+                          el.classList.add("peeling");
+                          playUnstick();
+                          window.setTimeout(() => onReact?.(frame._id, r.emoji), 240);
                         }}
                       >
-                        {r.emoji}
+                        {STICKER_ART[r.emoji] ? (
+                          <img className="sticker-art" src={STICKER_ART[r.emoji]} alt={r.emoji} />
+                        ) : (
+                          r.emoji
+                        )}
                       </button>
                     ) : null
                   )}
@@ -600,6 +611,16 @@ export default function CanvasView({
   const [stickerMode, setStickerMode] = useState(false);
   const [selectedSticker, setSelectedSticker] = useState<string>("❤️");
   const [stickersVisible, setStickersVisible] = useState(true);
+  const ghostRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!stickerMode) return;
+    const move = (e: MouseEvent) => {
+      const el = ghostRef.current;
+      if (el) el.style.transform = `translate3d(${e.clientX + 10}px, ${e.clientY - 34}px, 0) rotate(-6deg)`;
+    };
+    window.addEventListener("mousemove", move, { passive: true });
+    return () => window.removeEventListener("mousemove", move);
+  }, [stickerMode]);
   const hasAnyStickers =
     Object.values(reactions ?? {}).some((l) => l.length > 0) || Object.values(gifs ?? {}).some((l) => l.length > 0);
   // Notes layer: on by default — the annotations are curated, that's the point.
@@ -1102,7 +1123,7 @@ export default function CanvasView({
       } else {
         onReact?.(frame._id, selectedSticker, fx, fy);
         burstEmoji(e.clientX, e.clientY, selectedSticker);
-        playPop();
+        playSticker(selectedSticker);
       }
       return;
     }
@@ -1549,19 +1570,30 @@ export default function CanvasView({
       )}
 
       {stickerMode && (
+        <div
+          className="sticker-ghost"
+          ref={(el) => {
+            ghostRef.current = el;
+          }}
+          aria-hidden
+        >
+          {STICKER_ART[selectedSticker] ? (
+            <img className="sticker-art" src={STICKER_ART[selectedSticker]} alt="" />
+          ) : (
+            selectedSticker
+          )}
+        </div>
+      )}
+      {stickerMode && (
         <div className="sticker-dock" onMouseDown={(e) => e.stopPropagation()}>
-          {["❤️", "🔥", "🤔", "😕", "✂️", "💡"].map((emoji) => (
+          {STICKER_SET.map((emoji) => (
             <button
               key={emoji}
               className={`bloom-item ${selectedSticker === emoji ? "selected" : ""}`}
-              title={
-                { "❤️": "Love it", "🔥": "Ship it", "🤔": "Not sure", "😕": "Confusing", "✂️": "Cut it", "💡": "Idea" }[
-                  emoji
-                ]
-              }
+              title={STICKER_NAMES[emoji]}
               onClick={() => setSelectedSticker(emoji)}
             >
-              {emoji}
+              <img className="sticker-art" src={STICKER_ART[emoji]} alt={emoji} />
             </button>
           ))}
           <button
@@ -1600,7 +1632,7 @@ export default function CanvasView({
               setStickerMode((m) => !m);
             }}
           >
-            {stickerMode ? selectedSticker : "❤️"}
+            <Icon name="heart" />
           </button>
         )}
         {onReact && hasAnyStickers && (

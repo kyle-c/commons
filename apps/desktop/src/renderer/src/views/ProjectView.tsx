@@ -1168,11 +1168,14 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   );
   const setGiphyKey = useMutation(api.reactions.setGiphyKey);
   const [giphyResults, setGiphyResults] = useState<{ url: string; preview: string }[]>([]);
+  // Giphy's stickers endpoint serves transparent animated stickers — same
+  // key, same terms, different flavor. Riding the plumbing that exists.
+  const [giphyFlavor, setGiphyFlavor] = useState<"stickers" | "gifs">("stickers");
   const searchGiphy = async (q: string) => {
     if (!giphy?.key || !q.trim()) return;
     try {
       const res = await fetch(
-        `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(giphy.key)}&q=${encodeURIComponent(q)}&limit=8&rating=pg-13`
+        `https://api.giphy.com/v1/${giphyFlavor}/search?api_key=${encodeURIComponent(giphy.key)}&q=${encodeURIComponent(q)}&limit=8&rating=pg-13`
       );
       const body = (await res.json()) as { data?: { images?: { fixed_height?: { url?: string }; fixed_height_small?: { url?: string } } }[] };
       setGiphyResults(
@@ -2609,6 +2612,22 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                   {giphy?.key && !/^https?:/.test(gifUrl.trim()) ? "Search" : "Stick it"}
                 </button>
               </div>
+              {giphy?.key && (
+                <div className="reveal-form-row">
+                  <button
+                    className={`btn ghost quiet-action ${giphyFlavor === "stickers" ? "active" : ""}`}
+                    onClick={() => setGiphyFlavor("stickers")}
+                  >
+                    Stickers (transparent)
+                  </button>
+                  <button
+                    className={`btn ghost quiet-action ${giphyFlavor === "gifs" ? "active" : ""}`}
+                    onClick={() => setGiphyFlavor("gifs")}
+                  >
+                    GIFs
+                  </button>
+                </div>
+              )}
               {giphyResults.length > 0 && (
                 <div className="giphy-grid">
                   {giphyResults.map((g) => (
