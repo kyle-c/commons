@@ -3983,10 +3983,14 @@ kbd {
 .getting-started {
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-lg);
-  padding: 14px 16px;
+  padding: 14px 18px 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* Sized to its three lines, not to the page: full-bleed made it read as
+     a giant empty tile and crowded the first section heading beneath it. */
+  max-width: 600px;
+  margin-bottom: 30px;
 }
 .gs-head {
   display: flex;
@@ -4303,10 +4307,14 @@ kbd {
 .getting-started {
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-lg);
-  padding: 14px 16px;
+  padding: 14px 18px 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* Sized to its three lines, not to the page: full-bleed made it read as
+     a giant empty tile and crowded the first section heading beneath it. */
+  max-width: 600px;
+  margin-bottom: 30px;
 }
 .gs-head {
   display: flex;
