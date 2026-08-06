@@ -3992,6 +3992,20 @@ kbd {
   max-width: 600px;
   margin-bottom: 30px;
 }
+/* Over the canvas: a quiet panel bottom-left, solid so the dot grid doesn't
+   swallow the dashes, clear of the toolbar and minimap. */
+.getting-started.in-project {
+  position: absolute;
+  left: 14px;
+  bottom: 64px;
+  width: 320px;
+  margin-bottom: 0;
+  background: var(--bg-panel);
+  border-style: solid;
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-panel);
+  z-index: 24;
+}
 .gs-head {
   display: flex;
   align-items: center;
@@ -4315,6 +4329,20 @@ kbd {
      a giant empty tile and crowded the first section heading beneath it. */
   max-width: 600px;
   margin-bottom: 30px;
+}
+/* Over the canvas: a quiet panel bottom-left, solid so the dot grid doesn't
+   swallow the dashes, clear of the toolbar and minimap. */
+.getting-started.in-project {
+  position: absolute;
+  left: 14px;
+  bottom: 64px;
+  width: 320px;
+  margin-bottom: 0;
+  background: var(--bg-panel);
+  border-style: solid;
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-panel);
+  z-index: 24;
 }
 .gs-head {
   display: flex;

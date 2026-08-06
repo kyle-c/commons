@@ -8,7 +8,7 @@
  * either direction costs one redundant checkmark, not data.
  */
 
-export type FirstKey = "comment" | "reaction" | "whatif" | "agent" | "test" | "prototype";
+export type FirstKey = "opened" | "comment" | "reaction" | "whatif" | "agent" | "test" | "prototype";
 
 /**
  * Scoped per user, not per machine. The first cut shared one key across

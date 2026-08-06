@@ -21,6 +21,7 @@ import { usePublicSiteUrl } from "../lib/publicUrl";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { playConnected, playDraftReady, playProposals, playThrow } from "../lib/sounds";
 import { markFirst } from "../lib/firsts";
+import GettingStarted from "./GettingStarted";
 import { claimSurface, useSurfaceExclusivity } from "../lib/surfaces";
 import { registerShortcut } from "../lib/shortcuts";
 import { layoutFrames } from "../lib/frameLayout";
@@ -1083,7 +1084,10 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const [connectionOpen, setConnectionOpen] = useState(false);
   // Shown after "Sign in to previews…" sends someone to the full-size app.
   const [signInHint, setSignInHint] = useState(false);
-  // First-run milestone: seeing the prototype counts when the view opens.
+  // First-run milestones: entering a project, and seeing the prototype.
+  useEffect(() => {
+    markFirst("opened");
+  }, []);
   useEffect(() => {
     if (nav.view === "prototype") markFirst("prototype");
   }, [nav.view]);
@@ -2484,6 +2488,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           </button>
         </div>
       )}
+      {nav.view === "canvas" && <GettingStarted me={me} hasProjects scope="project" />}
       {nav.view === "canvas" && frames.length > 0 && !bloomHintDismissed && (
         <div className="nudge-banner">
           <span>Hover the 👍 under a screen to react · right-click or ⌃-click for dots, GIFs, and what-ifs.</span>
