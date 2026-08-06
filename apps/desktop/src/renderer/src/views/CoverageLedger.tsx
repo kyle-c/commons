@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
+import { markFirst } from "../lib/firsts";
 import { sessionToken, timeAgo } from "../lib/session";
 import Icon from "../components/icons";
 
@@ -68,6 +69,7 @@ export default function CoverageLedger({
     setLastRun(null);
     try {
       const result = await window.commons.surveyApp(baseUrl, routes);
+      markFirst("survey");
       let proposed = 0;
       for (const screen of result.screens) {
         if (screen.png.length === 0) continue;

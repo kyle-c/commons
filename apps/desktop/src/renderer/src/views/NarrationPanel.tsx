@@ -4,6 +4,7 @@ import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import type { AnnotationCitation, AnnotationEvidence } from "@commons/shared";
 import type { ThreadWithMessages } from "../comments/types";
+import { markFirst } from "../lib/firsts";
 import { sessionToken } from "../lib/session";
 
 /**
@@ -141,6 +142,7 @@ export default function NarrationPanel({ me, project, frames, threads, repoPath,
 
   const decide = async (action: "approve" | "edit" | "reject") => {
     if (!current) return;
+    if (action === "approve") markFirst("narrate");
     await curate({
       annotationId: current._id,
       action,

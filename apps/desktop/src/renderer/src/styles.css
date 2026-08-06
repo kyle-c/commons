@@ -708,6 +708,14 @@ textarea:focus {
   position: absolute;
   inset: 0;
 }
+/* Comment mode means comment mode: the shield outranks every canvas layer
+   (stickers z-4, heatmap, the app itself), so a click can only ever be a
+   pin. Without the explicit z, sticker layers sat above it and clicks fell
+   through to the prototype. */
+.frame-body .frame-shield.commenting {
+  z-index: 30;
+  cursor: crosshair;
+}
 .frame-placeholder {
   position: absolute;
   inset: 0;
@@ -4009,8 +4017,29 @@ kbd {
 .gs-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   font-weight: 600;
+}
+.gs-head > :first-child {
+  flex: 1;
+}
+.gs-count {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+.gs-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--bg-input);
+  overflow: hidden;
+}
+.gs-track span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width var(--dur-med) var(--ease-out);
 }
 .gs-step {
   display: flex;
@@ -4064,7 +4093,10 @@ kbd {
 .rx {
   position: absolute;
   left: 8px;
-  bottom: -30px;
+  /* Anchored to the frame's bottom edge and growing DOWNWARD: a negative
+     bottom anchored the pill's baseline, so the taller revealed bar rode up
+     into the frame and clipped against the app inside it. */
+  top: calc(100% + 8px);
   display: flex;
   align-items: center;
   z-index: 5;
@@ -4347,8 +4379,29 @@ kbd {
 .gs-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   font-weight: 600;
+}
+.gs-head > :first-child {
+  flex: 1;
+}
+.gs-count {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+.gs-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--bg-input);
+  overflow: hidden;
+}
+.gs-track span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width var(--dur-med) var(--ease-out);
 }
 .gs-step {
   display: flex;
@@ -4402,7 +4455,10 @@ kbd {
 .rx {
   position: absolute;
   left: 8px;
-  bottom: -30px;
+  /* Anchored to the frame's bottom edge and growing DOWNWARD: a negative
+     bottom anchored the pill's baseline, so the taller revealed bar rode up
+     into the frame and clipped against the app inside it. */
+  top: calc(100% + 8px);
   display: flex;
   align-items: center;
   z-index: 5;

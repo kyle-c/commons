@@ -531,7 +531,7 @@ const FrameLayer = memo(function FrameLayer({
                   }}
                 />
               )}
-              {commentMode && <div className="frame-shield" onMouseDown={(e) => onShieldDown(frame, e)} />}
+              {commentMode && <div className="frame-shield commenting" onMouseDown={(e) => onShieldDown(frame, e)} />}
             </div>
             {onReact && (
               /* The Meta pattern, asked for by name: one quiet thumbs-up

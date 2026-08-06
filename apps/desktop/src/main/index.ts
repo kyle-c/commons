@@ -44,17 +44,40 @@ app.on("render-process-gone", (_e, _wc, details) => {
   }
 });
 
-// Packaged builds get the icon from build/icon.icns via electron-builder;
-// dev runs would otherwise wear the stock Electron dock icon.
-if (!app.isPackaged) {
-  app.whenReady().then(() => {
+function dockPrefPath(): string {
+  return path.join(app.getPath("userData"), "dock-appearance");
+}
+
+function setDockIcon(mode: "light" | "dark"): void {
+  const dir = app.isPackaged ? process.resourcesPath : path.join(__dirname, "../../build");
+  try {
+    app.dock?.setIcon(path.join(dir, `dock-${mode}.png`));
+  } catch {
+    // Missing asset — the bundled icon stands.
+  }
+}
+
+// The dock icon at launch: last run's theme if recorded, else the bundled
+// default (packaged) / the repo icon (dev). Restoring before the window
+// exists is the whole point — no flash.
+app.whenReady().then(() => {
+  try {
+    const saved = fs.readFileSync(dockPrefPath(), "utf8").trim();
+    if (saved === "light" || saved === "dark") {
+      setDockIcon(saved);
+      return;
+    }
+  } catch {
+    // First run or unreadable — fall through.
+  }
+  if (!app.isPackaged) {
     try {
       app.dock?.setIcon(path.join(__dirname, "../../build/icon.png"));
     } catch {
       // Missing file in an odd checkout — the default icon is fine in dev.
     }
-  });
-}
+  }
+});
 
 // Main-process failures forward to the renderer, which owns error reporting
 // (POST /api/error). Handlers keep the app alive — a background failure
@@ -353,13 +376,16 @@ app.whenReady().then(() => {
 
   // Dock icon follows the app theme. Runtime-only: Finder and the DMG keep
   // the bundled icns; a truly adaptive icon awaits Icon Composer support.
+  // The choice persists to userData so the NEXT launch can wear it before
+  // the renderer boots — without that, the bundled (dark) icon stood in for
+  // a beat and light-mode users watched it flip on every launch.
   ipcMain.handle("set-dock-appearance", (_e, mode: "light" | "dark") => {
     if (mode !== "light" && mode !== "dark") return;
-    const dir = app.isPackaged ? process.resourcesPath : path.join(__dirname, "../../build");
+    setDockIcon(mode);
     try {
-      app.dock?.setIcon(path.join(dir, `dock-${mode}.png`));
+      fs.writeFileSync(dockPrefPath(), mode);
     } catch {
-      // Missing asset — the bundled icon stands.
+      // Unwritable userData — the flash returns, nothing else breaks.
     }
   });
 

@@ -757,6 +757,7 @@ function SharePopover({
 
   const copy = (kind: "app" | "web", text: string) => {
     void navigator.clipboard.writeText(text);
+    markFirst("share");
     setCopied(kind);
     setTimeout(() => setCopied(null), 1500);
   };
@@ -1090,6 +1091,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   }, []);
   useEffect(() => {
     if (nav.view === "prototype") markFirst("prototype");
+    if (nav.view === "flow") markFirst("flow");
   }, [nav.view]);
   // Flow view: edges from recorded tester navigation; positions computed as
   // a layered left-to-right graph. Only queried while the view is open.
@@ -1204,6 +1206,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
       sessionToken: sessionToken(),
     }).catch(() => ({ ok: false as const, reason: "not_a_gif" as const }));
     if (result.ok) {
+      markFirst("gif");
       playThrow();
       setGifFor(null);
       setGiphyResults([]);
@@ -1244,6 +1247,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
       sessionToken: sessionToken(),
     }).catch(() => ({ ok: false as const, reason: "not_a_gif" as const }));
     if (result.ok) {
+      markFirst("gif");
       playThrow();
       setGifFor(null);
       setGifUrl("");
@@ -2516,6 +2520,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               className="bloom-item"
               title={`Dot-vote this screen (${votesData?.votesLeft ?? 0} left)`}
               onClick={() => {
+                markFirst("vote");
                 void toggleVote({ frameId: bloom.frame._id, userId: me._id, sessionToken: sessionToken() });
                 playThrow();
                 setBloom(null);
@@ -2624,6 +2629,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                             sessionToken: sessionToken(),
                           }).catch(() => ({ ok: false as const, reason: "not_a_gif" as const }));
                           if (result.ok) {
+                            markFirst("gif");
                             playThrow();
                             setGifFor(null);
                             setGifUrl("");
@@ -2983,7 +2989,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             void toggleReaction({ frameId, emoji, userId: me._id, sessionToken: sessionToken() }).catch(() => {})
           }
           onVote={(frameId) =>
-            void toggleVote({ frameId, userId: me._id, sessionToken: sessionToken() })
+            void (markFirst("vote"),
+            toggleVote({ frameId, userId: me._id, sessionToken: sessionToken() }))
               .then((r) => {
                 if (r && "budgetSpent" in r && r.budgetSpent) alert("All five of your dots are spent — take one back first.");
               })
