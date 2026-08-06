@@ -104,7 +104,7 @@ interface Props {
   onVote?: (frameId: Id<"frames">) => void;
   onWhatIf?: (frame: Doc<"frames">) => void;
   gifs?: Record<string, { src: string; mine: boolean; by: string; fx?: number; fy?: number }[]>;
-  onAddGif?: (frame: Doc<"frames">) => void;
+  onAddGif?: (frame: Doc<"frames">, fx?: number, fy?: number) => void;
   onRemoveGif?: (frameId: Id<"frames">) => void;
   /** Members can rewrite an approved note where it stands; edits are logged. */
   onEditNote?: (note: { _id: string; text: string }) => void;
@@ -262,6 +262,8 @@ const FrameLayer = memo(function FrameLayer({
   loadedFrames,
   heatmap,
   commentMode,
+  stickerMode,
+  stickersVisible = true,
   viewerHasRepo,
   selfHasRepoElsewhere,
   repoHolderNames,
@@ -290,6 +292,8 @@ const FrameLayer = memo(function FrameLayer({
   loadedFrames: Record<string, boolean>;
   heatmap?: Props["heatmap"];
   commentMode: boolean;
+  stickerMode?: boolean;
+  stickersVisible?: boolean;
   viewerHasRepo?: boolean;
   selfHasRepoElsewhere?: boolean;
   repoHolderNames?: string[];
@@ -304,7 +308,7 @@ const FrameLayer = memo(function FrameLayer({
   onVote?: (frameId: Id<"frames">) => void;
   onWhatIf?: (frame: Doc<"frames">) => void;
   gifs?: Record<string, { src: string; mine: boolean; by: string; fx?: number; fy?: number }[]>;
-  onAddGif?: (frame: Doc<"frames">) => void;
+  onAddGif?: (frame: Doc<"frames">, fx?: number, fy?: number) => void;
   onRemoveGif?: (frameId: Id<"frames">) => void;
   onEditNote?: (note: { _id: string; text: string }) => void;
   onBloom?: (frame: Doc<"frames">, clientX: number, clientY: number, fx: number, fy: number) => void;
@@ -423,7 +427,7 @@ const FrameLayer = memo(function FrameLayer({
                               : "Waiting for a preview — ask a teammate with the repo to publish one"}
                 </div>
               )}
-              {(reactions?.[frame._id]?.length ?? 0) > 0 && (
+              {stickersVisible && (reactions?.[frame._id]?.length ?? 0) > 0 && (
                 <div className="sticker-layer" aria-hidden={false}>
                   {reactions![frame._id].map((r, i) =>
                     r.fx !== undefined && r.fy !== undefined ? (
@@ -474,7 +478,7 @@ const FrameLayer = memo(function FrameLayer({
                   </span>
                 </div>
               )}
-              {(gifs?.[frame._id]?.length ?? 0) > 0 && (
+              {stickersVisible && (gifs?.[frame._id]?.length ?? 0) > 0 && (
                 <div className="gif-stack" onMouseDown={(e) => e.stopPropagation()}>
                   {gifs![frame._id].slice(0, 8).map((g, i) => (
                     <img
@@ -531,53 +535,9 @@ const FrameLayer = memo(function FrameLayer({
                   }}
                 />
               )}
-              {commentMode && <div className="frame-shield commenting" onMouseDown={(e) => onShieldDown(frame, e)} />}
+              {(commentMode || stickerMode) && <div className="frame-shield commenting" onMouseDown={(e) => onShieldDown(frame, e)} />}
             </div>
           </div>
-            {onReact && (
-              /* A SIBLING of .frame, not a child, positioned in canvas
-                 coordinates like the notes: .frame carries content-visibility
-                 (implying paint containment), so anything a descendant paints
-                 outside the frame's box is silently clipped — this bar spent
-                 three bug reports invisible for exactly that reason. */
-              <div
-                className="rx"
-                style={{ left: pos.x + 8, top: pos.y + frame.height + 38 }}
-                onMouseDown={(e) => e.stopPropagation()}
-              >
-                <button className="rx-trigger" title="React">
-                  👍
-                </button>
-                <div className="rx-bar">
-                  {(
-                    [
-                      ["👍", "Like"],
-                      ["❤️", "Love"],
-                      ["✨", "Polish"],
-                      ["🔥", "Fire"],
-                      ["😮", "Whoa"],
-                      ["❓", "Question"],
-                      ["😬", "Yikes"],
-                    ] as const
-                  ).map(([emoji, name]) => (
-                    <button
-                      key={emoji}
-                      className="rx-emoji"
-                      title={name}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        burstEmoji(e.clientX, e.clientY, emoji);
-                        playPop();
-                        markFirst("reaction");
-                        onReact(frame._id, emoji);
-                      }}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
         </Fragment>
         );
       })}
@@ -631,6 +591,17 @@ export default function CanvasView({
   }, [projectId]);
 
   const [commentMode, setCommentMode] = useState(false);
+  /**
+   * Sticker mode, symmetric with comment mode: S toggles, the cursor's click
+   * places the selected sticker exactly where it lands, Esc leaves. The set
+   * is critique vocabulary, not social approval — love/ship/unsure/confusing/
+   * cut/idea covers a whole crit without a sentence.
+   */
+  const [stickerMode, setStickerMode] = useState(false);
+  const [selectedSticker, setSelectedSticker] = useState<string>("❤️");
+  const [stickersVisible, setStickersVisible] = useState(true);
+  const hasAnyStickers =
+    Object.values(reactions ?? {}).some((l) => l.length > 0) || Object.values(gifs ?? {}).some((l) => l.length > 0);
   // Notes layer: on by default — the annotations are curated, that's the point.
   const [notesOn, setNotesOn] = useState(true);
   // Inline note editing: the bubble itself is the editor (no modal).
@@ -1009,7 +980,10 @@ export default function CanvasView({
   const canComment = Boolean(me || guestToken);
   useEffect(() => {
     if (!canComment) return;
-    return registerShortcut("c", () => setCommentMode((m) => !m), { description: "Comment mode" });
+    return registerShortcut("c", () => {
+      setStickerMode(false);
+      setCommentMode((m) => !m);
+    }, { description: "Comment mode" });
   }, [canComment]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1017,6 +991,7 @@ export default function CanvasView({
       if (target.tagName === "TEXTAREA" || target.tagName === "INPUT") return;
       if (e.key === "Escape") {
         setCommentMode(false);
+        setStickerMode(false);
         setDraft(null);
         setFocusedFrame(null);
         setSelectedThread(null);
@@ -1024,6 +999,12 @@ export default function CanvasView({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  useEffect(() => {
+    return registerShortcut("s", () => {
+      setCommentMode(false);
+      setStickerMode((m) => !m);
+    }, { description: "Sticker mode: click to place the selected sticker" });
   }, []);
 
   const screenToCanvas = (clientX: number, clientY: number) => {
@@ -1112,6 +1093,19 @@ export default function CanvasView({
 
   const onFrameShieldMouseDown = (frame: Doc<"frames">, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (stickerMode) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const fx = (e.clientX - rect.left) / rect.width;
+      const fy = (e.clientY - rect.top) / rect.height;
+      if (selectedSticker === "🎞️") {
+        onAddGif?.(frame, fx, fy);
+      } else {
+        onReact?.(frame._id, selectedSticker, fx, fy);
+        burstEmoji(e.clientX, e.clientY, selectedSticker);
+        playPop();
+      }
+      return;
+    }
     if (commentMode) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const p = screenToCanvas(e.clientX, e.clientY);
@@ -1321,6 +1315,8 @@ export default function CanvasView({
           loadedFrames={loadedFrames}
           heatmap={heatmap}
           commentMode={commentMode}
+          stickerMode={stickerMode}
+          stickersVisible={stickersVisible}
           viewerHasRepo={viewerHasRepo}
           selfHasRepoElsewhere={selfHasRepoElsewhere}
           repoHolderNames={repoHolderNames}
@@ -1552,6 +1548,32 @@ export default function CanvasView({
         />
       )}
 
+      {stickerMode && (
+        <div className="sticker-dock" onMouseDown={(e) => e.stopPropagation()}>
+          {["❤️", "🔥", "🤔", "😕", "✂️", "💡"].map((emoji) => (
+            <button
+              key={emoji}
+              className={`bloom-item ${selectedSticker === emoji ? "selected" : ""}`}
+              title={
+                { "❤️": "Love it", "🔥": "Ship it", "🤔": "Not sure", "😕": "Confusing", "✂️": "Cut it", "💡": "Idea" }[
+                  emoji
+                ]
+              }
+              onClick={() => setSelectedSticker(emoji)}
+            >
+              {emoji}
+            </button>
+          ))}
+          <button
+            className={`bloom-item ${selectedSticker === "🎞️" ? "selected" : ""}`}
+            title="A GIF — click a screen to aim it"
+            onClick={() => setSelectedSticker("🎞️")}
+          >
+            🎞️
+          </button>
+          <span className="hint">click a screen to place · Esc leaves</span>
+        </div>
+      )}
       <div className="canvas-toolbar" onMouseDown={(e) => e.stopPropagation()}>
         {/* Absent for guests rather than present-and-dead: a control that
             opens a composer nothing can submit is worse than no control. */}
@@ -1560,9 +1582,35 @@ export default function CanvasView({
             className={`btn ghost icon-btn ${commentMode ? "active" : ""}`}
             aria-label="Comment"
             title="Comment mode (C)"
-            onClick={() => setCommentMode((m) => !m)}
+            onClick={() => {
+              setStickerMode(false);
+              setCommentMode((m) => !m);
+            }}
           >
             <Icon name="message" />
+          </button>
+        )}
+        {onReact && (
+          <button
+            className={`btn ghost icon-btn sticker-toggle ${stickerMode ? "active" : ""}`}
+            aria-label="Sticker mode"
+            title="Sticker mode: click to place the selected sticker (S)"
+            onClick={() => {
+              setCommentMode(false);
+              setStickerMode((m) => !m);
+            }}
+          >
+            {stickerMode ? selectedSticker : "❤️"}
+          </button>
+        )}
+        {onReact && hasAnyStickers && (
+          <button
+            className={`btn ghost icon-btn ${stickersVisible ? "active" : ""}`}
+            aria-label="Show stickers"
+            title={stickersVisible ? "Hide stickers (clean review)" : "Show stickers"}
+            onClick={() => setStickersVisible((v) => !v)}
+          >
+            <Icon name="image" />
           </button>
         )}
         {(annotations?.length ?? 0) > 0 && (

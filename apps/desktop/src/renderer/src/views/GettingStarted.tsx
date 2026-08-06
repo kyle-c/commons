@@ -23,7 +23,7 @@ const POOL: Quest[] = [
   { key: "project", label: "Put a repo on the canvas", detail: "+ New project, or connect GitHub and deployed repos appear on their own.", scope: "home" },
   { key: "opened", label: "Open a project", detail: "Any card below — every screen in it is the real product, live.", scope: "home" },
   { key: "comment", label: "Pin a comment", detail: "Press C, click the exact pixel, say the thing.", scope: "project" },
-  { key: "reaction", label: "React to a screen", detail: "Hover the 👍 under any screen — hold a beat for the full set.", scope: "project" },
+  { key: "reaction", label: "Place a sticker", detail: "Press S, pick a sticker, click exactly where you mean it.", scope: "project" },
   { key: "vote", label: "Spend a dot", detail: "Right-click a screen → ●. Five dots per project; spending one is a choice.", scope: "project" },
   { key: "gif", label: "Throw a GIF", detail: "Right-click → 🎞️ — search, paste, or drop one where you aim.", scope: "project" },
   { key: "whatif", label: "Ask what-if", detail: "Right-click → ✦. An agent builds a live variant on a draft branch.", scope: "project" },

@@ -2495,7 +2495,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
       {nav.view === "canvas" && <GettingStarted me={me} hasProjects scope="project" />}
       {nav.view === "canvas" && frames.length > 0 && !bloomHintDismissed && (
         <div className="nudge-banner">
-          <span>Hover the 👍 under a screen to react · right-click or ⌃-click for dots, GIFs, and what-ifs.</span>
+          <span>Press S to place stickers where you aim · right-click for dots, GIFs, and what-ifs.</span>
           <button
             className="btn ghost"
             onClick={() => {
@@ -2985,9 +2985,10 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           branchPreviewPattern={project.branchPreviewPattern}
           reactions={reactionsByFrame}
           votes={votesData?.byFrame}
-          onReact={(frameId, emoji) =>
-            void toggleReaction({ frameId, emoji, userId: me._id, sessionToken: sessionToken() }).catch(() => {})
-          }
+          onReact={(frameId, emoji, fx, fy) => {
+            markFirst("reaction");
+            void toggleReaction({ frameId, emoji, fx, fy, userId: me._id, sessionToken: sessionToken() }).catch(() => {});
+          }}
           onVote={(frameId) =>
             void (markFirst("vote"),
             toggleVote({ frameId, userId: me._id, sessionToken: sessionToken() }))
@@ -2998,8 +2999,9 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           }
           onWhatIf={project.gitRemote || repoPath ? (frame) => setWhatIf({ frame }) : undefined}
           gifs={gifsByFrame}
-          onAddGif={(frame) => {
+          onAddGif={(frame, fx, fy) => {
             setGifFor(frame);
+            setGifAnchor(fx !== undefined && fy !== undefined ? { fx, fy } : null);
             setGifUrl("");
             setGifNote(null);
           }}

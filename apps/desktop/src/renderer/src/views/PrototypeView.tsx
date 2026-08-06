@@ -30,6 +30,7 @@ export default function PrototypeView({
   onShowHeatmap,
   onSendToAgent,
   device,
+  notes,
 }: {
   frames: (Doc<"frames"> & { snapshotUrl?: string | null })[];
   devStatus: DevServerStatus;
@@ -45,10 +46,16 @@ export default function PrototypeView({
   onSendToAgent?: (title: string, prompt: string, routePath?: string) => void;
   /** Chosen in the titlebar's split view switcher. */
   device: ProtoDevice;
+  /** Approved design notes, keyed by routePath — shown contextually beside
+      the running screen. Deliberately absent from the tester harness: a
+      tester who reads the designer's rationale is no longer a test. */
+  notes?: Record<string, { text: string; inferred: boolean }[]>;
 }) {
   const routes = frames.filter((f) => f.kind === "route");
   const [routePath, setRoutePath] = useState(routes[0]?.routePath ?? "/");
   const [testsOpen, setTestsOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(true);
+  const routeNotes = notes?.[routePath] ?? [];
   /**
    * PRO-3: a Figma-backed project can flip the stage to the Figma prototype.
    * The embed needs no token — Figma's own viewer handles auth inside the
@@ -105,6 +112,16 @@ export default function PrototypeView({
           </button>
         )}
         {url && !figmaMode && project.supportsDarkMode && <PreviewAppearanceButton />}
+        {routeNotes.length > 0 && (
+          <button
+            className={`btn ghost icon-btn ${notesOpen ? "active" : ""}`}
+            aria-label="Design notes"
+            title="The approved rationale for this screen"
+            onClick={() => setNotesOpen((o) => !o)}
+          >
+            <Icon name="pen" />
+          </button>
+        )}
         <button
           className={`btn ghost ${testsOpen ? "active" : ""}`}
           title="Task-based usability tests, shareable by link (U)"
@@ -154,6 +171,20 @@ export default function PrototypeView({
         />
       )}
       <div className="proto-body">
+        {notesOpen && routeNotes.length > 0 && (
+          <div className="proto-notes">
+            {routeNotes.map((note, i) => (
+              <div key={i} className="frame-note">
+                {note.text}
+                {note.inferred && (
+                  <span className="citation inferred" title="No evidence in the record. The designer approved this as their read">
+                    inferred
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         {drawerOpen && (
           <div className="route-drawer">
             {(() => {

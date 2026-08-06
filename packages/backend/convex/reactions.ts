@@ -14,7 +14,10 @@ import { accessibleProject, requireViewer, resolveViewer } from "./access";
  */
 
 /** The whole palette. A fixed set, because an emoji picker is a rabbit hole. */
-const STAMPS = ["👍", "❤️", "✨", "🔥", "😮", "❓", "😬"];
+// Critique vocabulary, not social approval: love / ship / unsure /
+// confusing / cut / idea. Older stamps in the wild keep rendering; they
+// just stop being offerable.
+const STAMPS = ["❤️", "🔥", "🤔", "😕", "✂️", "💡"];
 
 export const VOTE_BUDGET = 5;
 

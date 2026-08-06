@@ -915,6 +915,22 @@ textarea:focus {
   border-radius: var(--radius-sm);
   padding: 5px 8px;
 }
+.proto-notes {
+  position: absolute;
+  right: 14px;
+  top: 60px;
+  bottom: 20px;
+  width: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 8;
+  pointer-events: none;
+}
+.proto-notes .frame-note {
+  pointer-events: auto;
+}
 .proto-stage {
   flex: 1;
   display: flex;
@@ -4085,107 +4101,34 @@ kbd {
   font-size: var(--text-sm);
 }
 
-/* ── The reaction bar (the Meta pattern) ─────────────────────────────────
-   One quiet thumbs-up below every frame; full color on hover; hold the
-   hover a beat and the whole set slides out, each emoji bouncing on its
-   own hover with its name in a tooltip. Clicking explodes it (lib/burst),
-   pops (lib/sounds), and the reaction lands in the corner cluster. */
-.rx {
+/* ── Sticker mode dock ───────────────────────────────────────────────────
+   The palette while S-mode is on: docked above the toolbar, one selection,
+   the hint says the contract. Reuses the bloom-item glyph buttons. */
+.sticker-dock {
   position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  z-index: 5;
-}
-/* A control, not a stray glyph: the naked half-transparent emoji vanished
-   at canvas zoom against the dot grid (the author looked straight at five
-   frames and saw nothing). The chip gives it a body that survives 50%
-   zoom; the emoji still colors on hover. */
-.rx-trigger {
-  font-size: 18px;
-  line-height: 1;
-  padding: 4px 10px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-default);
-  border-radius: 999px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-  cursor: pointer;
-  /* Full color at rest — the color IS the affordance (Meta's thumb is never
-     gray). The dimmed version vanished twice over: grayscale killed the
-     glyph and the panel body was light-on-light in light mode. */
-  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
-}
-.rx:hover .rx-trigger {
-  transform: scale(1.08);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-}
-.rx-bar {
-  display: flex;
   gap: 2px;
-  margin-left: 6px;
-  padding: 4px 8px;
+  padding: 6px 12px;
   background: var(--bg-panel);
   border: 1px solid var(--border-default);
   border-radius: 999px;
   box-shadow: var(--shadow-panel);
-  opacity: 0;
-  transform: translateX(-8px) scale(0.85);
-  transform-origin: left center;
-  pointer-events: none;
-  /* The Meta beat: the set reveals only after the hover has lasted a
-     second — a glance never opens it, intent does. Leaving is instant. */
-  transition: opacity 180ms var(--ease-out) 1s, transform 180ms var(--ease-out) 1s;
+  z-index: 40;
+  animation: pop-in var(--dur-med) var(--ease-out);
 }
-.rx:hover .rx-bar {
-  opacity: 1;
-  transform: translateX(0) scale(1);
-  pointer-events: auto;
+.sticker-dock .hint {
+  margin-left: 8px;
 }
-.rx-bar:hover {
-  transition-delay: 0s;
+.bloom-item.selected {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  transform: scale(1.15);
 }
-.rx-emoji {
-  font-size: 19px;
-  background: none;
-  border: 0;
-  cursor: pointer;
-  padding: 2px 4px;
-  transition: transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.rx-emoji:hover {
-  transform: scale(1.45) translateY(-5px);
-}
-.emoji-burst {
-  position: fixed;
-  z-index: 200;
-  pointer-events: none;
-}
-.emoji-burst span {
-  position: absolute;
-  font-size: 18px;
-  animation: burst-bit 650ms var(--ease-out) forwards;
-}
-@keyframes burst-bit {
-  from {
-    opacity: 1;
-    transform: translate(0, 0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translate(var(--dx), var(--dy)) scale(0.4);
-  }
-}
-/* The landing: cluster stamps pop in when they arrive. */
-.sticker-cluster .stamp {
-  animation: sticker-drop 260ms var(--ease-out);
-}
-@media (prefers-reduced-motion: reduce) {
-  .rx-bar {
-    transition-delay: 0s;
-  }
-  .emoji-burst span,
-  .sticker-cluster .stamp {
-    animation: none;
-  }
+.sticker-toggle {
+  font-size: 15px;
 }
 
 /* ── Thrown stickers + the bloom palette ─────────────────────────────────
