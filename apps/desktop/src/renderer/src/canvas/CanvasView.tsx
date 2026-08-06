@@ -19,7 +19,7 @@ import PreviewAppearanceButton from "../components/PreviewAppearanceButton";
 import { burstEmoji } from "../lib/burst";
 import { markFirst } from "../lib/firsts";
 import { STICKER_SET, STICKER_ART, STICKER_NAMES } from "../lib/stickers";
-import { playPop, playSticker, playUnstick } from "../lib/sounds";
+import { playSticker, playUnstick } from "../lib/sounds";
 
 interface Viewport {
   x: number;
@@ -1627,7 +1627,11 @@ export default function CanvasView({
               key={emoji}
               className={`bloom-item ${selectedSticker === emoji ? "selected" : ""}`}
               title={STICKER_NAMES[emoji]}
-              onClick={() => setSelectedSticker(emoji)}
+              onClick={() => {
+                setSelectedSticker(emoji);
+                // Picking auditions: you hear the voice before you place it.
+                playSticker(emoji);
+              }}
             >
               <img className="sticker-art" src={STICKER_ART[emoji]} alt={emoji} />
             </button>

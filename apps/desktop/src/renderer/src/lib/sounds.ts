@@ -55,7 +55,8 @@ function note(
   at: number,
   duration: number,
   peak: number,
-  darken?: boolean
+  darken?: boolean,
+  pan = 0
 ): void {
   const osc = audioCtx.createOscillator();
   osc.type = "sine";
@@ -81,11 +82,43 @@ function note(
   }
   osc.connect(gain);
   partial.connect(partialGain).connect(gain);
-  head.connect(master);
+  if (pan !== 0) {
+    const panner = audioCtx.createStereoPanner();
+    panner.pan.value = pan;
+    head.connect(panner).connect(master);
+  } else {
+    head.connect(master);
+  }
   osc.start(at);
   osc.stop(at + duration + 0.05);
   partial.start(at);
   partial.stop(at + duration + 0.05);
+}
+
+/** A pinch of filtered noise: the snip, the crackle, the confetti pop. */
+function noiseBurst(
+  audioCtx: AudioContext,
+  master: GainNode,
+  at: number,
+  duration: number,
+  peak: number,
+  centerHz: number
+): void {
+  const buffer = audioCtx.createBuffer(1, Math.max(1, Math.floor(audioCtx.sampleRate * duration)), audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
+  const src = audioCtx.createBufferSource();
+  src.buffer = buffer;
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = centerHz;
+  bp.Q.value = 1.4;
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.0001, at);
+  gain.gain.exponentialRampToValueAtTime(peak, at + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.001, at + duration);
+  src.connect(bp).connect(gain).connect(master);
+  src.start(at);
 }
 
 function master(audioCtx: AudioContext, level: number): GainNode {
@@ -267,52 +300,67 @@ export function playSticker(emoji: string): void {
     const t0 = audioCtx.currentTime + 0.02;
     switch (emoji) {
       case "❤️": {
-        // Lub-dub.
+        // Lub-dub at the animation's own tempo (the Noto heart squeezes
+        // twice a second): the sound IS the beat you're watching.
         note(audioCtx, out, 150, t0, 0.09, 0.6, true);
-        note(audioCtx, out, 110, t0 + 0.12, 0.12, 0.5, true);
+        note(audioCtx, out, 105, t0 + 0.14, 0.14, 0.55, true);
         break;
       }
       case "🔥": {
-        // A crackle: three fast filtered ticks stepping down.
-        note(audioCtx, out, 900, t0, 0.03, 0.4, true);
-        note(audioCtx, out, 640, t0 + 0.045, 0.03, 0.45, true);
-        note(audioCtx, out, 440, t0 + 0.095, 0.05, 0.4, true);
+        // A real crackle: five noise ticks, randomly spaced and pitched,
+        // the way the flicker never repeats itself.
+        let at = t0;
+        for (let i = 0; i < 5; i += 1) {
+          noiseBurst(audioCtx, out, at, 0.03, 0.35, 1800 + Math.random() * 2600);
+          at += 0.03 + Math.random() * 0.05;
+        }
+        note(audioCtx, out, 90, t0, 0.28, 0.25, true); // the low body of the fire
         break;
       }
       case "🤔": {
-        // Rising hmm.
+        // The rising hmm, with a doubt wobble on the top note.
         note(audioCtx, out, 220, t0, 0.1, 0.4, true);
-        note(audioCtx, out, 277, t0 + 0.09, 0.16, 0.4, true);
+        note(audioCtx, out, 277, t0 + 0.1, 0.2, 0.35, true);
+        note(audioCtx, out, 279, t0 + 0.1, 0.2, 0.2, true); // 2Hz beat against its twin
         break;
       }
       case "😕": {
-        // A wobble: minor second down, unsettled.
-        note(audioCtx, out, 330, t0, 0.1, 0.4);
-        note(audioCtx, out, 311, t0 + 0.09, 0.16, 0.4, true);
+        // Two detuned pairs a semitone apart: audibly unsure of itself.
+        note(audioCtx, out, 330, t0, 0.12, 0.35);
+        note(audioCtx, out, 334, t0, 0.12, 0.25);
+        note(audioCtx, out, 311, t0 + 0.11, 0.18, 0.35, true);
+        note(audioCtx, out, 314, t0 + 0.11, 0.18, 0.22, true);
         break;
       }
       case "✂️": {
-        // Snip snip.
-        note(audioCtx, out, 1400, t0, 0.025, 0.5, true);
-        note(audioCtx, out, 1400, t0 + 0.08, 0.025, 0.5, true);
+        // Snips are broadband, not tonal: two bright noise bites, the
+        // second a touch lower — blades closing.
+        noiseBurst(audioCtx, out, t0, 0.035, 0.5, 3400);
+        noiseBurst(audioCtx, out, t0 + 0.11, 0.04, 0.5, 2800);
         break;
       }
       case "💡": {
-        // The ding.
-        note(audioCtx, out, 1180, t0, 0.3, 0.35);
+        // The filament warms, then the idea arrives: a low swell under a
+        // bright ding, timed to the bulb's glow-up.
+        note(audioCtx, out, 160, t0, 0.22, 0.25, true);
+        note(audioCtx, out, 1180, t0 + 0.12, 0.32, 0.4);
         break;
       }
       case "🎉": {
-        // A little fanfare: fast major arpeggio up.
+        // Fanfare plus confetti: the arpeggio carries, three tiny noise
+        // pops land around it like paper hitting the floor.
         note(audioCtx, out, 523, t0, 0.08, 0.4);
         note(audioCtx, out, 659, t0 + 0.06, 0.08, 0.4);
-        note(audioCtx, out, 784, t0 + 0.12, 0.18, 0.45);
+        note(audioCtx, out, 784, t0 + 0.12, 0.2, 0.45);
+        noiseBurst(audioCtx, out, t0 + 0.1, 0.03, 0.3, 2400);
+        noiseBurst(audioCtx, out, t0 + 0.18, 0.03, 0.28, 3000);
+        noiseBurst(audioCtx, out, t0 + 0.26, 0.03, 0.25, 2000);
         break;
       }
       case "👀": {
-        // Two quick identical blinks.
-        note(audioCtx, out, 740, t0, 0.05, 0.4);
-        note(audioCtx, out, 740, t0 + 0.09, 0.05, 0.4);
+        // The eyes dart: the same blink, hard left then hard right.
+        note(audioCtx, out, 740, t0, 0.05, 0.42, false, -0.8);
+        note(audioCtx, out, 740, t0 + 0.11, 0.05, 0.42, false, 0.8);
         break;
       }
       default:
