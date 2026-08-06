@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, ipcMain, dialog, nativeTheme } from "electro
 import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
+import { execFile } from "child_process";
 import { DEEP_LINK_PROTOCOL, parseAuthCallback, parseDeepLink } from "@commons/shared";
 import type { AgentStartOptions, AnnotationGenerateRequest } from "@commons/shared";
 import { discoverRouteLinks, inspectRepo, listRepoApps } from "./routeDiscovery";
@@ -386,6 +387,24 @@ app.whenReady().then(() => {
       fs.writeFileSync(dockPrefPath(), mode);
     } catch {
       // Unwritable userData — the flash returns, nothing else breaks.
+    }
+    // The QUIT-state icon: a stopped app's dock tile shows the bundle's
+    // static icon, and rewriting the bundle would break its signature. The
+    // Finder custom-icon lives in extended attributes OUTSIDE the signing
+    // seal — the sanctioned "paste an icon on an app" mechanism — so light
+    // mode pins the light icon there, and dark clears it back to the
+    // bundled dark. Best-effort: if the Dock's cache lags, it catches up
+    // on its own; nothing here is load-bearing.
+    if (app.isPackaged && process.platform === "darwin") {
+      const appRoot = path.resolve(app.getPath("exe"), "../../..");
+      const iconPng = path.join(process.resourcesPath, `dock-${mode}.png`);
+      const script =
+        mode === "light"
+          ? `ObjC.import('AppKit'); const i = $.NSImage.alloc.initWithContentsOfFile(${JSON.stringify(iconPng)}); $.NSWorkspace.sharedWorkspace.setIconForFileOptions(i, ${JSON.stringify(appRoot)}, 0);`
+          : `ObjC.import('AppKit'); $.NSWorkspace.sharedWorkspace.setIconForFileOptions($(), ${JSON.stringify(appRoot)}, 0);`;
+      execFile("osascript", ["-l", "JavaScript", "-e", script], () => {
+        // Failure leaves the bundled icon — never worth surfacing.
+      });
     }
   });
 
