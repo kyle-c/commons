@@ -22,6 +22,7 @@ export type FirstKey =
   | "flow"
   | "survey"
   | "narrate"
+  | "invite"
   | "project";
 
 /**

@@ -5,42 +5,54 @@ import { hasFirst, type FirstKey } from "../lib/firsts";
 const DISMISSED_KEY = "commons.gettingStartedDismissed";
 const CELEBRATED_KEY = "commons.toolkitCelebrated";
 
+/**
+ * The quest ladder, made progressive (the author's correction: getting set
+ * up, bringing people in, and speaking on the work are a JOURNEY, not a
+ * grab-bag). Five phases; visible tips always come from the earliest phase
+ * with work left, so nobody is taught what-ifs before they have a project,
+ * or flow maps before they've commented. The role tunes ordering inside the
+ * later phases only — the ladder itself is universal. Checks still come
+ * only from doing the real thing (lib/firsts).
+ */
 interface Quest {
   key: FirstKey;
   label: string;
   detail: string;
   scope: "home" | "project";
+  phase: number;
 }
 
-/**
- * The toolkit, as a quest pool (the author's ask: keep 2-3 tips visible,
- * refilling, until the high-value features have each been used once). One
- * master list; the chosen role floats its signature moves to the front but
- * everyone's pool is the whole product — the point is discovering the parts
- * you would not have guessed at. Checks still come only from doing.
- */
+const PHASE_NAMES: Record<number, string> = {
+  1: "Set up",
+  2: "Bring people in",
+  3: "Speak on the work",
+  4: "Go deeper",
+  5: "Master the map",
+};
+
 const POOL: Quest[] = [
-  { key: "project", label: "Put a repo on the canvas", detail: "+ New project, or connect GitHub and deployed repos appear on their own.", scope: "home" },
-  { key: "opened", label: "Open a project", detail: "Any card below — every screen in it is the real product, live.", scope: "home" },
-  { key: "comment", label: "Pin a comment", detail: "Press C, click the exact pixel, say the thing.", scope: "project" },
-  { key: "reaction", label: "Place a sticker", detail: "Press S, pick a sticker, click exactly where you mean it.", scope: "project" },
-  { key: "vote", label: "Spend a dot", detail: "Right-click a screen → ●. Five dots per project; spending one is a choice.", scope: "project" },
-  { key: "gif", label: "Throw a GIF", detail: "Right-click → 🎞️ — search, paste, or drop one where you aim.", scope: "project" },
-  { key: "whatif", label: "Ask what-if", detail: "Right-click → ✦. An agent builds a live variant on a draft branch.", scope: "project" },
-  { key: "agent", label: "Send a thread to the agent", detail: "Any comment thread → ⚡. The draft comes back with a preview link.", scope: "project" },
-  { key: "prototype", label: "Try the prototype", detail: "The play tab runs the real app full-size.", scope: "project" },
-  { key: "test", label: "Start a user test", detail: "Tasks go out as one link; results land back on the canvas.", scope: "project" },
-  { key: "share", label: "Copy a share link", detail: "The share menu mints a link anyone can open — no account needed.", scope: "project" },
-  { key: "flow", label: "See the map", detail: "⌘3 — the whole app as a graph, drawn from real use.", scope: "project" },
-  { key: "survey", label: "Survey your coverage", detail: "The ledger (G) walks your running app and finds screens the canvas lacks.", scope: "project" },
-  { key: "narrate", label: "Approve a design note", detail: "Narrate (N) drafts the why behind each screen; nothing shows until you approve it.", scope: "project" },
+  { key: "project", label: "Put a repo on the canvas", detail: "+ New project, or connect GitHub and deployed repos appear on their own.", scope: "home", phase: 1 },
+  { key: "opened", label: "Open a project", detail: "Any card below — every screen in it is the real product, live.", scope: "home", phase: 1 },
+  { key: "invite", label: "Invite a teammate", detail: "The Team menu (⌘T), or invite from a project's Share menu — the email carries the project.", scope: "home", phase: 2 },
+  { key: "share", label: "Copy a share link", detail: "The share menu mints a link anyone can open — no account needed.", scope: "project", phase: 2 },
+  { key: "comment", label: "Pin a comment", detail: "Press C, click the exact pixel, say the thing.", scope: "project", phase: 3 },
+  { key: "reaction", label: "Place a sticker", detail: "Press S, pick a sticker, click exactly where you mean it.", scope: "project", phase: 3 },
+  { key: "vote", label: "Spend a dot", detail: "Right-click a screen → ●. Five dots per project; spending one is a choice.", scope: "project", phase: 3 },
+  { key: "whatif", label: "Ask what-if", detail: "Right-click a screen → ✦. An agent builds a live variant on a draft branch.", scope: "project", phase: 4 },
+  { key: "agent", label: "Send a thread to the agent", detail: "Any comment thread → ⚡. The draft comes back with a preview link.", scope: "project", phase: 4 },
+  { key: "prototype", label: "Try the prototype", detail: "The play tab runs the real app full-size.", scope: "project", phase: 4 },
+  { key: "gif", label: "Throw a GIF", detail: "In sticker mode, 🎞️ — search, paste, or drop one where you aim.", scope: "project", phase: 4 },
+  { key: "test", label: "Start a user test", detail: "Tasks go out as one link; results land back on the canvas.", scope: "project", phase: 4 },
+  { key: "flow", label: "See the map", detail: "⌘3 — the whole app as a graph, drawn from real use.", scope: "project", phase: 5 },
+  { key: "survey", label: "Survey your coverage", detail: "The ledger (G) walks your running app and finds screens the canvas lacks.", scope: "project", phase: 5 },
+  { key: "narrate", label: "Approve a design note", detail: "Narrate (N) drafts the why behind each screen; nothing shows until you approve it.", scope: "project", phase: 5 },
 ];
 
-/** The role's signature moves float first; the rest keep pool order. */
+/** Inside phases 4-5, the role's signature moves lead. */
 const ROLE_LEAD: Record<"designer" | "pm" | "engineer", FirstKey[]> = {
-  designer: ["comment", "reaction", "whatif"],
-  pm: ["prototype", "reaction", "test"],
-  engineer: ["project", "agent", "whatif"],
+  designer: ["whatif", "gif", "prototype"],
+  pm: ["prototype", "test", "whatif"],
+  engineer: ["agent", "whatif", "prototype"],
 };
 
 export default function GettingStarted({
@@ -68,17 +80,19 @@ export default function GettingStarted({
   const pool = POOL.filter((q) => (role === "engineer" ? true : q.key !== "project"));
   const done = (q: Quest) => (q.key === "project" ? hasProjects || hasFirst("project") : hasFirst(q.key));
   const lead = ROLE_LEAD[role];
+  // Phase is the ladder; the role only reorders within a phase.
   const ordered = [...pool].sort((a, b) => {
+    if (a.phase !== b.phase) return a.phase - b.phase;
     const ai = lead.indexOf(a.key);
     const bi = lead.indexOf(b.key);
     return (ai === -1 ? lead.length : ai) - (bi === -1 ? lead.length : bi);
   });
   const doneCount = pool.filter(done).length;
   const allDone = doneCount === pool.length;
+  const currentPhase = ordered.find((q) => !done(q))?.phase;
 
   if (allDone && celebrated) return null;
   if (allDone) {
-    // The finale shows wherever the last milestone landed, once, then never.
     return (
       <div className={`getting-started ${scope === "project" ? "in-project" : ""}`}>
         <div className="gs-head">
@@ -99,15 +113,21 @@ export default function GettingStarted({
     );
   }
 
-  // Always 2-3 tips for THIS surface: the next incomplete quests at this
-  // scope, refilling as earlier ones complete.
-  const next = ordered.filter((q) => q.scope === scope && !done(q)).slice(0, 3);
+  // 2-3 tips for THIS surface, in ladder order, held to the current phase
+  // (+1, so a surface with no current-phase work teaches what's next
+  // rather than nothing).
+  const next = ordered
+    .filter((q) => q.scope === scope && !done(q) && q.phase <= (currentPhase ?? 5) + 1)
+    .slice(0, 3);
   if (next.length === 0) return null;
+  const phaseName = PHASE_NAMES[next[0].phase];
 
   return (
     <div className={`getting-started ${scope === "project" ? "in-project" : ""}`}>
       <div className="gs-head">
-        <span>Getting started</span>
+        <span>
+          Getting started<span className="gs-phase"> · {phaseName}</span>
+        </span>
         <span className="gs-count">
           {doneCount} of {pool.length}
         </span>

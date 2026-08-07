@@ -4064,6 +4064,10 @@ kbd {
 .gs-head > :first-child {
   flex: 1;
 }
+.gs-phase {
+  color: var(--accent);
+  font-weight: 500;
+}
 .gs-count {
   font-size: var(--text-xs);
   color: var(--text-tertiary);

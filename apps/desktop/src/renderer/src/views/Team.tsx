@@ -6,6 +6,7 @@ import { initials, sessionToken } from "../lib/session";
 import { useSurfaceExclusivity } from "../lib/surfaces";
 import { registerShortcut } from "../lib/shortcuts";
 import { useClickOutside } from "../lib/useClickOutside";
+import { markFirst } from "../lib/firsts";
 import Icon from "../components/icons";
 import { PopSection, RevealField } from "../components/popover";
 
@@ -32,6 +33,7 @@ export default function Team({ me }: { me: Doc<"users"> }) {
 
   const send = async (value: string) => {
     const result = await invite({ email: value, invitedBy: me._id });
+    markFirst("invite");
     if (result.ok) {
       setNotice(`Invited ${value.toLowerCase()}. They'll get an email.`);
     } else {

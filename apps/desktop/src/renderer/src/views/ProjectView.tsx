@@ -733,6 +733,7 @@ function SharePopover({
       sessionToken: sessionToken(),
     }).catch(() => ({ ok: false as const, reason: "invalid_email" as const }));
     if (result.ok) {
+      markFirst("invite");
       setInviteNote(`Invited — the email links straight to ${project.name}.`);
       setInviteEmail("");
     } else {
