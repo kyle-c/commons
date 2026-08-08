@@ -17,6 +17,7 @@ import AgentPanel, { type PanelSession } from "../agents/AgentPanel";
 import NarrationPanel from "./NarrationPanel";
 import { useAgentSessions, type AgentResultEvent } from "../agents/useAgentSessions";
 import { getConvexUrl, initials, sessionToken, timeAgo } from "../lib/session";
+import { toast } from "../lib/toast";
 import { usePublicSiteUrl } from "../lib/publicUrl";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { playConnected, playDraftReady, playProposals, playThrow } from "../lib/sounds";
@@ -1114,6 +1115,9 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const [crawlNote, setCrawlNote] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [drawOpen, setDrawOpen] = useState(false);
+  // "Clear drawn paths" deletes with no undo — the button arms on the first
+  // click and only fires on the second, disarming itself after a beat.
+  const [clearArmed, setClearArmed] = useState(false);
   const [connectFrom, setConnectFrom] = useState<string>("");
   const [connectTo, setConnectTo] = useState<string>("");
   const [connectLabel, setConnectLabel] = useState("");
@@ -1395,7 +1399,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
       if (result && "repoPath" in result) {
         await linkRepo({ projectId: nav.projectId, userId: me._id, repoPath: result.repoPath, machineId: machineId ?? undefined, sessionToken: sessionToken() });
       } else if (result && "error" in result) {
-        alert(`Clone failed: ${result.error}`);
+        toast(`Clone failed: ${result.error}`, { tone: "error" });
       }
     } finally {
       setCloning(false);
@@ -2238,7 +2242,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
                 }
                 onClick={async () => {
                   const result = await window.commons.pullRepo(repoPath);
-                  if (!result.ok) alert(result.message);
+                  if (!result.ok) toast(result.message, { tone: "error" });
                 }}
               >
                 Pull ↓{gitStatus.behind}
@@ -2896,13 +2900,21 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               </button>
               {(flowEdges ?? []).some((e) => e.source === "manual") && (
                 <button
-                  className="btn ghost quiet-action"
+                  className={`btn ghost quiet-action ${clearArmed ? "danger" : ""}`}
                   title="Remove every hand-drawn path. Tester-derived and code-declared paths stay."
-                  onClick={() =>
-                    void clearFlowEdges({ projectId: nav.projectId, source: "manual", userId: me._id, sessionToken: sessionToken() }).catch(() => {})
-                  }
+                  onClick={() => {
+                    if (!clearArmed) {
+                      setClearArmed(true);
+                      window.setTimeout(() => setClearArmed(false), 4000);
+                      return;
+                    }
+                    setClearArmed(false);
+                    void clearFlowEdges({ projectId: nav.projectId, source: "manual", userId: me._id, sessionToken: sessionToken() }).catch(() =>
+                      toast("The paths didn't clear — check your connection and try again.", { tone: "error" })
+                    );
+                  }}
                 >
-                  Clear drawn paths
+                  {clearArmed ? "Click again to clear them" : "Clear drawn paths"}
                 </button>
               )}
             </div>
@@ -3001,6 +3013,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
           viewerHasRepo={!!repoPath}
           selfHasRepoElsewhere={!repoPath && selfHasRepoElsewhere}
           repoHolderNames={holderNames}
+          onFixFigma={project.figmaFileKey ? () => setOpenSetting("figma") : undefined}
           initialThreadId={nav.threadId}
           initialFrameId={nav.frameId}
           frameReloadTokens={frameReloadTokens}
@@ -3029,7 +3042,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             void (markFirst("vote"),
             toggleVote({ frameId, userId: me._id, sessionToken: sessionToken() }))
               .then((r) => {
-                if (r && "budgetSpent" in r && r.budgetSpent) alert("All five of your dots are spent — take one back first.");
+                if (r && "budgetSpent" in r && r.budgetSpent) toast("All five of your dots are spent — take one back first.");
               })
               .catch(() => {})
           }

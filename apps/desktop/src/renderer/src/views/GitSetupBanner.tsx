@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Doc } from "@commons/backend/convex/_generated/dataModel";
 import type { GitSetupStatus } from "@commons/shared";
+import { toast } from "../lib/toast";
 
 const DISMISS_KEY = "commons.gitSetupDismissed";
 
@@ -33,7 +34,7 @@ export default function GitSetupBanner({ me, probeRemote }: { me: Doc<"users">; 
     setBusy(true);
     try {
       const result = await window.commons.setGitIdentity(me.name, me.email);
-      if (!result.ok) alert(result.message);
+      if (!result.ok) toast(result.message, { tone: "error" });
       refresh();
     } finally {
       setBusy(false);

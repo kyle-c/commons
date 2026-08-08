@@ -154,6 +154,11 @@ export default function GettingStarted({
           </div>
         </div>
       ))}
+      {/* The one teaching line that unlocks all the others: the cheat sheet
+          lists every shortcut the current surface registered. */}
+      <span className="gs-tip hint">
+        Press <kbd>?</kbd> anywhere for the keyboard map.
+      </span>
     </div>
   );
 }

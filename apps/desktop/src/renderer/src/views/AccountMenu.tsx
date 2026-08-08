@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc } from "@commons/backend/convex/_generated/dataModel";
 import { initials, sessionToken } from "../lib/session";
+import { toast } from "../lib/toast";
 import { useSurfaceExclusivity } from "../lib/surfaces";
 import { useClickOutside } from "../lib/useClickOutside";
 import { effectiveTheme, onSystemThemeChange, setThemePreference } from "../lib/theme";
@@ -87,7 +88,7 @@ export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSig
       setOpen(false);
     } catch (err) {
       console.error("avatar upload failed", err);
-      alert("Couldn't upload that image — try a different file.");
+      toast("Couldn't upload that image — try a different file.", { tone: "error" });
     } finally {
       setBusy(false);
     }

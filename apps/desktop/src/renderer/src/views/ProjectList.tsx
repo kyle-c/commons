@@ -5,6 +5,7 @@ import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import type { AppCandidate, RepoInspection } from "@commons/shared";
 import type { Nav } from "../App";
 import { initials, timeAgo, sessionToken } from "../lib/session";
+import { toast } from "../lib/toast";
 import { layoutFrames } from "../lib/frameLayout";
 import GitSetupBanner from "./GitSetupBanner";
 import { useMachineId } from "../lib/machine";
@@ -181,7 +182,7 @@ export default function ProjectList({
   const addProject = async (workspaceId: Id<"workspaces">) => {
     if (adding) return;
     if (!window.commons) {
-      alert("Adding local repos needs the desktop app.");
+      toast("Adding a local repo needs the Mac app. Connect GitHub in the workspace menu and deployed projects appear here on their own.");
       return;
     }
     setAdding(true);
@@ -684,8 +685,10 @@ export default function ProjectList({
                                     userId: me._id,
                                     sessionToken: sessionToken(),
                                   });
-                                } catch (err) {
-                                  alert(err instanceof Error ? err.message : String(err));
+                                } catch {
+                                  // Convex redacts thrown messages on prod;
+                                  // plain words beat "Server Error".
+                                  toast("The delete didn't go through — try again.", { tone: "error" });
                                 }
                               }}
                             >

@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import { timeAgo, sessionToken } from "../lib/session";
+import { toast } from "../lib/toast";
 import { markFirst } from "../lib/firsts";
 import { usePublicSiteUrl } from "../lib/publicUrl";
 import { playFirstResult } from "../lib/sounds";
@@ -116,8 +117,8 @@ function NewTestForm({
         intercept: recruit ? { enabled: true, rate: recruitRate } : undefined,
       });
       onDone();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : String(err));
+    } catch {
+      toast("The test didn't save — check your connection and try again.", { tone: "error" });
     } finally {
       setSaving(false);
     }

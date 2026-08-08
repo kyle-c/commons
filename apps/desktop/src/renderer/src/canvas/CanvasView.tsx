@@ -10,6 +10,7 @@ import { postGuestThread, storedGuestName } from "../lib/guestApi";
 import ThreadPanel from "../comments/ThreadPanel";
 import Minimap from "./Minimap";
 import { initials, sessionToken } from "../lib/session";
+import { toast } from "../lib/toast";
 import { resolveFrameUrl } from "../lib/frameUrl";
 import { draftPreviewUrl } from "@commons/shared";
 import { tidyPositions } from "../lib/frameLayout";
@@ -114,6 +115,8 @@ interface Props {
   onBloom?: (frame: Doc<"frames">, clientX: number, clientY: number, fx: number, fy: number) => void;
   /** Whether the previewed app declares a dark mode; the theme flip hides otherwise. */
   supportsDarkMode?: boolean;
+  /** A Figma frame whose render failed offers this: open the Figma settings. */
+  onFixFigma?: () => void;
 }
 
 /**
@@ -316,6 +319,7 @@ const FrameLayer = memo(function FrameLayer({
   onRemoveGif,
   onEditNote,
   onBloom,
+  onFixFigma,
 }: {
   frames: CanvasFrame[];
   localPos: Record<string, { x: number; y: number }>;
@@ -347,6 +351,7 @@ const FrameLayer = memo(function FrameLayer({
   onRemoveGif?: (frameId: Id<"frames">) => void;
   onEditNote?: (note: { _id: string; text: string }) => void;
   onBloom?: (frame: Doc<"frames">, clientX: number, clientY: number, fx: number, fy: number) => void;
+  onFixFigma?: () => void;
 }) {
   return (
     <>
@@ -386,6 +391,18 @@ const FrameLayer = memo(function FrameLayer({
               }}
             >
               <span>{frame.title}</span>
+              {/* A failed Figma render used to be a wall: the error sat in the
+                  title with nowhere to go. The fix lives where the failure is. */}
+              {onFixFigma && frame.title.startsWith("Figma render failed") && (
+                <button
+                  className="frame-fix"
+                  title="Usually an expired or under-scoped Figma token. Opens the Figma settings so you can paste a fresh one and re-import."
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={onFixFigma}
+                >
+                  Fix access
+                </button>
+              )}
               <span className="route">{frame.routePath}</span>
               {frame.kind === "state" && (
                 <span
@@ -608,6 +625,7 @@ export default function CanvasView({
   onEditNote,
   onBloom,
   supportsDarkMode,
+  onFixFigma,
   projectId,
   frames,
   threads,
@@ -1239,7 +1257,7 @@ export default function CanvasView({
     } catch {
       setPendingPin(null);
       setDraft(restore);
-      alert("The comment didn't post — check your connection and try again.");
+      toast("The comment didn't post — check your connection and try again.", { tone: "error" });
     }
   };
 
@@ -1389,6 +1407,7 @@ export default function CanvasView({
           gifs={gifs}
           onAddGif={onAddGif}
           onRemoveGif={onRemoveGif}
+          onFixFigma={onFixFigma}
           {...stableFrameHandlers}
         />
 
