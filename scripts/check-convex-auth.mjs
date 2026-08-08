@@ -80,7 +80,18 @@ function bodyAfter(source, openBraceIndex) {
 
 const declaration = /export const (\w+)\s*=\s*(internalMutation|internalQuery|internalAction|mutation|query|action)\(\{/g;
 
+/**
+ * Resolved-then-defeated: a body that resolves identity and then falls back to
+ * the caller's claim, `resolveViewer(...) ?? args.userId`. It mentions a gate
+ * (so the scan above is satisfied) while honouring the very claim the gate
+ * exists to reject — an unauthenticated caller supplies the id and passes.
+ * The 2026-08-08 review found this exact shape live in comments.postAgentReply
+ * and repoLinks.forUser. Flag it wherever it appears.
+ */
+const FALLBACK_TO_CLAIM = /resolveViewer\([\s\S]{0,80}?\?\?/;
+
 const ungated = [];
+const fallbacks = [];
 const staleAllowlist = new Set(Object.keys(OPEN_BY_DESIGN));
 let publicCount = 0;
 
@@ -93,8 +104,10 @@ for (const file of readdirSync(convexDir).sort()) {
     publicCount += 1;
     const key = `${file}:${name}`;
     staleAllowlist.delete(key);
-    if (key in OPEN_BY_DESIGN) continue;
     const body = bodyAfter(source, match.index + match[0].length);
+    // Fallback-to-claim is dangerous even in an OPEN_BY_DESIGN function.
+    if (FALLBACK_TO_CLAIM.test(body)) fallbacks.push({ key, kind });
+    if (key in OPEN_BY_DESIGN) continue;
     if (!GATES.some((gate) => body.includes(gate))) ungated.push({ key, kind });
   }
 }
@@ -115,6 +128,17 @@ if (ungated.length > 0) {
 
   If a function genuinely must stay open, add it to OPEN_BY_DESIGN in
   ${path.relative(process.cwd(), fileURLToPath(import.meta.url))} with the reason.`);
+}
+
+if (fallbacks.length > 0) {
+  failed = true;
+  console.error(`\n✘ ${fallbacks.length} public Convex function(s) fall back to a claimed identity:\n`);
+  for (const { key, kind } of fallbacks) console.error(`    ${key}  (${kind})`);
+  console.error(`
+  These resolve the viewer and then honour the caller's userId when no session
+  resolves ("resolveViewer(...) ?? args.userId"). An unauthenticated caller
+  supplies the id and the gate passes. Drop the fallback: use the resolved
+  viewer alone (requireViewer for "must be signed in"), never the claim.`);
 }
 
 if (staleAllowlist.size > 0) {

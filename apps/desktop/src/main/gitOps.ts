@@ -11,6 +11,29 @@ import crypto from "crypto";
  * only fast-forward pulls and Commons-owned draft branches.
  */
 
+/**
+ * A git remote from a project doc is collaborator-writable (`setGitRemote`
+ * validates it only as a string) and flows straight into `git clone` and
+ * `git ls-remote`. git's transport helpers turn that into remote code
+ * execution on the host: `ext::sh -c "<cmd>"` runs the string in a shell, and
+ * a value starting with `-` is parsed as a git option (argument injection).
+ * The ls-remote probe even fires on project-list render, so this is
+ * near-zero-click. Allow only the real remote shapes and reject the rest;
+ * callers also pass `--` before the remote as belt-and-braces.
+ */
+export function isSafeGitRemote(remote: string): boolean {
+  if (typeof remote !== "string" || remote.length === 0 || remote.length > 2048) return false;
+  if (remote.startsWith("-")) return false; // never an option
+  if (/[\x00-\x1f]/.test(remote)) return false; // no control chars / newlines
+  if (remote.includes("::")) return false; // ext::/transport helpers = RCE
+  // https://…, http://…, ssh://…, git://…, or scp-like user@host:path.
+  return (
+    /^https?:\/\/\S+$/i.test(remote) ||
+    /^(ssh|git):\/\/\S+$/i.test(remote) ||
+    /^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:\S+$/.test(remote)
+  );
+}
+
 function git(
   cwd: string,
   args: string[],
@@ -162,11 +185,14 @@ export async function insideRepo(dir: string): Promise<boolean> {
 }
 
 export async function clone(gitRemote: string, targetDir: string): Promise<{ ok: boolean; message: string }> {
+  if (!isSafeGitRemote(gitRemote)) {
+    return { ok: false, message: "That git remote isn't a supported URL (expected https://, ssh://, or git@host:path)." };
+  }
   const parent = path.dirname(targetDir);
   const result = await new Promise<{ ok: boolean; stderr: string }>((resolve) => {
     execFile(
       "git",
-      ["clone", gitRemote, targetDir],
+      ["clone", "--", gitRemote, targetDir],
       { cwd: parent, timeout: 600_000, env: process.env },
       (error, _stdout, stderr) => resolve({ ok: !error, stderr: stderr.trim() })
     );
@@ -303,8 +329,8 @@ export async function checkSetup(probeRemote?: string): Promise<GitSetupStatus> 
   const name = await git(home, ["config", "--global", "user.name"]);
   const email = await git(home, ["config", "--global", "user.email"]);
   let remoteAccess: GitSetupStatus["remoteAccess"] = "skipped";
-  if (probeRemote) {
-    const probe = await git(home, ["ls-remote", "--heads", probeRemote], {
+  if (probeRemote && isSafeGitRemote(probeRemote)) {
+    const probe = await git(home, ["ls-remote", "--heads", "--", probeRemote], {
       timeout: 20_000,
       env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
     });

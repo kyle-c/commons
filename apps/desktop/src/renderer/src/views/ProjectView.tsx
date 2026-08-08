@@ -1762,8 +1762,8 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
     });
     rememberMapping(info.sessionId, mirrorId);
     setActiveAgentSessionId(mirrorId);
+    setSidePanel("agents"); // was after the return — local sessions never opened the panel
     return mirrorId;
-    setSidePanel("agents");
   };
 
   /**

@@ -99,7 +99,11 @@ export const forUser = query({
     machineId: v.optional(v.string()),
   },
   handler: async (ctx, { projectId, machineId, ...viewer }) => {
-    const userId = (await resolveViewer(ctx, viewer)) ?? viewer.userId;
+    // Strict identity + project gate, like `holders`: the fallback to the
+    // claimed userId let an account-less caller read anyone's local repo path
+    // (OS username, directory layout) for any project.
+    const userId = await resolveViewer(ctx, viewer);
+    if (!userId || !(await accessibleProject(ctx, projectId, userId))) return null;
     const rows = await ctx.db
       .query("repoLinks")
       .withIndex("by_user_project", (q) => q.eq("userId", userId).eq("projectId", projectId))

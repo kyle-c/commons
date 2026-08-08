@@ -35,8 +35,11 @@ export const sendMagicLinkEmail = internalAction({
   <p><a href="${link}" style="display:inline-block;background:#4c6ef5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Sign in to Commons</a></p>
   <p style="color:#888;font-size:13px">This link works once and expires in 15 minutes. If you didn't request it, ignore this email.</p>
 </div>`;
-    // Unkeyed environments print the link so dev sign-ins still work.
-    if (!process.env.RESEND_API_KEY) console.log(`magic link for ${email}: ${link}`);
+    // Dev convenience: print the link so local sign-ins work without email.
+    // Gated on an EXPLICIT dev flag, never on a missing RESEND_API_KEY — a
+    // prod deploy that lost its key must not start logging live auth links
+    // (each redeems to a session) into the Convex logs.
+    if (process.env.COMMONS_DEV === "1") console.log(`magic link for ${email}: ${link}`);
     await sendEmail(email, "Your Commons sign-in link", html);
   },
 });

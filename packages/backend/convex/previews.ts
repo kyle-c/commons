@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { accessibleProject, randomToken, resolveViewer } from "./access";
 import { normalizeRemote } from "./previewLogic";
 import { siteUrl } from "./siteUrl";
@@ -23,6 +24,23 @@ import { siteUrl } from "./siteUrl";
  */
 
 const MAX_FILES = 200;
+
+/** Constant-time compare for the runToken bearer credential. */
+function sameToken(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/** Free every uploaded blob a build holds — call on every terminal path so
+ *  failed and stalled builds don't leak storage (only success freed them). */
+async function freeBuildBlobs(
+  ctx: { storage: { delete: (id: Id<"_storage">) => Promise<void> } },
+  files: { storageId: Id<"_storage"> }[]
+): Promise<void> {
+  for (const file of files) await ctx.storage.delete(file.storageId).catch(() => {});
+}
 
 export const startBuild = mutation({
   args: {
@@ -157,7 +175,7 @@ export const buildTokenOk = internalQuery({
     const id = ctx.db.normalizeId("previewBuilds", buildId);
     if (!id) return null;
     const build = await ctx.db.get(id);
-    if (!build || build.runToken !== runToken) return null;
+    if (!build || !sameToken(build.runToken, runToken)) return null;
     if (build.status !== "building") return null;
     if (build.files.length >= MAX_FILES) return null;
     return { id, projectId: build.projectId };
@@ -187,9 +205,11 @@ export const finishBuild = internalMutation({
   },
   handler: async (ctx, args) => {
     const build = await ctx.db.get(args.buildId);
-    if (!build || build.runToken !== args.runToken || build.status !== "building") return;
+    if (!build || !sameToken(build.runToken, args.runToken) || build.status !== "building") return;
     if (args.error || !args.indexHtml) {
-      await ctx.db.patch(args.buildId, { status: "error", error: args.error ?? "The build produced no index.html." });
+      // A failed finish still uploaded its files — free them, don't leak them.
+      await freeBuildBlobs(ctx, build.files);
+      await ctx.db.patch(args.buildId, { status: "error", error: args.error ?? "The build produced no index.html.", files: [] });
       return;
     }
     await ctx.db.patch(args.buildId, { status: "ready", indexHtml: args.indexHtml });
@@ -224,8 +244,11 @@ export const markError = internalMutation({
   args: { buildId: v.id("previewBuilds"), runToken: v.string(), error: v.string() },
   handler: async (ctx, { buildId, runToken, error }) => {
     const build = await ctx.db.get(buildId);
-    if (!build || build.runToken !== runToken) return;
-    if (build.status === "building") await ctx.db.patch(buildId, { status: "error", error });
+    if (!build || !sameToken(build.runToken, runToken)) return;
+    if (build.status === "building") {
+      await freeBuildBlobs(ctx, build.files);
+      await ctx.db.patch(buildId, { status: "error", error, files: [] });
+    }
   },
 });
 
@@ -281,9 +304,13 @@ export const sweepStalled = internalMutation({
     const builds = await ctx.db.query("previewBuilds").collect();
     for (const build of builds) {
       if (build.status !== "building" || build._creationTime > cutoff) continue;
+      // A stalled build already uploaded some files — free them here, the one
+      // terminal path the success-side supersede loop never reaches.
+      await freeBuildBlobs(ctx, build.files);
       await ctx.db.patch(build._id, {
         status: "error",
         error: "The build never reported back — its Actions run may have failed. Check the repo's Actions tab, or try again.",
+        files: [],
       });
     }
   },

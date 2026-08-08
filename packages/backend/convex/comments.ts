@@ -209,7 +209,10 @@ export const postAgentReply = mutation({
     images: v.optional(v.array(v.id("_storage"))),
   },
   handler: async (ctx, args) => {
-    const hostId = (await resolveViewer(ctx, args)) ?? args.hostUserId;
+    // Identity is the session, never the claimed hostUserId: without this a
+    // share-link guest could forge agent replies (and ⚡ Slack posts) as any
+    // member by passing their id and no token.
+    const hostId = await requireViewer(ctx, args);
     const thread = await ctx.db.get(args.threadId);
     const project = thread ? await ctx.db.get(thread.projectId) : null;
     if (!thread || !project || !(await canAccessProject(ctx, project, hostId))) {

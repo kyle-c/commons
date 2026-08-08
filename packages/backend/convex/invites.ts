@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { canAccessProject, requireViewer, resolveViewer } from "./access";
+import { canAccessProject, isWorkspaceMember, requireViewer, resolveViewer } from "./access";
 
 // Invite a teammate by email. Sign-in is invite-gated (see auth.completeGoogleSignIn),
 // so this is what actually opens the door; the email is a courtesy nudge.
@@ -68,11 +68,22 @@ export const pending = query({
     // Fails soft, not loud: a throwing query takes the whole render down
     // with it, and a client whose token hasn't loaded yet would white-screen
     // instead of showing an empty panel. Returning nothing leaks nothing.
-    if (!(await resolveViewer(ctx, args))) return [];
+    const viewerId = await resolveViewer(ctx, args);
+    if (!viewerId) return [];
     const invites = await ctx.db.query("invites").collect();
+    // Only invites the viewer is entitled to see: ones they sent, or ones in a
+    // workspace they belong to. An unscoped .collect() handed every pending
+    // invitee's email across all tenants to any signed-in user.
+    const visible = await Promise.all(
+      invites.map(async (i) => {
+        if (i.acceptedAt) return false;
+        if (i.invitedBy === viewerId) return true;
+        return i.workspaceId ? await isWorkspaceMember(ctx, i.workspaceId, viewerId) : false;
+      })
+    );
     return await Promise.all(
       invites
-        .filter((i) => !i.acceptedAt)
+        .filter((_, idx) => visible[idx])
         .map(async (i) => ({ ...i, inviter: await ctx.db.get(i.invitedBy) }))
     );
   },
@@ -81,8 +92,14 @@ export const pending = query({
 export const revoke = mutation({
   args: { inviteId: v.id("invites"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
   handler: async (ctx, { inviteId, ...viewer }) => {
-    await requireViewer(ctx, viewer);
+    const viewerId = await requireViewer(ctx, viewer);
     const invite = await ctx.db.get(inviteId);
-    if (invite && !invite.acceptedAt) await ctx.db.delete(inviteId);
+    if (!invite || invite.acceptedAt) return;
+    // Only the inviter or a member of the invite's workspace may revoke it —
+    // otherwise any signed-in user could delete anyone's pending invite by id.
+    const allowed =
+      invite.invitedBy === viewerId ||
+      (invite.workspaceId ? await isWorkspaceMember(ctx, invite.workspaceId, viewerId) : false);
+    if (allowed) await ctx.db.delete(inviteId);
   },
 });

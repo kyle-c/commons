@@ -40,7 +40,9 @@ export const list = query({
   args: { userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const viewerId = await resolveViewer(ctx, args);
-    if (!viewerId) return await ctx.db.query("users").collect();
+    // No session, no directory: an unauthenticated caller used to get the whole
+    // users table (names, emails, googleIds). Identity is required.
+    if (!viewerId) return [];
     const memberships = await ctx.db
       .query("workspaceMembers")
       .withIndex("by_user", (q) => q.eq("userId", viewerId))
