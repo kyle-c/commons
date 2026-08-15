@@ -141,6 +141,35 @@ describe("scripts that run in customer CI", () => {
     expect(workflow).not.toMatch(/https:\/\/[a-z-]+\.convex\.site/);
   });
 
+  it("the preview build detects the package manager and runs the repo's own build", () => {
+    // The broadened runner covers any static framework by running the repo's
+    // build script under the right package manager, not a hardcoded allow-list.
+    const runner = served("cloudAgents.ts", "RUNNER_SCRIPT");
+    expect(runner, "no lockfile-based package-manager detection").toMatch(/pnpm-lock\.yaml/);
+    expect(runner, "corepack not enabled for pnpm/yarn").toMatch(/corepack/);
+    expect(runner, "does not run the repo's own build script").toMatch(/scripts\.build/);
+  });
+
+  it("the preview build honours the commons.json escape hatch", () => {
+    const runner = served("cloudAgents.ts", "RUNNER_SCRIPT");
+    expect(runner).toMatch(/commons\.json/);
+    expect(runner, "no appDir (monorepo) support").toMatch(/appDir/);
+    expect(runner, "no previewBuild override").toMatch(/previewBuild/);
+    expect(runner, "no previewOutDir override").toMatch(/previewOutDir/);
+  });
+
+  it("the Next static-export check survives the template literal", () => {
+    // Written \\s in source so the served regex keeps its backslashes; the
+    // single-backslash form silently degraded to /outputs*:s*/ — a check that
+    // missed the ordinary spaced `output: 'export'`. Assert the corrected
+    // pattern is present verbatim, and that it matches both spacings.
+    const runner = served("cloudAgents.ts", "RUNNER_SCRIPT");
+    expect(runner.includes(`output\\s*:\\s*["']export`), "served Next regex lost its backslashes").toBe(true);
+    const re = /output\s*:\s*["']export["']/;
+    expect(re.test(`output: "export"`), "regex fails on the spaced form").toBe(true);
+    expect(re.test(`output:'export'`), "regex fails on the tight form").toBe(true);
+  });
+
   it("drafts land on a commons/ branch and nothing else", () => {
     // The whole safety story for `contents: write` is that pushes are
     // confined to a namespace nobody works in.

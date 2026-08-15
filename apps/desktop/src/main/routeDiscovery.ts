@@ -288,6 +288,13 @@ interface CommonsConfig {
   port?: number;
   routes?: { path: string; title?: string; section?: string }[];
   device?: { width: number; height: number };
+  // Preview-build escape hatch, read by the cloud runner (cloudAgents.ts):
+  //   appDir        — build this subdirectory (monorepos)
+  //   previewBuild  — exact build command, overrides framework detection
+  //   previewOutDir — where the static output lands, overrides auto-detection
+  appDir?: string;
+  previewBuild?: string[];
+  previewOutDir?: string;
 }
 
 export async function readCommonsConfig(repoPath: string): Promise<CommonsConfig | null> {

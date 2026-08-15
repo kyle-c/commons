@@ -378,30 +378,79 @@ if (payload.mode === "preview") {
       execFileSync("git", ["fetch", "origin", payload.ref], { stdio: "inherit" });
       execFileSync("git", ["checkout", payload.ref], { stdio: "inherit" });
     }
-    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
-    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-    let outDir = null;
-    execFileSync("npm", ["install", "--no-fund", "--no-audit"], { stdio: "inherit" });
-    if (deps.vite) {
-      execFileSync("npx", ["vite", "build"], { stdio: "inherit" });
-      outDir = "dist";
-    } else if (deps.expo) {
-      execFileSync("npx", ["expo", "export", "--platform", "web"], { stdio: "inherit" });
-      outDir = "dist";
-    } else if (deps.next) {
-      const config = ["next.config.js", "next.config.mjs", "next.config.ts"]
-        .map((f) => { try { return fs.readFileSync(f, "utf8"); } catch { return ""; } })
-        .join("");
-      if (!/output\s*:\s*["']export["']/.test(config)) {
-        await finish({ error: "This Next.js app isn't configured for static export (output: 'export'), so it needs a server — paste a deployed URL instead." });
-        process.exit(0);
-      }
-      execFileSync("npx", ["next", "build"], { stdio: "inherit" });
-      outDir = "out";
-    } else {
-      await finish({ error: "No static build recognized here (Vite, Expo web, or export-configured Next) — paste a deployed URL instead." });
+    // commons.json (repo root) is the escape hatch: appDir points at the app
+    // inside a monorepo; previewBuild/previewOutDir override detection.
+    let cfg = {};
+    try { cfg = JSON.parse(fs.readFileSync("commons.json", "utf8")) || {}; } catch { cfg = {}; }
+    const root = process.cwd();
+    const appDir = typeof cfg.appDir === "string" && cfg.appDir ? cfg.appDir : ".";
+    const buildRoot = path.resolve(root, appDir);
+    if (buildRoot !== root && !buildRoot.startsWith(root + path.sep)) {
+      await finish({ error: "commons.json appDir points outside the repo." });
       process.exit(0);
     }
+    const at = { cwd: buildRoot, stdio: "inherit" };
+    const has = (f) => { try { fs.accessSync(path.join(buildRoot, f)); return true; } catch { return false; } };
+
+    // Package manager from the lockfile, so pnpm/yarn repos install at all
+    // (corepack honours the packageManager field, versions included).
+    const pm = has("pnpm-lock.yaml") ? "pnpm" : has("yarn.lock") ? "yarn" : "npm";
+    if (pm !== "npm") { try { execFileSync("corepack", ["enable"], { stdio: "inherit" }); } catch { /* fall through to a plain invoke */ } }
+
+    const pkg = JSON.parse(fs.readFileSync(path.join(buildRoot, "package.json"), "utf8"));
+    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+    const scripts = pkg.scripts || {};
+    execFileSync(pm, pm === "npm" ? ["install", "--no-fund", "--no-audit"] : ["install"], at);
+
+    // previewOutDir, else auto-detect after the build.
+    let outDir = typeof cfg.previewOutDir === "string" && cfg.previewOutDir ? cfg.previewOutDir : null;
+    if (Array.isArray(cfg.previewBuild) && cfg.previewBuild.length) {
+      // Explicit override wins over all detection.
+      execFileSync(cfg.previewBuild[0], cfg.previewBuild.slice(1), at);
+    } else if (deps.next) {
+      // Next needs a server unless it is export-configured; say which, precisely.
+      const nextCfg = ["next.config.js", "next.config.mjs", "next.config.ts"]
+        .map((f) => { try { return fs.readFileSync(path.join(buildRoot, f), "utf8"); } catch { return ""; } })
+        .join("");
+      if (!/output\\s*:\\s*["']export["']/.test(nextCfg)) {
+        await finish({ error: "This Next.js app isn't configured for static export (output: 'export'), so it needs a server — paste a deployed URL instead, or add a commons.json previewBuild." });
+        process.exit(0);
+      }
+      execFileSync(pm, ["run", "build"], at);
+      if (!outDir) outDir = "out";
+    } else if (deps.expo) {
+      execFileSync("npx", ["expo", "export", "--platform", "web"], at);
+      if (!outDir) outDir = "dist";
+    } else if (scripts.build) {
+      // The repo's own build: respects prebuild/codegen/custom out dirs and
+      // covers every static framework (Vite, CRA, Vue, Angular, SvelteKit,
+      // Astro, Gatsby, Solid, …) without an allow-list.
+      execFileSync(pm, ["run", "build"], at);
+    } else if (deps.vite) {
+      execFileSync("npx", ["vite", "build"], at);
+      if (!outDir) outDir = "dist";
+    } else {
+      await finish({ error: "No web build found here. Commons builds static output from your repo's build script — add one, set a commons.json previewBuild, or paste a deployed URL instead." });
+      process.exit(0);
+    }
+
+    // Find the static output: the newest candidate holding an index.html.
+    if (!outDir) {
+      const candidates = ["dist", "build", "out", "public", "www", ".output/public", ".svelte-kit/output/client"];
+      let bestAt = -1;
+      for (const c of candidates) {
+        try {
+          const st = fs.statSync(path.join(buildRoot, c, "index.html"));
+          if (st.mtimeMs > bestAt) { bestAt = st.mtimeMs; outDir = c; }
+        } catch { /* not this one */ }
+      }
+    }
+    if (!outDir || !has(path.join(outDir, "index.html"))) {
+      await finish({ error: "The build finished but produced no index.html to serve. If your output folder is unusual, set commons.json previewOutDir." });
+      process.exit(0);
+    }
+
+    const absOut = path.join(buildRoot, outDir);
     const files = [];
     const walk = (dir) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -410,11 +459,11 @@ if (payload.mode === "preview") {
         else files.push(full);
       }
     };
-    walk(outDir);
+    walk(absOut);
     let index = "";
     let uploaded = 0;
     for (const file of files) {
-      const rel = path.relative(outDir, file).split(path.sep).join("/");
+      const rel = path.relative(absOut, file).split(path.sep).join("/");
       if (rel === "index.html") { index = fs.readFileSync(file, "utf8"); continue; }
       if (rel.endsWith(".map") || fs.statSync(file).size > 8 * 1024 * 1024) continue;
       if (uploaded >= 190) break;
