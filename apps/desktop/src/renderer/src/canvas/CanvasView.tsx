@@ -309,7 +309,7 @@ const FrameLayer = memo(function FrameLayer({
   onShieldDown,
   onLoaded,
   onFrameDuplicate,
-  onDeleteCopy,
+  onDeleteFrame,
   branchPreviewPattern,
   reactions,
   votes,
@@ -343,8 +343,8 @@ const FrameLayer = memo(function FrameLayer({
   onLoaded: (loadKey: string) => void;
   /** Option/Alt-drag on a header duplicates the frame at the drop point. */
   onFrameDuplicate?: (frame: Doc<"frames">, e: React.MouseEvent) => void;
-  /** Remove a hand-made copy (only offered on copies). */
-  onDeleteCopy?: (frame: Doc<"frames">) => void;
+  /** Soft-delete a frame (undoable). Offered on every frame's header. */
+  onDeleteFrame?: (frame: Doc<"frames">) => void;
   /** Exploration props: variants render from draft branches via this pattern. */
   branchPreviewPattern?: string;
   reactions?: Record<string, { emoji: string; count: number; mine: boolean; fx?: number; fy?: number }[]>;
@@ -442,13 +442,13 @@ const FrameLayer = memo(function FrameLayer({
               )}
               <span style={{ flex: 1 }} />
               {openCount > 0 && <span className="badge comments">{openCount}</span>}
-              {frame.copyOf && onDeleteCopy && (
+              {onDeleteFrame && (
                 <button
                   className="frame-del"
-                  aria-label="Remove this duplicate"
-                  title="Remove this duplicate"
+                  aria-label="Delete this frame"
+                  title="Delete this frame (⌫). Undo from the toast or with ⌘Z."
                   onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => { e.stopPropagation(); onDeleteCopy(frame); }}
+                  onClick={(e) => { e.stopPropagation(); onDeleteFrame(frame); }}
                 >
                   ✕
                 </button>
@@ -711,6 +711,11 @@ export default function CanvasView({
   // the previous pixels (snapshot underlay) until the fresh iframe paints.
   const [loadedFrames, setLoadedFrames] = useState<Record<string, boolean>>({});
   const [focusedFrame, setFocusedFrame] = useState<Id<"frames"> | null>(null);
+  // Live refs so the once-registered keydown listener sees current values.
+  const focusedFrameRef = useRef(focusedFrame);
+  focusedFrameRef.current = focusedFrame;
+  const framesRef = useRef(frames);
+  framesRef.current = frames;
   const [selectedThread, setSelectedThread] = useState<Id<"threads"> | null>(initialThreadId ?? null);
   const [draft, setDraft] = useState<Draft | null>(null);
   // Optimistic frame positions while dragging (and until the mutation round-trips).
@@ -748,6 +753,9 @@ export default function CanvasView({
   const moveFrame = useMutation(api.projects.moveFrame);
   const duplicateFrame = useMutation(api.projects.duplicateFrame);
   const deleteFrame = useMutation(api.projects.deleteFrame);
+  const restoreFrame = useMutation(api.projects.restoreFrame);
+  // A stack of just-deleted frame ids, so ⌘Z peels them back in order.
+  const deletedStack = useRef<Id<"frames">[]>([]);
   // A restored viewport skips the initial fit — unless a deep link targets
   // a specific frame, which still deserves the centered landing.
   const didFit = useRef(savedViewports.has(projectId) && !initialFrameId);
@@ -1094,13 +1102,26 @@ export default function CanvasView({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === "TEXTAREA" || target.tagName === "INPUT") return;
+      if (target.tagName === "TEXTAREA" || target.tagName === "INPUT" || target.isContentEditable) return;
       if (e.key === "Escape") {
         setCommentMode(false);
         setStickerMode(false);
         setDraft(null);
         setFocusedFrame(null);
         setSelectedThread(null);
+      }
+      // Delete the selected frame; ⌘Z / Ctrl+Z peels back the last delete.
+      if ((e.key === "Backspace" || e.key === "Delete") && focusedFrameRef.current) {
+        const frame = framesRef.current.find((f) => f._id === focusedFrameRef.current);
+        if (frame) {
+          e.preventDefault();
+          frameHandlersRef.current.del(frame);
+        }
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && deletedStack.current.length > 0) {
+        e.preventDefault();
+        const id = deletedStack.current[deletedStack.current.length - 1];
+        frameHandlersRef.current.undo(id);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1183,8 +1204,10 @@ export default function CanvasView({
     const origin = framePos(frame);
     const start = { x: e.clientX, y: e.clientY };
     let latest = origin;
+    let moved = false;
     const move = (ev: MouseEvent) => {
       const v = vpRef.current;
+      moved = true;
       latest = {
         x: origin.x + (ev.clientX - start.x) / v.scale,
         y: origin.y + (ev.clientY - start.y) / v.scale,
@@ -1194,7 +1217,9 @@ export default function CanvasView({
     const up = () => {
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
-      moveFrame({ frameId: frame._id, x: latest.x, y: latest.y, userId: me._id!, sessionToken: sessionToken() });
+      // A click (no drag) selects the frame — a target for ⌫; a real drag moves it.
+      if (moved) moveFrame({ frameId: frame._id, x: latest.x, y: latest.y, userId: me._id!, sessionToken: sessionToken() });
+      else setFocusedFrame(frame._id);
     };
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
@@ -1227,11 +1252,23 @@ export default function CanvasView({
     window.addEventListener("mouseup", up);
   };
 
-  const removeCopy = (frame: Doc<"frames">) => {
+  const undoDelete = (frameId: Id<"frames">) => {
     if (!me) return;
-    void deleteFrame({ frameId: frame._id, userId: me._id, sessionToken: sessionToken() }).catch(() =>
-      toast("Couldn't remove that copy — try again.", { tone: "error" })
+    deletedStack.current = deletedStack.current.filter((id) => id !== frameId);
+    void restoreFrame({ frameId, userId: me._id, sessionToken: sessionToken() }).catch(() =>
+      toast("Couldn't bring that frame back — try again.", { tone: "error" })
     );
+  };
+
+  const removeFrame = (frame: Doc<"frames">) => {
+    if (!me) return;
+    setFocusedFrame((f) => (f === frame._id ? null : f));
+    deletedStack.current.push(frame._id);
+    void deleteFrame({ frameId: frame._id, userId: me._id, sessionToken: sessionToken() }).catch(() => {
+      deletedStack.current = deletedStack.current.filter((id) => id !== frame._id);
+      toast("Couldn't remove that frame — try again.", { tone: "error" });
+    });
+    toast(`Removed "${frame.title}"`, { action: { label: "Undo", onClick: () => undoDelete(frame._id) } });
   };
 
   const onFrameShieldMouseDown = (frame: Doc<"frames">, e: React.MouseEvent) => {
@@ -1349,13 +1386,13 @@ export default function CanvasView({
     }
     return counts;
   }, [threads]);
-  const frameHandlersRef = useRef({ drag: startFrameDrag, shield: onFrameShieldMouseDown, dup: startFrameDuplicate, del: removeCopy });
-  frameHandlersRef.current = { drag: startFrameDrag, shield: onFrameShieldMouseDown, dup: startFrameDuplicate, del: removeCopy };
+  const frameHandlersRef = useRef({ drag: startFrameDrag, shield: onFrameShieldMouseDown, dup: startFrameDuplicate, del: removeFrame, undo: undoDelete });
+  frameHandlersRef.current = { drag: startFrameDrag, shield: onFrameShieldMouseDown, dup: startFrameDuplicate, del: removeFrame, undo: undoDelete };
   const [stableFrameHandlers] = useState(() => ({
     onFrameDrag: (frame: Doc<"frames">, e: React.MouseEvent) => frameHandlersRef.current.drag(frame, e),
     onShieldDown: (frame: Doc<"frames">, e: React.MouseEvent) => frameHandlersRef.current.shield(frame, e),
     onFrameDuplicate: (frame: Doc<"frames">, e: React.MouseEvent) => frameHandlersRef.current.dup(frame, e),
-    onDeleteCopy: (frame: Doc<"frames">) => frameHandlersRef.current.del(frame),
+    onDeleteFrame: (frame: Doc<"frames">) => frameHandlersRef.current.del(frame),
     onLoaded: (loadKey: string) =>
       setLoadedFrames((prev) => (prev[loadKey] ? prev : { ...prev, [loadKey]: true })),
   }));
@@ -1477,6 +1514,7 @@ export default function CanvasView({
           onRemoveGif={onRemoveGif}
           onFixFigma={onFixFigma}
           {...stableFrameHandlers}
+          onDeleteFrame={me ? stableFrameHandlers.onDeleteFrame : undefined}
         />
 
         {/* Option-drag duplicate: a ghost the size of the frame, tracking the

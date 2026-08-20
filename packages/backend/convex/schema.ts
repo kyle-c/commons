@@ -431,6 +431,11 @@ export default defineSchema({
     // land on its own _id — nothing it collects touches the original. Excluded
     // from route reconciliation and the prototype drawer; removable in place.
     copyOf: v.optional(v.id("frames")),
+    // Soft delete: a removed frame is hidden everywhere but kept whole so the
+    // delete is undoable (its comments, reactions, and snapshot come back with
+    // it). It still reconciles by route, so a deleted screen stays deleted
+    // rather than resurrecting on the next sync.
+    deletedAt: v.optional(v.number()),
     // Canvas placement.
     x: v.number(),
     y: v.number(),

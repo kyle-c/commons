@@ -17,11 +17,13 @@ function ensureHost(): HTMLDivElement {
   return host;
 }
 
-export function toast(message: string, opts?: { tone?: "info" | "error" }) {
+export function toast(
+  message: string,
+  opts?: { tone?: "info" | "error"; action?: { label: string; onClick: () => void } }
+) {
   const tone = opts?.tone ?? "info";
   const el = document.createElement("div");
   el.className = `toast ${tone}`;
-  el.textContent = message;
   el.setAttribute("role", tone === "error" ? "alert" : "status");
   let gone = false;
   const dismiss = () => {
@@ -30,6 +32,26 @@ export function toast(message: string, opts?: { tone?: "info" | "error" }) {
     el.classList.add("leaving");
     window.setTimeout(() => el.remove(), 240);
   };
+  const label = document.createElement("span");
+  label.textContent = message;
+  el.appendChild(label);
+  if (opts?.action) {
+    // An action toast lingers a little longer and only dismisses on its own
+    // controls — clicking the body shouldn't lose the one chance to undo.
+    const btn = document.createElement("button");
+    btn.className = "toast-action";
+    btn.textContent = opts.action.label;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      opts.action!.onClick();
+      dismiss();
+    });
+    el.appendChild(btn);
+    ensureHost().appendChild(el);
+    window.setTimeout(dismiss, 8000);
+    return;
+  }
+  el.style.cursor = "pointer";
   el.addEventListener("click", dismiss);
   ensureHost().appendChild(el);
   window.setTimeout(dismiss, tone === "error" ? 7000 : 4800);

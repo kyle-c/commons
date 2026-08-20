@@ -153,10 +153,12 @@ export const frames = query({
   args: { projectId: v.id("projects"), userId: v.optional(v.id("users")), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     if (!(await accessibleProject(ctx, args.projectId, await resolveViewer(ctx, args)))) return [];
-    const rows = await ctx.db
-      .query("frames")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect();
+    const rows = (
+      await ctx.db
+        .query("frames")
+        .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+        .collect()
+    ).filter((f) => !f.deletedAt); // soft-deleted frames are hidden until restored
     // Latest snapshot per frame (SNAP-3): placeholder fallback + capture staleness.
     return await Promise.all(
       rows.map(async (frame) => {
@@ -547,11 +549,11 @@ export const attachSnapshot = internalMutation({
 });
 
 /**
- * Remove a hand-made duplicate and everything that accreted on it. Scoped to
- * copies (copyOf set) on purpose: the canonical route/state frames are the
- * app's own map and come back on the next sync — this is not the door for
- * deleting those. Sweeps every table that points at the frame so a removed
- * copy leaves no orphans.
+ * Remove a frame — a soft delete, so it's undoable. The frame and everything
+ * on it (comments, reactions, snapshot) are kept whole and simply hidden; a
+ * restore brings them all back. Works on any frame the viewer can reach, not
+ * only copies: a deleted canonical route still reconciles by routePath, so it
+ * stays deleted rather than resurrecting on the next sync.
  */
 export const deleteFrame = mutation({
   args: {
@@ -563,37 +565,22 @@ export const deleteFrame = mutation({
     const frame = await ctx.db.get(frameId);
     if (!frame) return;
     await requireProjectAccess(ctx, frame.projectId, viewer);
-    if (!frame.copyOf) throw new Error("Only duplicated frames can be removed here.");
+    await ctx.db.patch(frameId, { deletedAt: Date.now() });
+  },
+});
 
-    const threads = await ctx.db.query("threads").withIndex("by_frame", (q) => q.eq("frameId", frameId)).collect();
-    for (const thread of threads) {
-      const messages = await ctx.db.query("messages").withIndex("by_thread", (q) => q.eq("threadId", thread._id)).collect();
-      for (const m of messages) {
-        for (const img of m.images ?? []) await ctx.storage.delete(img).catch(() => {});
-        await ctx.db.delete(m._id);
-      }
-      await ctx.db.delete(thread._id);
-    }
-    const reactions = await ctx.db.query("reactions").withIndex("by_frame_user", (q) => q.eq("frameId", frameId)).collect();
-    for (const r of reactions) await ctx.db.delete(r._id);
-    const gifs = await ctx.db.query("gifReactions").withIndex("by_frame", (q) => q.eq("frameId", frameId)).collect();
-    for (const g of gifs) await ctx.db.delete(g._id);
-    const votes = await ctx.db.query("frameVotes").withIndex("by_frame_user", (q) => q.eq("frameId", frameId)).collect();
-    for (const vt of votes) await ctx.db.delete(vt._id);
-    const snaps = await ctx.db.query("frameSnapshots").withIndex("by_frame", (q) => q.eq("frameId", frameId)).collect();
-    for (const s of snaps) {
-      await ctx.storage.delete(s.storageId).catch(() => {});
-      await ctx.db.delete(s._id);
-    }
-    // annotations have no by_frame index — scan the project's and match.
-    const notes = await ctx.db.query("annotations").withIndex("by_project", (q) => q.eq("projectId", frame.projectId)).collect();
-    for (const n of notes) if (n.frameId === frameId) await ctx.db.delete(n._id);
-    // Agent sessions keep their history; just detach so nothing points at a
-    // frame that's gone.
-    const sessions = await ctx.db.query("agentSessions").withIndex("by_project", (q) => q.eq("projectId", frame.projectId)).collect();
-    for (const s of sessions) if (s.frameId === frameId) await ctx.db.patch(s._id, { frameId: undefined });
-
-    await ctx.db.delete(frameId);
+/** Undo a delete: the frame and its comments/reactions/snapshot reappear. */
+export const restoreFrame = mutation({
+  args: {
+    frameId: v.id("frames"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { frameId, ...viewer }) => {
+    const frame = await ctx.db.get(frameId);
+    if (!frame) return;
+    await requireProjectAccess(ctx, frame.projectId, viewer);
+    await ctx.db.patch(frameId, { deletedAt: undefined });
   },
 });
 
