@@ -454,6 +454,88 @@ export const moveFrame = mutation({
   },
 });
 
+/**
+ * Option-drag on the canvas: a fresh, independent copy of a frame at the drop
+ * point. It clones what the frame *is* (route, kind, size) but nothing it has
+ * *collected* — comments, reactions, votes, and agent work land on the new
+ * _id, so the original is untouched. Not a variant: variant lineage is left
+ * off deliberately.
+ */
+export const duplicateFrame = mutation({
+  args: {
+    frameId: v.id("frames"),
+    x: v.number(),
+    y: v.number(),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { frameId, x, y, ...viewer }) => {
+    const original = await ctx.db.get(frameId);
+    if (!original) throw new Error("That screen is gone.");
+    await requireProjectAccess(ctx, original.projectId, viewer);
+    return await ctx.db.insert("frames", {
+      projectId: original.projectId,
+      kind: original.kind,
+      title: original.title,
+      section: original.section,
+      routePath: original.routePath,
+      figmaNodeId: original.figmaNodeId,
+      stateLabel: original.stateLabel,
+      stateOrigin: original.stateOrigin,
+      copyOf: original._id,
+      x,
+      y,
+      width: original.width,
+      height: original.height,
+    });
+  },
+});
+
+/**
+ * Remove a hand-made duplicate and everything that accreted on it. Scoped to
+ * copies (copyOf set) on purpose: the canonical route/state frames are the
+ * app's own map and come back on the next sync — this is not the door for
+ * deleting those. Sweeps every table that points at the frame so a removed
+ * copy leaves no orphans.
+ */
+export const deleteFrame = mutation({
+  args: {
+    frameId: v.id("frames"),
+    userId: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, { frameId, ...viewer }) => {
+    const frame = await ctx.db.get(frameId);
+    if (!frame) return;
+    await requireProjectAccess(ctx, frame.projectId, viewer);
+    if (!frame.copyOf) throw new Error("Only duplicated frames can be removed here.");
+
+    const threads = await ctx.db.query("threads").withIndex("by_frame", (q) => q.eq("frameId", frameId)).collect();
+    for (const thread of threads) {
+      const messages = await ctx.db.query("messages").withIndex("by_thread", (q) => q.eq("threadId", thread._id)).collect();
+      for (const m of messages) await ctx.db.delete(m._id);
+      await ctx.db.delete(thread._id);
+    }
+    const reactions = await ctx.db.query("reactions").withIndex("by_frame_user", (q) => q.eq("frameId", frameId)).collect();
+    for (const r of reactions) await ctx.db.delete(r._id);
+    const gifs = await ctx.db.query("gifReactions").withIndex("by_frame", (q) => q.eq("frameId", frameId)).collect();
+    for (const g of gifs) await ctx.db.delete(g._id);
+    const votes = await ctx.db.query("frameVotes").withIndex("by_frame_user", (q) => q.eq("frameId", frameId)).collect();
+    for (const vt of votes) await ctx.db.delete(vt._id);
+    const snaps = await ctx.db.query("frameSnapshots").withIndex("by_frame", (q) => q.eq("frameId", frameId)).collect();
+    for (const s of snaps) await ctx.db.delete(s._id);
+    // annotations have no by_frame index — scan the project's and match.
+    const notes = await ctx.db.query("annotations").withIndex("by_project", (q) => q.eq("projectId", frame.projectId)).collect();
+    for (const n of notes) if (n.frameId === frameId) await ctx.db.delete(n._id);
+    // Agent sessions keep their history; just detach so nothing points at a
+    // frame that's gone.
+    const sessions = await ctx.db.query("agentSessions").withIndex("by_project", (q) => q.eq("projectId", frame.projectId)).collect();
+    for (const s of sessions) if (s.frameId === frameId) await ctx.db.patch(s._id, { frameId: undefined });
+
+    await ctx.db.delete(frameId);
+  },
+});
+
 export const archive = mutation({
   args: {
     projectId: v.id("projects"),
@@ -809,7 +891,12 @@ export const rediscover = mutation({
       .query("frames")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .collect();
-    const knownByRoute = new Map(existing.filter((f) => f.routePath).map((f) => [f.routePath, f]));
+    // Only canonical frames reconcile against discovered routes. Hand-made
+    // copies and what-if variants share a routePath but keep their own place —
+    // reconciliation must never move or absorb them.
+    const knownByRoute = new Map(
+      existing.filter((f) => f.routePath && !f.copyOf && !f.variantOf).map((f) => [f.routePath, f])
+    );
     for (const frame of frames) {
       const known = frame.routePath ? knownByRoute.get(frame.routePath) : undefined;
       if (known) {

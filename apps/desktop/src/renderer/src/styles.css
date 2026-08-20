@@ -4551,3 +4551,37 @@ kbd {
   padding-top: 8px;
   border-top: 1px solid var(--border-subtle);
 }
+
+/* ── Option-drag frame duplication ───────────────────────────────────────
+   copy badge, the drag ghost, and the remove control on a copy's header. */
+.badge.copy {
+  background: color-mix(in srgb, var(--text-secondary) 20%, transparent);
+  color: var(--text-secondary);
+}
+.frame-ghost {
+  position: absolute;
+  border: 1.5px dashed var(--accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  display: flex;
+  align-items: flex-start;
+  padding: 6px 10px;
+  font-size: var(--text-xs);
+  color: var(--accent);
+  pointer-events: none;
+  z-index: 20;
+}
+.frame-del {
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.frame-del:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}

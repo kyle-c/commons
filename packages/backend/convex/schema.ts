@@ -425,6 +425,12 @@ export default defineSchema({
     variantOf: v.optional(v.id("frames")),
     variantPrompt: v.optional(v.string()),
     variantBranch: v.optional(v.string()),
+    // A hand-made duplicate (option-drag on the canvas): a fresh, independent
+    // frame of the same route. copyOf points at what it was cloned from. It
+    // renders live like any frame, but comments, reactions, votes, and agents
+    // land on its own _id — nothing it collects touches the original. Excluded
+    // from route reconciliation and the prototype drawer; removable in place.
+    copyOf: v.optional(v.id("frames")),
     // Canvas placement.
     x: v.number(),
     y: v.number(),

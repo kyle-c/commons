@@ -308,6 +308,8 @@ const FrameLayer = memo(function FrameLayer({
   onFrameDrag,
   onShieldDown,
   onLoaded,
+  onFrameDuplicate,
+  onDeleteCopy,
   branchPreviewPattern,
   reactions,
   votes,
@@ -339,6 +341,10 @@ const FrameLayer = memo(function FrameLayer({
   onFrameDrag: (frame: Doc<"frames">, e: React.MouseEvent) => void;
   onShieldDown: (frame: Doc<"frames">, e: React.MouseEvent) => void;
   onLoaded: (loadKey: string) => void;
+  /** Option/Alt-drag on a header duplicates the frame at the drop point. */
+  onFrameDuplicate?: (frame: Doc<"frames">, e: React.MouseEvent) => void;
+  /** Remove a hand-made copy (only offered on copies). */
+  onDeleteCopy?: (frame: Doc<"frames">) => void;
   /** Exploration props: variants render from draft branches via this pattern. */
   branchPreviewPattern?: string;
   reactions?: Record<string, { emoji: string; count: number; mine: boolean; fx?: number; fy?: number }[]>;
@@ -380,7 +386,12 @@ const FrameLayer = memo(function FrameLayer({
           >
             <div
               className="frame-header"
+              title="Drag to move · ⌥-drag to duplicate"
               onMouseDown={(e) => {
+                if (e.altKey && e.button === 0 && onFrameDuplicate) {
+                  onFrameDuplicate(frame, e);
+                  return;
+                }
                 if (e.ctrlKey && e.button === 0 && onBloom) {
                   e.preventDefault();
                   e.stopPropagation();
@@ -419,6 +430,11 @@ const FrameLayer = memo(function FrameLayer({
                   what-if
                 </span>
               )}
+              {frame.copyOf && (
+                <span className="badge copy" title="A hand-made duplicate. Comments, reactions, and agents on it are its own — the original is untouched.">
+                  copy
+                </span>
+              )}
               {source && !source.live && !frame.variantBranch && (
                 <span className="badge" title="Rendered from the deployed preview — locate the repo for a live dev server">
                   preview
@@ -426,6 +442,17 @@ const FrameLayer = memo(function FrameLayer({
               )}
               <span style={{ flex: 1 }} />
               {openCount > 0 && <span className="badge comments">{openCount}</span>}
+              {frame.copyOf && onDeleteCopy && (
+                <button
+                  className="frame-del"
+                  aria-label="Remove this duplicate"
+                  title="Remove this duplicate"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); onDeleteCopy(frame); }}
+                >
+                  ✕
+                </button>
+              )}
             </div>
             <div className="frame-body">
               {url ? (
@@ -688,6 +715,9 @@ export default function CanvasView({
   const [draft, setDraft] = useState<Draft | null>(null);
   // Optimistic frame positions while dragging (and until the mutation round-trips).
   const [localPos, setLocalPos] = useState<Record<string, { x: number; y: number }>>({});
+  // Option-drag duplication: a lightweight ghost tracks the cursor in canvas
+  // space; on drop a real, independent copy is minted at that spot.
+  const [dupGhost, setDupGhost] = useState<{ title: string; x: number; y: number; w: number; h: number } | null>(null);
 
   // Tidy view: the Overview toggle now switches between your arranged
   // layout (the shared x/y in Convex) and an organized grid computed
@@ -716,6 +746,8 @@ export default function CanvasView({
 
   const createThread = useMutation(api.comments.createThread);
   const moveFrame = useMutation(api.projects.moveFrame);
+  const duplicateFrame = useMutation(api.projects.duplicateFrame);
+  const deleteFrame = useMutation(api.projects.deleteFrame);
   // A restored viewport skips the initial fit — unless a deep link targets
   // a specific frame, which still deserves the centered landing.
   const didFit = useRef(savedViewports.has(projectId) && !initialFrameId);
@@ -1168,6 +1200,40 @@ export default function CanvasView({
     window.addEventListener("mouseup", up);
   };
 
+  // Option/Alt-drag on a header: drag a ghost, drop an independent copy. A bare
+  // option-click (no drag) still lands one, offset like Figma's ⌥-nudge.
+  const startFrameDuplicate = (frame: Doc<"frames">, e: React.MouseEvent) => {
+    if (!me || commentMode || e.button !== 0 || positionOverride) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const origin = framePos(frame);
+    const start = { x: e.clientX, y: e.clientY };
+    let latest = { x: origin.x + 24, y: origin.y + 24 };
+    setDupGhost({ title: frame.title, x: latest.x, y: latest.y, w: frame.width, h: frame.height + 30 });
+    const move = (ev: MouseEvent) => {
+      const v = vpRef.current;
+      latest = { x: origin.x + (ev.clientX - start.x) / v.scale, y: origin.y + (ev.clientY - start.y) / v.scale };
+      setDupGhost((g) => (g ? { ...g, x: latest.x, y: latest.y } : g));
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      setDupGhost(null);
+      void duplicateFrame({ frameId: frame._id, x: latest.x, y: latest.y, userId: me._id!, sessionToken: sessionToken() }).catch(() =>
+        toast("Couldn't duplicate that frame — try again.", { tone: "error" })
+      );
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
+  const removeCopy = (frame: Doc<"frames">) => {
+    if (!me) return;
+    void deleteFrame({ frameId: frame._id, userId: me._id, sessionToken: sessionToken() }).catch(() =>
+      toast("Couldn't remove that copy — try again.", { tone: "error" })
+    );
+  };
+
   const onFrameShieldMouseDown = (frame: Doc<"frames">, e: React.MouseEvent) => {
     e.stopPropagation();
     if (stickerMode) {
@@ -1283,11 +1349,13 @@ export default function CanvasView({
     }
     return counts;
   }, [threads]);
-  const frameHandlersRef = useRef({ drag: startFrameDrag, shield: onFrameShieldMouseDown });
-  frameHandlersRef.current = { drag: startFrameDrag, shield: onFrameShieldMouseDown };
+  const frameHandlersRef = useRef({ drag: startFrameDrag, shield: onFrameShieldMouseDown, dup: startFrameDuplicate, del: removeCopy });
+  frameHandlersRef.current = { drag: startFrameDrag, shield: onFrameShieldMouseDown, dup: startFrameDuplicate, del: removeCopy };
   const [stableFrameHandlers] = useState(() => ({
     onFrameDrag: (frame: Doc<"frames">, e: React.MouseEvent) => frameHandlersRef.current.drag(frame, e),
     onShieldDown: (frame: Doc<"frames">, e: React.MouseEvent) => frameHandlersRef.current.shield(frame, e),
+    onFrameDuplicate: (frame: Doc<"frames">, e: React.MouseEvent) => frameHandlersRef.current.dup(frame, e),
+    onDeleteCopy: (frame: Doc<"frames">) => frameHandlersRef.current.del(frame),
     onLoaded: (loadKey: string) =>
       setLoadedFrames((prev) => (prev[loadKey] ? prev : { ...prev, [loadKey]: true })),
   }));
@@ -1410,6 +1478,17 @@ export default function CanvasView({
           onFixFigma={onFixFigma}
           {...stableFrameHandlers}
         />
+
+        {/* Option-drag duplicate: a ghost the size of the frame, tracking the
+            cursor in canvas space until the copy lands where it's dropped. */}
+        {dupGhost && (
+          <div
+            className="frame-ghost"
+            style={{ left: dupGhost.x, top: dupGhost.y, width: dupGhost.w, height: dupGhost.h }}
+          >
+            <span>{dupGhost.title}</span>
+          </div>
+        )}
 
         {notesOn &&
           frames.map((frame) => {

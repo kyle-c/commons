@@ -52,7 +52,9 @@ export default function PrototypeView({
       tester who reads the designer's rationale is no longer a test. */
   notes?: Record<string, { text: string; inferred: boolean }[]>;
 }) {
-  const routes = frames.filter((f) => f.kind === "route");
+  // Canvas-only duplicates (copyOf) are scratch copies of a route, not extra
+  // navigation targets — the prototype drawer stays the app's real screens.
+  const routes = frames.filter((f) => f.kind === "route" && !f.copyOf);
   const [routePath, setRoutePath] = useState(routes[0]?.routePath ?? "/");
   const [testsOpen, setTestsOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true);
