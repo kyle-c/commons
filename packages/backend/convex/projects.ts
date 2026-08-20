@@ -1,4 +1,4 @@
-import { mutation, query, internalQuery, internalMutation } from "./_generated/server";
+import { mutation, query, internalQuery, internalMutation, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
@@ -473,7 +473,7 @@ export const duplicateFrame = mutation({
     const original = await ctx.db.get(frameId);
     if (!original) throw new Error("That screen is gone.");
     await requireProjectAccess(ctx, original.projectId, viewer);
-    return await ctx.db.insert("frames", {
+    const newId = await ctx.db.insert("frames", {
       projectId: original.projectId,
       kind: original.kind,
       title: original.title,
@@ -488,6 +488,61 @@ export const duplicateFrame = mutation({
       width: original.width,
       height: original.height,
     });
+    // Carry the original's snapshot so the copy shows the same screen even
+    // with no live dev server here (the repo may be on another machine). The
+    // copy gets its OWN blob — recapturing the original must never blank it —
+    // so the copy happens in a scheduled action that can read and re-store.
+    const snap = await ctx.db
+      .query("frameSnapshots")
+      .withIndex("by_frame", (q) => q.eq("frameId", original._id))
+      .unique();
+    if (snap) {
+      await ctx.scheduler.runAfter(0, internal.projects.cloneFrameSnapshot, {
+        fromStorageId: snap.storageId,
+        toFrameId: newId,
+        projectId: original.projectId,
+      });
+    }
+    return newId;
+  },
+});
+
+/** Copy a snapshot blob to a freshly duplicated frame (its own independent
+ *  blob), scheduled by duplicateFrame. */
+export const cloneFrameSnapshot = internalAction({
+  args: {
+    fromStorageId: v.id("_storage"),
+    toFrameId: v.id("frames"),
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, { fromStorageId, toFrameId, projectId }) => {
+    const url = await ctx.storage.getUrl(fromStorageId);
+    if (!url) return;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const storageId = await ctx.storage.store(await res.blob());
+    await ctx.runMutation(internal.projects.attachSnapshot, { frameId: toFrameId, projectId, storageId });
+  },
+});
+
+export const attachSnapshot = internalMutation({
+  args: {
+    frameId: v.id("frames"),
+    projectId: v.id("projects"),
+    storageId: v.id("_storage"),
+  },
+  handler: async (ctx, { frameId, projectId, storageId }) => {
+    // The copy may be gone, or a live capture may have beaten us here — never
+    // clobber a fresher snapshot, and never leave the new blob orphaned.
+    const frame = await ctx.db.get(frameId);
+    const existing = frame
+      ? await ctx.db.query("frameSnapshots").withIndex("by_frame", (q) => q.eq("frameId", frameId)).unique()
+      : null;
+    if (!frame || existing) {
+      await ctx.storage.delete(storageId).catch(() => {});
+      return;
+    }
+    await ctx.db.insert("frameSnapshots", { frameId, projectId, storageId, capturedAt: Date.now() });
   },
 });
 
@@ -513,7 +568,10 @@ export const deleteFrame = mutation({
     const threads = await ctx.db.query("threads").withIndex("by_frame", (q) => q.eq("frameId", frameId)).collect();
     for (const thread of threads) {
       const messages = await ctx.db.query("messages").withIndex("by_thread", (q) => q.eq("threadId", thread._id)).collect();
-      for (const m of messages) await ctx.db.delete(m._id);
+      for (const m of messages) {
+        for (const img of m.images ?? []) await ctx.storage.delete(img).catch(() => {});
+        await ctx.db.delete(m._id);
+      }
       await ctx.db.delete(thread._id);
     }
     const reactions = await ctx.db.query("reactions").withIndex("by_frame_user", (q) => q.eq("frameId", frameId)).collect();
@@ -523,7 +581,10 @@ export const deleteFrame = mutation({
     const votes = await ctx.db.query("frameVotes").withIndex("by_frame_user", (q) => q.eq("frameId", frameId)).collect();
     for (const vt of votes) await ctx.db.delete(vt._id);
     const snaps = await ctx.db.query("frameSnapshots").withIndex("by_frame", (q) => q.eq("frameId", frameId)).collect();
-    for (const s of snaps) await ctx.db.delete(s._id);
+    for (const s of snaps) {
+      await ctx.storage.delete(s.storageId).catch(() => {});
+      await ctx.db.delete(s._id);
+    }
     // annotations have no by_frame index — scan the project's and match.
     const notes = await ctx.db.query("annotations").withIndex("by_project", (q) => q.eq("projectId", frame.projectId)).collect();
     for (const n of notes) if (n.frameId === frameId) await ctx.db.delete(n._id);

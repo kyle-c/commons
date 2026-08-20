@@ -2058,17 +2058,6 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         <div className="seg-wrap" ref={deviceMenuRef}>
           <div className="seg">
             <button
-              className={nav.view === "canvas" ? "on" : ""}
-              aria-label="Canvas"
-              title="Canvas: every screen, comments, notes"
-              onClick={() => {
-                setDeviceMenuOpen(false);
-                setNav({ ...nav, view: "canvas" });
-              }}
-            >
-              <Icon name="frames" />
-            </button>
-            <button
               className={`${nav.view === "prototype" ? "on" : ""} ${deviceMenuOpen ? "menu-open" : ""}`}
               aria-label="Prototype"
               title={
@@ -2082,6 +2071,17 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
               }}
             >
               <Icon name={nav.view === "prototype" ? protoDevice.icon : "play"} />
+            </button>
+            <button
+              className={nav.view === "canvas" ? "on" : ""}
+              aria-label="Canvas"
+              title="Canvas: every screen, comments, notes"
+              onClick={() => {
+                setDeviceMenuOpen(false);
+                setNav({ ...nav, view: "canvas" });
+              }}
+            >
+              <Icon name="frames" />
             </button>
             <button
               className={nav.view === "flow" ? "on" : ""}
