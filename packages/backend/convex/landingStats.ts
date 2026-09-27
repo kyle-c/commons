@@ -16,7 +16,10 @@ import { isLandingEvent, landingDay } from "./landingEvents";
  *
  * The accepted event names live in landingEvents.ts.
  *
- * Read with: npx convex run --prod landingStats:recent '{"days": 14}'
+ * Read from the repo root with `pnpm stats` (last 14 days), or pass a span:
+ * pnpm stats '{"days": 30}'. It runs the backend package's own Convex CLI,
+ * so there's no download prompt (a bare `npx convex` from the root has none
+ * installed and offers to fetch one).
  */
 export const record = internalMutation({
   args: { event: v.string() },
