@@ -1,7 +1,9 @@
 /**
- * Theme switching. Dark chrome is the default (SPEC aesthetic); light is an
- * explicit choice, "system" follows macOS. Tokens live in theme.css under
- * :root (dark) and :root[data-theme="light"].
+ * Theme switching. The default follows the system appearance (macOS, or the
+ * browser's setting on the web), so a light machine opens onto the same sand
+ * and paper as trycommons.app. Picking light or dark sticks until "Match
+ * system" is chosen again. Tokens live in theme.css under :root (dark) and
+ * :root[data-theme="light"].
  */
 export type ThemePreference = "dark" | "light" | "system";
 
@@ -10,7 +12,7 @@ const media = window.matchMedia("(prefers-color-scheme: light)");
 
 export function getThemePreference(): ThemePreference {
   const stored = localStorage.getItem(THEME_KEY);
-  return stored === "light" || stored === "system" ? stored : "dark";
+  return stored === "light" || stored === "dark" ? stored : "system";
 }
 
 function resolve(pref: ThemePreference): "dark" | "light" {

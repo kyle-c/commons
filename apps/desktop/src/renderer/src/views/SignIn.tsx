@@ -4,7 +4,7 @@ import { api } from "@commons/backend/convex/_generated/api";
 import { setStoredSession, type StoredSession } from "../lib/session";
 
 const FAIL_MESSAGES: Record<string, string> = {
-  expired: "The sign-in took too long — try again.",
+  expired: "The sign-in took too long. Try again.",
   unverified_email: "That Google account has no verified email address.",
 };
 
@@ -37,7 +37,7 @@ export default function SignIn({ onSignedIn }: { onSignedIn: (session: StoredSes
       } else {
         claiming.current = false;
         setState(null);
-        setError("Sign-in could not be completed — try again.");
+        setError("Sign-in could not be completed. Try again.");
       }
     },
     [claim, onSignedIn]
@@ -57,7 +57,7 @@ export default function SignIn({ onSignedIn }: { onSignedIn: (session: StoredSes
       void finish(state);
     } else if (status.status === "failed") {
       setState(null);
-      setError(FAIL_MESSAGES[status.error ?? ""] ?? "Sign-in failed — try again.");
+      setError(FAIL_MESSAGES[status.error ?? ""] ?? "Sign-in failed. Try again.");
     }
   }, [state, status, finish]);
 
@@ -99,7 +99,7 @@ export default function SignIn({ onSignedIn }: { onSignedIn: (session: StoredSes
               Continue with Google
             </button>
             <div className="hint" style={{ margin: "12px 0 8px" }}>
-              or get a sign-in link by email — no Google account needed
+              or get a sign-in link by email, no Google account needed
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               <input
@@ -118,8 +118,8 @@ export default function SignIn({ onSignedIn }: { onSignedIn: (session: StoredSes
         ) : emailSent ? (
           <>
             <p>
-              Check <strong>{email}</strong> — the sign-in link lands in a minute and works once. This screen
-              finishes automatically when you click it.
+              Check <strong>{email}</strong>. The sign-in link lands in a minute and works once, and this
+              screen finishes by itself when you click it.
             </p>
             <button className="btn ghost" onClick={() => { setState(null); setEmailSent(false); }}>
               Cancel
@@ -127,7 +127,7 @@ export default function SignIn({ onSignedIn }: { onSignedIn: (session: StoredSes
           </>
         ) : (
           <>
-            <p>Finishing sign-in in your browser — come back here when Google is done.</p>
+            <p>Finishing sign-in in your browser. Come back here when Google is done.</p>
             <button className="btn ghost" onClick={() => setState(null)}>
               Cancel
             </button>

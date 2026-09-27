@@ -4609,3 +4609,140 @@ kbd {
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
+
+/* ── Brand layer (2026-09-27): the trycommons.app language, carried in ────
+   Pressable buttons, die-cut stickers, the marker hand for tips and empty
+   states, and a front door that looks like the site. The canvas and dense
+   toolbars stay calm on purpose: the screens people review are the hero.
+   Fonts come from lib/fonts.ts; the tokens from theme.css. */
+
+/* Pressable buttons. Secondary rests on a soft ledge; primary wears the
+   bright ember with ink type and an ink edge it sinks into. Ghost (toolbar)
+   buttons stay flat. */
+.btn {
+  border-radius: 8px;
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 0 var(--border-strong);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform 120ms var(--ease-out),
+    box-shadow 120ms var(--ease-out);
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 var(--border-strong);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--border-strong);
+}
+.btn.primary {
+  background: var(--btn-primary-bg);
+  border: 1.5px solid var(--btn-edge);
+  color: var(--btn-primary-ink);
+  font-weight: 600;
+  box-shadow: 0 2px 0 var(--btn-ledge);
+}
+.btn.primary:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover);
+  box-shadow: 0 3px 0 var(--btn-ledge);
+}
+.btn.primary:active:not(:disabled) {
+  box-shadow: 0 0 0 var(--btn-ledge);
+}
+.btn.ghost,
+.btn.ghost:hover:not(:disabled),
+.btn.active {
+  box-shadow: none;
+  transform: none;
+}
+.btn.ghost:active:not(:disabled) {
+  box-shadow: none;
+  transform: scale(0.97);
+}
+.btn:disabled {
+  transform: none;
+}
+
+/* Die-cut stickers: a white edge and a soft drop, as on the site. */
+.sticker.thrown {
+  filter: drop-shadow(1.5px 0 0 #fff) drop-shadow(-1.5px 0 0 #fff) drop-shadow(0 1.5px 0 #fff)
+    drop-shadow(0 -1.5px 0 #fff) drop-shadow(0 4px 6px rgba(0, 0, 0, 0.28));
+}
+.sticker-ghost {
+  filter: drop-shadow(1.5px 0 0 #fff) drop-shadow(-1.5px 0 0 #fff) drop-shadow(0 1.5px 0 #fff)
+    drop-shadow(0 -1.5px 0 #fff) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.22));
+}
+
+/* The marker hand: tips and empty states only. Controls inside them keep
+   the interface face, and nobody's own words are ever set in it. */
+.gs-tip,
+.empty-hero .hint,
+.empty-state,
+.sticker-dock .hint {
+  font-family: var(--font-hand);
+  font-weight: 500;
+}
+.gs-tip {
+  font-size: 13.5px;
+}
+.empty-hero .hint {
+  font-size: 15px;
+  line-height: 1.5;
+}
+.empty-state {
+  font-size: 15px;
+}
+.empty-state button,
+.empty-hero .hint button,
+.gs-tip button,
+.gs-tip kbd {
+  font-family: var(--font-ui);
+}
+
+/* The front door (sign-in, setup): the site's paper-and-dots canvas and a
+   card built like its sheets, with a sticker slapped on the corner. */
+.center-screen {
+  background-color: var(--bg-app);
+  background-image: radial-gradient(circle, var(--canvas-dot) 1.2px, transparent 1.4px);
+  background-size: 24px 24px;
+}
+.center-card {
+  position: relative;
+  width: 400px;
+  padding: 32px;
+  border: 1.5px solid var(--btn-edge);
+  border-radius: 20px;
+  box-shadow:
+    0 6px 0 var(--btn-ledge),
+    0 24px 48px rgba(0, 0, 0, 0.12);
+}
+.center-card h1 {
+  font-size: 34px;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+.center-card .lede {
+  font-size: var(--text-lg);
+}
+.center-card::before {
+  content: "\1F525" / "";
+  position: absolute;
+  top: -20px;
+  right: -16px;
+  font-size: 38px;
+  line-height: 1;
+  transform: rotate(14deg);
+  pointer-events: none;
+  filter: drop-shadow(1.5px 0 0 #fff) drop-shadow(-1.5px 0 0 #fff) drop-shadow(0 1.5px 0 #fff)
+    drop-shadow(0 -1.5px 0 #fff) drop-shadow(0 5px 7px rgba(0, 0, 0, 0.25));
+}
+.center-card .btn {
+  justify-content: center;
+}
+.center-card .btn.primary {
+  padding: 10px 14px;
+  font-size: var(--text-lg);
+}

@@ -12,17 +12,30 @@ professional tool — Figma/Linear-adjacent, macOS-native. Commons is chrome aro
 user's *product*; the product is the hero. The UI should recede: low-contrast warm
 surfaces, quiet borders, color reserved for meaning.
 
-Dark mode (default) is deep warm charcoal with a moss undertone; light mode is sand
-and paper. Light mode is a first-class token set (`data-theme="light"`), never a
-special case.
+Dark mode is deep warm charcoal with a moss undertone; light mode is sand and paper.
+Light mode is a first-class token set (`data-theme="light"`), never a special case. The
+default follows the system appearance (`lib/theme.ts`); `⌘L` flips and pins a choice,
+and the account menu's "Match system appearance" hands it back.
+
+**Brand layer (2026-09-27).** The app speaks the same visual language as trycommons.app,
+but only at the edges: display titles, pressable buttons on real actions, die-cut
+stickers, the marker hand in tips and empty states, and a front door (sign-in, setup)
+built like the site's sheets. The canvas and dense toolbars stay calm; the screens
+people review are still the hero.
 
 ## Typography
 
-- **Stack:** `-apple-system, "system-ui", "SF Pro Text", Inter, sans-serif` — the native
-  stack is an intentional choice for a macOS tool, not a placeholder.
-- **Display serif** (`--font-display`: Iowan Old Style/Palatino stack) for editorial
-  display moments only — page titles like the home "Projects" h1. The tool itself
-  stays sans; the serif never appears in controls, labels, or body copy.
+Three bundled faces, all SIL OFL (`assets/fonts`, registered by `lib/fonts.ts` through
+the FontFace API so the web build resolves them against the page, not its storage
+redirect). Each falls back to a system stack if loading fails.
+
+- **Interface** (`--font-ui`): Figtree, over the native stack. Everything in the tool.
+- **Display** (`--font-display`): Fraunces, pinned soft and wonky at 600. Editorial
+  display moments only: page titles like the home "Projects" h1, empty-state heroes,
+  the sign-in card. Never in controls, labels, or body copy.
+- **Hand** (`--font-hand`): Shantell Sans at 500. Tips (`.gs-tip`), empty states, and
+  the sticker dock hint, nothing else. Buttons and `kbd` inside them keep the
+  interface face, and people's own words (comments, names, briefs) are never set in it.
 - **Scale:** body 13px (`--text-sm`), captions/hints 11-12px (`--text-xs`), section
   headers 14-16px (`--text-md`), page titles 20px/600. Pro-tool density; never below 11px.
 - **Weights:** 400 body, 500 emphasis, 600 headings/names. Two weights per surface max.
@@ -33,9 +46,11 @@ special case.
 - **Tokens only.** Every color is a `theme.css` variable; hardcoded hex in components is
   a bug. Translucency via `color-mix(in srgb, var(--x) N%, transparent)`.
 - **Budget:** ~12 rendered colors per surface (audit measured 11 — hold that line).
-- **Semantic:** `--accent` (muted teal — interactive/brand, the palette's one cool note),
-  `--success`, `--danger` — used for meaning, never decoration. Bronze (`--comment`) is
-  reserved for open-thread/comment affordances.
+- **Semantic:** `--accent` (burnt orange: interactive/brand), `--success`, `--danger`,
+  used for meaning, never decoration. Bronze (`--comment`) is reserved for
+  open-thread/comment affordances.
+- **Buttons** carry their own tokens (`--btn-edge`, `--btn-ledge`, `--btn-primary-bg`,
+  `--btn-primary-ink`): primary wears the bright ember with ink type in both modes.
 - Project card covers are the one expressive surface: brand-color gradients mined from
   the repo, name-hash fallback otherwise. Gradients appear nowhere else.
 
@@ -60,6 +75,12 @@ special case.
 - **Pills/chips** (update ready, heatmap active, catch-up): bottom- or top-centered,
   one line, one action, dismissible. For ambient state only — never primary workflow.
 - **Badges:** tiny rounded rects; bronze = open threads, green = live, accent = active.
+- **Buttons:** three tiers. Primary (`.btn.primary`, one per surface) is ember with an
+  ink edge and a 2px ledge it sinks into on press. Secondary (`.btn`) is bordered on a
+  soft ledge. Ghost (`.btn.ghost`, every toolbar and icon button) stays flat; a dense
+  strip of pressable buttons is noise.
+- **Stickers** render die-cut: a white edge and a soft drop (`.sticker.thrown`,
+  `.sticker-ghost`), as on the site.
 
 ## Copy voice
 
@@ -108,8 +129,9 @@ crossfades), `--ease-out`. Shared keyframes: `rise-in` (lists, cards, messages),
 durations or curves per component.
 
 Rules of thumb:
-- Feedback is instant-feeling: press states (`.btn:active` scale 0.97) and hovers use
-  `--dur-fast`; anything slower reads as lag, the opposite of the goal.
+- Feedback is instant-feeling: press states and hovers finish within 120ms; anything
+  slower reads as lag, the opposite of the goal. Pressable buttons lift 1px on hover
+  and sink 2px into their ledge on press; ghost buttons scale to 0.97.
 - Entrances only; exits are instant. Users wait for arrivals, never for departures.
 - Never animate layout the user is actively manipulating (canvas pan/zoom, frame drag,
   live cursors) — direct manipulation must track the hand 1:1. Commanded moves (⌘±,
@@ -169,7 +191,9 @@ The app should feel faster than it is:
 Text-first in content; chrome controls use the single 16px stroke-icon family in
 `components/icons.tsx` (currentColor, 1.8 stroke). No emoji in chrome, no decorative
 icons, no icon circles, no illustration. An icon earns its place only as a functional
-identifier with a tooltip and aria-label carrying the words.
+identifier with a tooltip and aria-label carrying the words. Stickers are the exception
+because they are content (people throw them), and the front door wears one on the
+card's corner, as the site does, hidden from screen readers.
 
 ## Accessibility floor
 
@@ -210,28 +234,27 @@ notes and the provenance footer float as overlays rather than pushing the canvas
 
 ## Marketing surface (trycommons.app)
 
-The only place Commons leads with light mode. Paper (#f3f0e8) and panels (#fbf9f4) under
-ink (#26251e), deep teal accent (#1f7a6e) for contrast on paper, serif display at every
-heading level. Product imagery is dark, so the page reads calm and the app reads focused,
-which is the same figure/ground logic the app uses between chrome and canvas.
+The playful face of the brand (2026-09-27, `packages/backend/convex/landing.ts`), and
+the source of the app's brand layer. Paper (#fbf9f4) and sand (#f3f0e8) under ink
+(#26251e); the bright ember (#d98a54) fills primary buttons with ink type, and the
+deeper ember (#9c531f) draws focus rings and small accents. Fraunces at every heading level, Figtree
+for copy, Shantell Sans for handwritten notes. Emoji stickers are slapped on with the
+die-cut edge.
 
-Rules that keep it honest: no external fonts, scripts, or images (it renders instantly
-and survives any CSP), product visuals are drawn in CSS rather than faked in a mockup
-tool, and claims map to shipped behaviour. Motion is one gentle reveal on first sight and
-nothing else, disabled under reduced motion.
+The hero is the product working, not a picture of it: a scene of real screens where
+comments land, an agent drafts, and stickers fly, and then "Your turn" hands the
+visitor the composer and the sticker dock to try it themselves. Sticker sounds come from
+the app's Web Audio voices, with a mute button. Structure: hero (the two calls to
+action, then the live release line, "Version X, shipped today") beside the scene → why
+mocks go stale → how it works → roles → FAQ → the ember closing band → footer.
 
-Structure (premium pass, 2026-08-02): centered hero with a badge and the product shot
-staged in a halo → works-with strip (real integrations as text chips, never faked logos)
-→ the shift → **who it's for** (designers, engineers, PMs as three `.tier` columns) →
-feature rows alternating side to side → steps with serif numerals → access tiers → FAQ →
-closing CTA on the app's own dot grid → a real three-column footer. Sections alternate
-`.band` with plain so the page has a pulse; a new section reuses the existing `.tier` /
-`.card` / `.row` vocabulary rather than adding CSS. One material recipe on every raised
-surface (ambient + key shadow + top highlight); rules fade at both ends; the halo is the
-page's one gradient flourish and bleeds deliberately, clipped by `overflow-x: clip`
-(never `hidden`, which kills the sticky nav). The role section exists because the three
-jobs read the same product differently, and a visitor should find their own row before
-the feature detail starts.
+Rules that keep it honest: the only outside requests are three Google Fonts stylesheets
+(swap, system fallbacks, Shantell subset to the characters it sets); product visuals
+are HTML and CSS, never a mockup tool; claims map to shipped behaviour; the share card
+is `/og.jpg`, rendered from `scripts/og`. Counting is cookie-less: `sendBeacon` to
+`/api/lp` bumps per-day counters for a fixed event list (`landingEvents.ts`), read with
+`pnpm stats`. The scene loop runs only while it's on screen, and reduced motion stops
+it.
 
 ## Anti-patterns (audit-enforced)
 

@@ -6,7 +6,7 @@ import { initials, sessionToken } from "../lib/session";
 import { toast } from "../lib/toast";
 import { useSurfaceExclusivity } from "../lib/surfaces";
 import { useClickOutside } from "../lib/useClickOutside";
-import { effectiveTheme, onSystemThemeChange, setThemePreference } from "../lib/theme";
+import { effectiveTheme, getThemePreference, onSystemThemeChange, setThemePreference } from "../lib/theme";
 import { registerShortcut } from "../lib/shortcuts";
 
 /**
@@ -32,11 +32,20 @@ export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSig
   }, []);
 
   // Theme lives here now (set-and-forget preference), ⌘L still flips it.
+  // The default follows the system; flipping pins a choice, and "Match
+  // system" hands it back.
   const [theme, setTheme] = useState<"dark" | "light">(effectiveTheme());
+  const [followsSystem, setFollowsSystem] = useState(getThemePreference() === "system");
   const flipTheme = () => {
     const next = effectiveTheme() === "dark" ? "light" : "dark";
     setThemePreference(next);
     setTheme(next);
+    setFollowsSystem(false);
+  };
+  const matchSystem = () => {
+    setThemePreference("system");
+    setTheme(effectiveTheme());
+    setFollowsSystem(true);
   };
   useEffect(() => onSystemThemeChange(() => setTheme(effectiveTheme())), []);
   useEffect(
@@ -153,6 +162,11 @@ export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSig
           <button title="⌘L flips it from anywhere" onClick={flipTheme}>
             {theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
           </button>
+          {!followsSystem && (
+            <button title="Go back to following your system's light or dark setting" onClick={matchSystem}>
+              Match system appearance
+            </button>
+          )}
           <button onClick={onSignOut}>Sign out</button>
           <input
             ref={fileRef}

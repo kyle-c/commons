@@ -7,6 +7,7 @@ import ErrorBoundary from "./ErrorBoundary";
 import { getConvexUrl } from "./lib/session";
 import { initErrorReporting } from "./lib/errorReport";
 import { initTheme } from "./lib/theme";
+import { loadBrandFonts } from "./lib/fonts";
 import faviconUrl from "./assets/favicon.png";
 import "./theme.css";
 import "./styles.css";
@@ -25,6 +26,7 @@ import "./styles.css";
 // that reserved inset would push the tab strip out of line with the subnav.
 document.documentElement.dataset.desktop = window.commons ? "1" : "0";
 
+loadBrandFonts();
 initTheme();
 initErrorReporting();
 

@@ -23,9 +23,12 @@ const convexUrl = prod ? "https://rapid-anteater-106.convex.cloud" : "https://ba
 const convexFlags = prod ? ["--prod"] : [];
 
 console.log(`Building renderer for ${prod ? "PROD" : "dev"}…`);
+// An absolute /app/ base: asset URLs in the bundle become page-relative
+// ("/app/assets/…") instead of resolving against the script's own URL, which
+// on the web is a Convex storage URL after the /app 302.
 execFileSync("npx", ["electron-vite", "build"], {
   cwd: path.join(root, "apps/desktop"),
-  env: { ...process.env, VITE_CONVEX_URL: convexUrl },
+  env: { ...process.env, VITE_CONVEX_URL: convexUrl, COMMONS_RENDERER_BASE: "/app/" },
   stdio: "inherit",
 });
 
@@ -52,13 +55,16 @@ walk(rendererDir, "");
 const uploaded = [];
 for (const name of files) {
   const uploadUrl = convexRun("updates:createUploadUrl");
-  const type = name.endsWith(".js")
-    ? "text/javascript"
-    : name.endsWith(".css")
-      ? "text/css"
-      : name.endsWith(".svg")
-        ? "image/svg+xml"
-        : "application/octet-stream";
+  const TYPES = {
+    ".js": "text/javascript",
+    ".css": "text/css",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".woff2": "font/woff2",
+    ".json": "application/json",
+  };
+  const type = TYPES[path.extname(name)] ?? "application/octet-stream";
   const res = await fetch(uploadUrl, {
     method: "POST",
     headers: { "Content-Type": type },
@@ -82,7 +88,7 @@ indexHtml = indexHtml.replaceAll(/(\/app\/assets\/[^"']+)/g, `$1?v=${v}`);
 // deployment's storage origin — swap in a web-appropriate policy.
 indexHtml = indexHtml.replace(
   /content="default-src[^"]*"/,
-  `content="default-src 'self'; script-src 'self' https://*.convex.cloud; style-src 'self' 'unsafe-inline' https://*.convex.cloud; connect-src 'self' https://*.convex.cloud wss://*.convex.cloud; frame-src https:; img-src 'self' data: https:;"`
+  `content="default-src 'self'; script-src 'self' https://*.convex.cloud; style-src 'self' 'unsafe-inline' https://*.convex.cloud; font-src 'self' https://*.convex.cloud; connect-src 'self' https://*.convex.cloud wss://*.convex.cloud; frame-src https:; img-src 'self' data: https:;"`
 );
 
 convexRun("updates:publishWebApp", { indexHtml, files: uploaded });

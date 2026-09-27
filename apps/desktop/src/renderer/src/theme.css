@@ -20,10 +20,9 @@
   /* Text — warm off-whites, not clinical gray */
   --text-primary: #edebe0;
   --text-secondary: #a3a195;
-  --text-tertiary: #716f64;
+  --text-tertiary: #8a887c; /* 4.8:1 on --bg-app; #716f64 was 3.4:1 */
   --text-inverse: #1a1b17;
 
-  /* Accent — muted teal, the brand's one cool note */
   /* Burnt orange. Deliberately redder than --comment bronze (#c9944a) so the
      brand's two warm roles stay separable: accent = what you can act on,
      bronze = where discussion lives. */
@@ -37,9 +36,12 @@
   --danger: #d0655c;
   --comment: #c9944a;
 
-  /* Type — editorial serif for display moments, quiet sans for the tool */
-  --font-display: "Iowan Old Style", "Palatino", Georgia, serif;
-  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif;
+  /* Type, shared with trycommons.app and bundled (lib/fonts.ts): Fraunces,
+     soft and wonky, for display moments; Figtree for the tool; Shantell Sans,
+     a marker hand, for tips and empty states only, never for people's work. */
+  --font-display: "Fraunces", "Iowan Old Style", "Palatino", Georgia, serif;
+  --font-ui: "Figtree", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  --font-hand: "Shantell Sans", "Marker Felt", "Comic Sans MS", cursive;
   --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
   --text-xs: 11px;
   --text-sm: 12px;
@@ -52,10 +54,18 @@
   --radius-md: 8px;
   --radius-lg: 12px;
   --shadow-panel: 0 8px 32px rgba(8, 8, 4, 0.55);
+
+  /* Pressable buttons, as on the site: an edge and a ledge the button sinks
+     into. Primary wears the bright ember with ink type in both modes. */
+  --btn-edge: #0c0d0a;
+  --btn-ledge: #0c0d0a;
+  --btn-primary-bg: #d98a54;
+  --btn-primary-bg-hover: #e39a68;
+  --btn-primary-ink: #1a1b17;
 }
 
 /* Light mode — sand and paper. Applied via data-theme on <html>
-   (lib/theme.ts); dark remains the default. */
+   (lib/theme.ts); the default follows the system appearance. */
 :root[data-theme="light"] {
   /* Surfaces */
   --bg-app: #f3f0e8;
@@ -75,10 +85,10 @@
   /* Text */
   --text-primary: #26251e;
   --text-secondary: #5c5a4f;
-  --text-tertiary: #8f8d80;
+  --text-tertiary: #6f6d60; /* 4.6:1 on --bg-app; #8f8d80 was 3.2:1 */
   --text-inverse: #fbf9f4;
 
-  /* Accent — deeper teal for contrast on paper */
+  /* Accent: deeper ember for contrast on paper */
   --accent: #9c531f;
   --accent-hover: #84441a;
   --accent-muted: rgba(156, 83, 31, 0.13);
@@ -90,4 +100,8 @@
   --comment: #a8712c;
 
   --shadow-panel: 0 8px 32px rgba(50, 45, 25, 0.15);
+
+  --btn-edge: #26251e;
+  --btn-ledge: #26251e;
+  --btn-primary-ink: #26251e;
 }
