@@ -755,4 +755,13 @@ export default defineSchema({
   })
     .index("by_project", ["projectId"])
     .index("by_user_project", ["userId", "projectId"]),
+
+  // The marketing page's own scoreboard: one counter per (UTC day, event).
+  // Cookie-less by design: no visitor id, no IP, no user agent, nothing that
+  // identifies a person, just how many times each thing happened that day.
+  landingDaily: defineTable({
+    day: v.string(), // "2026-09-27", UTC
+    event: v.string(), // one of LANDING_EVENTS (landingStats.ts)
+    count: v.number(),
+  }).index("by_day_event", ["day", "event"]),
 });

@@ -1,0 +1,99 @@
+<!doctype html>
+<!--
+  The trycommons.app share card (1200x630): what Slack, X, and iMessage show
+  when someone pastes the link. Same materials as the landing page, drawn
+  bolder, because a feed shows it at about 500px wide.
+  Render with: node scripts/og/render.mjs
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,600,100,1&display=block" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;700&display=block" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    width: 1200px; height: 630px; overflow: hidden; position: relative;
+    background-color: #fbf9f4;
+    background-image: radial-gradient(circle, #d9d3c3 1.6px, transparent 1.9px);
+    background-size: 28px 28px;
+    font-family: "Figtree", system-ui, sans-serif; color: #26251e;
+  }
+  .brand { position: absolute; left: 72px; top: 58px; display: flex; align-items: center; gap: 14px;
+           font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 36px;
+           font-variation-settings: "opsz" 36, "SOFT" 100, "WONK" 1; }
+  h1 { position: absolute; left: 72px; top: 148px; margin: 0; width: 640px;
+       font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 84px; line-height: 0.98; letter-spacing: -0.02em;
+       font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1; }
+  .mk { position: relative; display: inline-block; white-space: nowrap; }
+  .mk svg { position: absolute; left: -9%; top: -14%; width: 118%; height: 130%; overflow: visible; }
+  .mk path { fill: none; stroke: #c8743f; stroke-width: 4.5; stroke-linecap: round; }
+  .sub { position: absolute; left: 72px; top: 436px; width: 600px; margin: 0; font-size: 27px; line-height: 1.35; color: #4b4a41; font-weight: 500; }
+  .url { position: absolute; left: 72px; bottom: 46px; font-size: 24px; font-weight: 700; color: #26251e;
+         padding: 8px 16px; border: 2.5px solid #26251e; border-radius: 12px; background: #d98a54; box-shadow: 0 5px 0 #26251e; }
+  .ph { position: absolute; width: 212px; height: 430px; border-radius: 28px; background: #fff; color: #1f2a28;
+        box-shadow: 0 0 0 4px #26251e, 0 10px 0 4px #26251e, 0 26px 44px rgba(60, 50, 25, 0.2);
+        padding: 18px 16px; display: flex; flex-direction: column; gap: 11px; font-size: 12px; }
+  .ph .t { display: flex; justify-content: space-between; font-weight: 700; font-size: 11px; }
+  .ph .t i { width: 36px; height: 8px; border-radius: 8px; background: #d9ddd8; display: block; }
+  .ph .lbl { color: #6a7672; margin-top: 6px; }
+  .ph .amt { font-size: 29px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+  .ph .row { display: flex; justify-content: space-between; padding: 9px 10px; border-radius: 10px; background: #eef2ef; }
+  .ph .row b { font-weight: 700; }
+  .ph .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ph .btns span { background: #2f5d55; color: #fff; border-radius: 99px; text-align: center; padding: 8px 0; font-weight: 700; }
+  .ph .btns span + span { background: #e3ebe8; color: #2f5d55; }
+  .ph .li { display: flex; gap: 9px; align-items: center; }
+  .ph .li i { width: 26px; height: 26px; border-radius: 50%; background: #e3ebe8; display: block; flex-shrink: 0; }
+  .ph .li s { display: block; height: 7px; border-radius: 6px; background: #e6e9e6; flex: 1; text-decoration: none; }
+  .changed { box-shadow: 0 0 0 3.5px rgba(217, 138, 84, 0.85); border-radius: 8px; }
+  .fh { position: absolute; font-size: 17px; font-weight: 700; display: flex; gap: 8px; align-items: center; }
+  .fh .badge { font-size: 13px; color: #9c531f; background: #f8e3d2; padding: 3px 10px; border-radius: 99px; }
+  .pin { position: absolute; width: 36px; height: 36px; border-radius: 50% 50% 50% 5px; background: #b8823a; color: #fff;
+         font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: center;
+         box-shadow: 0 0 0 4px #fff, 0 8px 16px rgba(60, 50, 25, 0.3); }
+  .stk { position: absolute; font-size: 64px; line-height: 1;
+         filter: drop-shadow(2.5px 0 0 #fff) drop-shadow(-2.5px 0 0 #fff) drop-shadow(0 2.5px 0 #fff) drop-shadow(0 -2.5px 0 #fff) drop-shadow(0 8px 10px rgba(60, 50, 25, 0.28)); }
+  .cur { position: absolute; display: flex; align-items: flex-start; color: #5b86e5; }
+  .cur svg { width: 30px; height: 30px; }
+  .cur span { margin-top: 22px; background: #5b86e5; color: #fff; font-weight: 700; font-size: 16px; padding: 3px 10px; border-radius: 8px; }
+</style>
+</head>
+<body>
+  <div class="brand">
+    <svg width="46" height="46" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#26251e"/><path d="M21.5 11.5a6 6 0 1 0 0 9" fill="none" stroke="#d98a54" stroke-width="3" stroke-linecap="round"/><path d="M14 11.5a6 6 0 1 0 0 9" fill="none" stroke="#fbf9f4" stroke-width="2" stroke-linecap="round" opacity="0.6"/></svg>
+    Commons
+  </div>
+  <h1>Design on the <span class="mk">product,<svg viewBox="0 0 220 90" preserveAspectRatio="none"><path d="M34 20 C78 3, 172 1, 202 26 C224 45, 202 77, 130 85 C68 91, 10 78, 7 52 C4 29, 42 11, 98 7" /></svg></span> not pictures of it.</h1>
+  <p class="sub">Comment on the running app, hand it to an agent, and get a working draft back.</p>
+  <div class="url">trycommons.app</div>
+
+  <div class="fh" style="left:752px;top:92px">Home</div>
+  <div class="ph" style="left:752px;top:124px">
+    <div class="t">9:41 <i></i></div>
+    <div class="lbl">Balance</div>
+    <div class="amt">$4,280.19</div>
+    <div class="btns"><span>Send</span><span>Request</span></div>
+    <div class="li"><i></i><s></s></div>
+    <div class="li"><i></i><s></s></div>
+    <div class="li"><i></i><s></s></div>
+  </div>
+  <div class="pin" style="left:910px;top:168px">M</div>
+
+  <div class="fh" style="left:964px;top:60px">Home <span class="badge">draft</span></div>
+  <div class="ph" style="left:964px;top:92px">
+    <div class="t">9:41 <i></i></div>
+    <div class="changed"><div class="lbl">Across all accounts</div><div class="amt">$4,280.19</div></div>
+    <div class="row changed"><span>Ready to send</span><b>$1,120.00</b></div>
+    <div class="btns"><span>Send</span><span>Request</span></div>
+    <div class="li"><i></i><s></s></div>
+    <div class="li"><i></i><s></s></div>
+  </div>
+
+  <div class="stk" style="left:1114px;top:52px;transform:rotate(14deg)">&#128293;</div>
+  <div class="stk" style="left:688px;top:476px;transform:rotate(-12deg)">&#127881;</div>
+  <div class="stk" style="left:606px;top:62px;transform:rotate(-8deg);font-size:54px">&#128161;</div>
+  <div class="cur" style="left:1050px;top:470px"><svg viewBox="0 0 16 16"><path d="M2.2 1.4l10.6 6.3-4.6 1.2-2.3 4.3z" fill="currentColor" stroke="#26251e" stroke-width="1.1" stroke-linejoin="round"/></svg><span>Maya</span></div>
+</body>
+</html>

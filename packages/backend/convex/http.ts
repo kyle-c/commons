@@ -1,6 +1,8 @@
 import { httpRouter } from "convex/server";
 import { googleCallbackUrl, siteUrl } from "./siteUrl";
 import { landingHtml } from "./landing";
+import { isLandingEvent } from "./landingEvents";
+import { ogImageBytes } from "./ogImage";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { buildAuthCallbackUrl } from "@commons/shared";
@@ -12,12 +14,43 @@ http.route({
   path: "/",
   method: "GET",
   handler: httpAction(async (ctx) => {
-    // The page shows which build /download will hand you, so the claim on the
-    // button is checkable rather than a promise.
+    // The page shows which build /download will hand you and when it shipped,
+    // so the claim on the button is checkable rather than a promise.
     const release = await ctx.runQuery(internal.updates.latest, {});
-    return new Response(landingHtml(release?.version), {
+    const html = landingHtml({
+      version: release?.version,
+      releasedAt: release?.publishedAt,
+      site: siteUrl(),
+      now: Date.now(),
+    });
+    return new Response(html, {
       status: 200,
       headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" },
+    });
+  }),
+});
+
+// The landing page's cookie-less beacon: the body is one event name, nothing
+// else. Unknown names are dropped (landingStats.record re-checks the list).
+http.route({
+  path: "/api/lp",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const event = (await request.text()).trim().slice(0, 32);
+    if (isLandingEvent(event)) await ctx.runMutation(internal.landingStats.record, { event });
+    return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
+  }),
+});
+
+// The share card Slack, X, and iMessage show when someone pastes the link.
+// Rendered from scripts/og (see its README); regenerate after a redesign.
+http.route({
+  path: "/og.jpg",
+  method: "GET",
+  handler: httpAction(async () => {
+    return new Response(ogImageBytes(), {
+      status: 200,
+      headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=86400" },
     });
   }),
 });
