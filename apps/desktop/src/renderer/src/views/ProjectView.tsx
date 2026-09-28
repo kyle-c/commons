@@ -773,13 +773,16 @@ function SharePopover({
 
   return (
     <div style={{ position: "relative" }} ref={wrapRef}>
+      {/* The project chrome's one ember action, labelled like the site's calls
+          to action; it stays pressed while the popover is open. */}
       <button
-        className={`btn ghost icon-btn ${open ? "active" : ""}`}
-        aria-label="Share"
+        className="btn primary share-btn"
+        aria-expanded={open}
         title={isPrivate ? "Private — only you and added members" : "Share this project"}
         onClick={() => setOpen(!open)}
       >
         <Icon name="share" />
+        Share
       </button>
       {open && (
         <div className="titlebar-popover">

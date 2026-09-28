@@ -17,11 +17,16 @@ Light mode is a first-class token set (`data-theme="light"`), never a special ca
 default follows the system appearance (`lib/theme.ts`); `⌘L` flips and pins a choice,
 and the account menu's "Match system appearance" hands it back.
 
-**Brand layer (2026-09-27).** The app speaks the same visual language as trycommons.app,
-but only at the edges: display titles, pressable buttons on real actions, die-cut
-stickers, the marker hand in tips and empty states, and a front door (sign-in, setup)
-built like the site's sheets. The canvas and dense toolbars stay calm; the screens
-people review are still the hero.
+**Brand layer (2026-09-27, working chrome 2026-09-28).** The app speaks the same visual
+language as trycommons.app. The site's structural idea carries through: anything you can
+pick up is a *sheet* with an edge and a ledge (`--sheet-edge`, `--sheet-ledge`,
+`--shadow-sheet`): the screens on the canvas, every panel, popover, and chip that floats
+over them, the canvas dock, the minimap, project cards, and the tab you're on. The view
+switcher is a row of keys with the current one pressed in ink, Share is the project
+chrome's one ember action, section and group names speak Fraunces, and nothing is set in
+tracked capitals. Toolbars stay ghost and the user's own screens stay unpainted; the
+screens people review are still the hero. The first pass (2026-09-27) covered only the
+edges, and the canvas screen still read as the old app, which is why the second exists.
 
 ## Typography
 
@@ -31,8 +36,9 @@ redirect). Each falls back to a system stack if loading fails.
 
 - **Interface** (`--font-ui`): Figtree, over the native stack. Everything in the tool.
 - **Display** (`--font-display`): Fraunces, pinned soft and wonky at 600. Editorial
-  display moments only: page titles like the home "Projects" h1, empty-state heroes,
-  the sign-in card. Never in controls, labels, or body copy.
+  display moments only: page titles like the home "Projects" h1, canvas section names,
+  home group headings, empty-state heroes, the sign-in card. Never in controls, small
+  labels, or body copy.
 - **Hand** (`--font-hand`): Shantell Sans at 500. Tips (`.gs-tip`), empty states, and
   the sticker dock hint, nothing else. Buttons and `kbd` inside them keep the
   interface face, and people's own words (comments, names, briefs) are never set in it.
@@ -51,6 +57,10 @@ redirect). Each falls back to a system stack if loading fails.
   open-thread/comment affordances.
 - **Buttons** carry their own tokens (`--btn-edge`, `--btn-ledge`, `--btn-primary-bg`,
   `--btn-primary-ink`): primary wears the bright ember with ink type in both modes.
+- **Sheets** take `--sheet-edge` and `--sheet-ledge`: ink in light mode; in dark mode a
+  warm grey edge over a black ledge, because an ink edge vanishes into a dark canvas.
+- **Pressed and selected** is ink: the current view key and a toggled canvas mode fill
+  with `--text-primary` and take `--bg-panel` for their icon, inverting in dark mode.
 - Project card covers are the one expressive surface: brand-color gradients mined from
   the repo, name-hash fallback otherwise. Gradients appear nowhere else.
 
@@ -58,8 +68,9 @@ redirect). Each falls back to a system stack if loading fails.
 
 - Controls are 28px tall; titlebar 44px; panel headers ~44px. This is a desktop mouse +
   keyboard tool — do not inflate to touch sizes, do not shrink below 26px.
-- Radius scale: `--radius-sm` inputs/chips, `--radius-md` cards/rows, `--radius-lg`
-  panels/popovers, `999px` pills. Nested radius ≤ parent radius.
+- Radius scale: `--radius-sm` inputs/chips, `--radius-md` rows, `--radius-lg` inner
+  cards, `--radius-sheet` (14px) for sheets (panels, popovers, the dock, the minimap,
+  project cards), 12px for canvas screens, `999px` pills. Nested radius ≤ parent radius.
 - Spacing rhythm: 4/6/8/10/12/14/16/20. Related things sit closer than unrelated things.
 
 ## Surfaces & patterns
@@ -67,7 +78,8 @@ redirect). Each falls back to a system stack if loading fails.
 - **Titlebar:** the command strip. Text-label ghost buttons; the breadcrumb is the only
   flexible child (ellipsizes; "Projects /" prefix drops below 1240px). Controls never
   shrink or wrap. New titlebar items must justify their permanent cost.
-- **Popovers** (`titlebar-popover`): anchored top-right, 340px default. Settings forms use
+- **Popovers** (`titlebar-popover`): sheets, anchored top-right, 340px default. Section
+  labels (`.pop-section`) are sentence case. Settings forms use
   `popover-form` (stacked: bold label → one-line hint → full-width input → inline
   validation → right-aligned actions). Never inline labels beside inputs.
 - **Side panels** (agent, user tests, threads): fixed, `--radius-lg`, own scroll; close
@@ -76,9 +88,13 @@ redirect). Each falls back to a system stack if loading fails.
   one line, one action, dismissible. For ambient state only — never primary workflow.
 - **Badges:** tiny rounded rects; bronze = open threads, green = live, accent = active.
 - **Buttons:** three tiers. Primary (`.btn.primary`, one per surface) is ember with an
-  ink edge and a 2px ledge it sinks into on press. Secondary (`.btn`) is bordered on a
-  soft ledge. Ghost (`.btn.ghost`, every toolbar and icon button) stays flat; a dense
-  strip of pressable buttons is noise.
+  ink edge and a 2px ledge it sinks into on press; in the project chrome it is Share,
+  labelled, and it stays pressed (`aria-expanded`) while its popover is open. Secondary
+  (`.btn`) is bordered on a soft ledge. Ghost (`.btn.ghost`, every toolbar and icon
+  button) stays flat; a dense strip of pressable buttons is noise.
+- **Canvas screens** are sheets in canvas units: the edge thins to a hairline as you
+  zoom out, like a printed sheet. The focused screen adds an ember band. Canvas section
+  names are Fraunces in sentence case.
 - **Stickers** render die-cut: a white edge and a soft drop (`.sticker.thrown`,
   `.sticker-ghost`), as on the site.
 
@@ -261,4 +277,4 @@ it.
 - Gradients outside project covers · icon-in-circle grids · centered-everything ·
   decorative blobs/dividers · happy talk · "OK/Submit" buttons · hardcoded colors ·
   wrapping/clipping bars (degrade like the titlebar instead) · blank loading panels ·
-  dev vocabulary in designer-facing labels.
+  dev vocabulary in designer-facing labels · tracked all-caps labels.

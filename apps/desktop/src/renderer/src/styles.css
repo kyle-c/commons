@@ -4746,3 +4746,240 @@ kbd {
   padding: 10px 14px;
   font-size: var(--text-lg);
 }
+
+/* ── Brand layer, part two (2026-09-28): the working chrome ──────────────
+   Part one dressed the edges, and the canvas screen still read as the old
+   app. This carries the site's one structural idea into the tool: anything
+   you can pick up has an ink edge and a ledge. That means the screens on
+   the canvas (sheets on a table), everything that floats over them, and the
+   tab you're on. The view switcher becomes a row of keys with the current
+   one pressed in ink, Share is the one ember action in the project chrome,
+   and section names speak Fraunces. The user's own screens stay unpainted. */
+
+/* Screens on the canvas. Canvas units on purpose: the edge thins to a
+   hairline as you zoom out, the way a printed sheet would. */
+.frame {
+  border-color: var(--sheet-edge);
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px var(--sheet-edge),
+    0 6px 0 1px var(--sheet-ledge);
+}
+.frame.focused {
+  border-color: var(--sheet-edge);
+  box-shadow:
+    0 0 0 5px var(--btn-primary-bg),
+    0 0 0 6px var(--sheet-edge),
+    0 10px 0 6px var(--sheet-ledge);
+}
+.frame-header {
+  border-radius: 11px 11px 0 0;
+  background: var(--bg-panel);
+  border-bottom-color: var(--border-default);
+  color: var(--text-tertiary);
+}
+.frame-header > span:first-child {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.frame-body {
+  border-radius: 0 0 11px 11px;
+}
+.frame-ghost {
+  border-radius: 12px;
+}
+.section-label {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--text-primary);
+}
+.section-label::first-letter {
+  text-transform: uppercase;
+}
+
+/* Everything that floats is a sheet. */
+.titlebar-popover,
+.mention-menu,
+.proto-notes,
+.user-tests,
+.palette,
+.compare-modal,
+.thread-panel,
+.agent-panel,
+.overlay-card,
+.status-menu,
+.getting-started.in-project,
+.canvas-toolbar,
+.minimap,
+.toast,
+.update-chip,
+.heatmap-chip,
+.sticker-dock,
+.bloom-palette {
+  border: 1.5px solid var(--sheet-edge);
+  box-shadow: var(--shadow-sheet);
+}
+.titlebar-popover,
+.proto-notes,
+.user-tests,
+.palette,
+.compare-modal,
+.thread-panel,
+.agent-panel,
+.overlay-card,
+.getting-started.in-project,
+.canvas-toolbar,
+.minimap {
+  border-radius: var(--radius-sheet);
+}
+.mention-menu,
+.status-menu,
+.toast {
+  border-radius: 10px;
+}
+
+/* The canvas dock: a toggled mode is a key held down, in ink. */
+.canvas-toolbar {
+  padding: 5px;
+  gap: 3px;
+}
+.canvas-toolbar .btn.active,
+.canvas-toolbar .btn.active:hover {
+  background: var(--text-primary);
+  border-color: transparent;
+  color: var(--bg-panel);
+}
+.canvas-toolbar .zoom {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* The view switcher: a row of keys, the current view pressed in ink. The
+   Prototype key's device tray hangs from its left edge now that Prototype
+   comes first (it had been anchored right since Flow joined the row, so it
+   opened under Flow). */
+.seg {
+  background: var(--bg-panel);
+  border: 1.5px solid var(--sheet-edge);
+  border-radius: 10px;
+  box-shadow: 0 2px 0 var(--sheet-ledge);
+  gap: 2px;
+}
+.seg button {
+  border-radius: 7px;
+}
+.seg button:hover:not(.on) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.seg button.on {
+  background: var(--text-primary);
+  color: var(--bg-panel);
+}
+.device-menu {
+  left: 3.5px;
+  right: auto;
+  top: calc(100% - 3.5px);
+  background: var(--text-primary);
+  border-radius: 0 0 7px 7px;
+}
+.device-menu button {
+  color: color-mix(in srgb, var(--bg-panel) 70%, transparent);
+}
+.device-menu button:hover {
+  color: var(--bg-panel);
+  background: color-mix(in srgb, var(--bg-panel) 14%, transparent);
+}
+.device-menu button:last-child {
+  border-radius: 0 0 7px 7px;
+}
+
+/* The tab you're on is a tag stuck to the bar. The strip clips overflowing
+   tabs, so it pads out room for the ring and ledge and cancels the padding
+   with margins, leaving the layout where it was. */
+.tab-strip {
+  padding: 3px 3px 5px;
+  margin: -3px -3px -5px;
+  gap: 4px;
+}
+.tab {
+  border-radius: 8px;
+}
+.tab.active {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow:
+    0 0 0 1.5px var(--sheet-edge),
+    0 2px 0 1.5px var(--sheet-ledge);
+}
+
+/* Share: the project chrome's one ember action. It stays pressed while its
+   popover is open. */
+.subnav .share-btn {
+  height: 28px;
+  padding: 0 12px 0 10px;
+  border-radius: 8px;
+}
+.btn.primary svg {
+  color: inherit;
+}
+.btn.primary[aria-expanded="true"],
+.btn.primary[aria-expanded="true"]:hover {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--btn-ledge);
+}
+
+/* The running app in Prototype sits on the same ledge as the canvas screens. */
+.proto-device {
+  border: 1.5px solid var(--sheet-edge);
+  border-radius: var(--radius-sheet);
+  box-shadow: 0 6px 0 var(--sheet-ledge);
+}
+
+/* Home: project cards are sheets you pick up. */
+.home-header h1 {
+  font-size: 30px;
+  letter-spacing: -0.01em;
+}
+.project-card {
+  border: 1.5px solid var(--sheet-edge);
+  border-radius: var(--radius-sheet);
+  box-shadow: 0 4px 0 var(--sheet-ledge);
+}
+.project-card:hover {
+  border-color: var(--sheet-edge);
+  background: var(--bg-panel);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 var(--sheet-ledge);
+}
+.project-card:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--sheet-ledge);
+}
+.project-card.skeleton-card {
+  border-color: var(--border-default);
+  box-shadow: none;
+}
+
+/* Sentence case everywhere, as on the site: no tracked capitals. Group
+   headings on home speak Fraunces like the canvas section names; small
+   labels stay in the interface face. */
+.workspace-heading {
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: -0.005em;
+  text-transform: none;
+  color: var(--text-primary);
+}
+.pop-section,
+.narration-section,
+.center-card label {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--text-sm);
+}

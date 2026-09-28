@@ -62,6 +62,16 @@
   --btn-primary-bg: #d98a54;
   --btn-primary-bg-hover: #e39a68;
   --btn-primary-ink: #1a1b17;
+
+  /* Sheets: anything you can pick up (panels, popovers, the canvas dock, the
+     minimap, the screens on the canvas) carries the same ink edge and a
+     ledge, with a soft drop for things that float. */
+  --radius-sheet: 14px;
+  /* In dark mode an ink edge vanishes into the canvas, so sheets take a warm
+     grey edge over a black ledge; in light mode both are ink. */
+  --sheet-edge: #5d5e53;
+  --sheet-ledge: #0c0d0a;
+  --shadow-sheet: 0 4px 0 var(--sheet-ledge), 0 16px 36px rgba(8, 8, 4, 0.5);
 }
 
 /* Light mode — sand and paper. Applied via data-theme on <html>
@@ -71,8 +81,8 @@
   --bg-app: #f3f0e8;
   --bg-panel: #fbf9f4;
   --bg-panel-raised: #f6f3ec;
-  --bg-canvas: #eae6dc;
-  --canvas-dot: #c6c1b1;
+  --bg-canvas: #f3f0e8; /* the site's sand: ink-edged screens no longer need a darker table */
+  --canvas-dot: #d3cdbc;
   --bg-input: #ece8dd;
   --bg-hover: #ece9df;
   --bg-active: #e2ddcf;
@@ -104,4 +114,7 @@
   --btn-edge: #26251e;
   --btn-ledge: #26251e;
   --btn-primary-ink: #26251e;
+  --sheet-edge: #26251e;
+  --sheet-ledge: #26251e;
+  --shadow-sheet: 0 4px 0 var(--sheet-ledge), 0 16px 36px rgba(60, 50, 25, 0.16);
 }
