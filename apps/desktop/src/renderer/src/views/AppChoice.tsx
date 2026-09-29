@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AppCandidate, RepoInspection } from "@commons/shared";
+import { stackById, stackLabel, type AppCandidate, type RepoInspection } from "@commons/shared";
 
 /**
  * Which app in this repo should become the project?
@@ -123,7 +123,7 @@ export function AppChoice({
                   >
                     <span className="repo-app-name">{app.label}</span>
                     <span className="repo-app-kind">
-                      {app.framework === "expo" ? "mobile" : app.framework}
+                      {stackById(app.framework)?.form === "phone" ? "mobile" : stackLabel(app.framework)}
                     </span>
                     {busy === app.path && <span className="repo-app-current">reading…</span>}
                     {busy === null && app.path === suggested && (

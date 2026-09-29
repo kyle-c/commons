@@ -1,4 +1,4 @@
-import type { DiscoveredRoute, RepoInspection } from "@commons/shared";
+import { stackById, type DiscoveredRoute, type RepoInspection } from "@commons/shared";
 
 /**
  * Tidy view: an organized layout computed from existing frames — same
@@ -77,7 +77,7 @@ export interface FrameSpec {
  * Mobile frameworks get phone-sized frames; web frameworks desktop-sized.
  */
 export function layoutFrames(inspection: RepoInspection): FrameSpec[] {
-  const mobile = inspection.framework === "expo";
+  const mobile = stackById(inspection.framework)?.form === "phone";
   const width = inspection.device?.width ?? (mobile ? 390 : 1280);
   const height = inspection.device?.height ?? (mobile ? 844 : 800);
   const { gapX, gapY, cols, sectionGap } = frameGrid(mobile, height);

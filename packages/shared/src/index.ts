@@ -1,3 +1,7 @@
+import type { Framework } from "./stacks";
+
+export * from "./stacks";
+
 /** A route discovered in a local Next.js project. */
 export interface DiscoveredRoute {
   /** URL path, e.g. "/", "/settings/profile". Dynamic segments keep brackets: "/posts/[id]". */
@@ -22,7 +26,7 @@ export interface AppCandidate {
   path: string;
   /** Folder name, or the repo name when the app is at the root. */
   label: string;
-  framework: "nextjs" | "expo" | "vite" | "custom" | "unknown";
+  framework: Framework;
   /** package.json name, when it has one. */
   name?: string;
 }
@@ -31,7 +35,7 @@ export interface AppCandidate {
 export interface RepoInspection {
   repoPath: string;
   name: string;
-  framework: "nextjs" | "expo" | "vite" | "custom" | "unknown";
+  framework: Framework;
   /** Frame size from commons.json (defaults: expo 390×844, web 1280×800). */
   device?: { width: number; height: number };
   packageManager: "pnpm" | "yarn" | "npm" | "bun";

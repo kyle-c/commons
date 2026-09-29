@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
-import type { AppCandidate, RepoInspection } from "@commons/shared";
+import { stackLabel, type AppCandidate, type RepoInspection } from "@commons/shared";
 import type { Nav } from "../App";
 import { initials, timeAgo, sessionToken } from "../lib/session";
 import { toast } from "../lib/toast";
@@ -545,15 +545,7 @@ export default function ProjectList({
               <div className="card-name">{project.name}</div>
             )}
             <div className="meta">
-              <span>
-                {project.framework === "nextjs"
-                  ? "Next.js"
-                  : project.framework === "expo"
-                    ? "Expo"
-                    : project.framework === "vite"
-                      ? "Vite"
-                      : "Code"}
-              </span>
+              <span>{stackLabel(project.framework)}</span>
               {project.visibility === "private" && <span>🔒 private</span>}
               {project.creator && project.creator._id !== me._id && <span>by {project.creator.name}</span>}
               <span>active {timeAgo(project.lastActivityAt ?? project._creationTime)} ago</span>

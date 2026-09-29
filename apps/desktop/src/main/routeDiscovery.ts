@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { DiscoveredRoute, RepoInspection, AppCandidate } from "@commons/shared";
+import { detectStack, stackById, type DiscoveredRoute, type RepoInspection, type AppCandidate, type ScreenSource } from "@commons/shared";
 
 const PAGE_FILES = ["page.tsx", "page.jsx", "page.ts", "page.js"];
 const PAGE_EXTS = [".tsx", ".jsx", ".ts", ".js"];
@@ -333,14 +333,11 @@ async function gitRootOf(dir: string): Promise<string> {
 export async function listRepoApps(fromPath: string): Promise<AppCandidate[]> {
   const root = await gitRootOf(fromPath);
   const found: AppCandidate[] = [];
-  const classify = (deps: Record<string, string>): RepoInspection["framework"] | null =>
-    deps.next ? "nextjs" : deps.vite ? "vite" : deps.expo || deps["react-native"] ? "expo" : null;
-
   const read = async (dir: string): Promise<{ framework: RepoInspection["framework"]; name?: string } | null> => {
     try {
       const pkg = JSON.parse(await fs.readFile(path.join(dir, "package.json"), "utf8"));
-      const framework = classify({ ...pkg.dependencies, ...pkg.devDependencies });
-      return framework ? { framework, name: pkg.name } : null;
+      const stack = detectStack({ ...pkg.dependencies, ...pkg.devDependencies });
+      return stack ? { framework: stack.id, name: pkg.name } : null;
     } catch {
       return null;
     }
@@ -428,16 +425,75 @@ export async function discoverNavigatorScreens(
   return { screens, linkingPaths };
 }
 
+/** The first of these folders that exists, relative to the repo. */
+async function firstDir(repoPath: string, dirs: string[]): Promise<string | null> {
+  for (const dir of dirs) {
+    const abs = path.join(repoPath, dir);
+    if (await exists(abs)) return abs;
+  }
+  return null;
+}
+
+/**
+ * One screen source (see ScreenSource in @commons/shared). A source that finds
+ * nothing returns no routes, and the stack's next source gets a turn.
+ */
+async function readScreens(
+  source: ScreenSource,
+  repoPath: string
+): Promise<{ routes: DiscoveredRoute[]; navigatorScreens?: string[] }> {
+  const routes: DiscoveredRoute[] = [];
+  switch (source) {
+    case "next-app": {
+      const dir = await firstDir(repoPath, ["app", "src/app"]);
+      if (dir) await walkAppDir(dir, [], repoPath, routes);
+      return { routes };
+    }
+    case "next-pages": {
+      const dir = await firstDir(repoPath, ["pages", "src/pages"]);
+      if (dir) await walkPagesDir(dir, [], repoPath, routes);
+      return { routes };
+    }
+    case "expo-router": {
+      const dir = await firstDir(repoPath, ["app", "src/app"]);
+      if (dir) await walkExpoDir(dir, [], repoPath, routes);
+      return { routes };
+    }
+    case "react-navigation": {
+      // A classic React Navigation app declares its screens in JSX rather
+      // than on disk, so read them from the navigators. They become real
+      // routes only when the app has a linking config to give them URLs.
+      const found = await discoverNavigatorScreens(repoPath);
+      if (found.screens.length === 0) return { routes };
+      for (const name of found.linkingPaths ? found.screens : []) {
+        const mapped = found.linkingPaths?.[name];
+        if (!mapped) continue;
+        routes.push({
+          path: mapped.startsWith("/") ? mapped : `/${mapped}`,
+          file: "react-navigation",
+          title: name,
+          dynamic: /:|\[/.test(mapped),
+        });
+      }
+      return { routes, navigatorScreens: found.screens };
+    }
+    case "react-router":
+      return { routes };
+    case "root":
+      // No convention to read: start at the root and point people at
+      // commons.json for the rest (the running-app crawl finds more).
+      routes.push({ path: "/", file: "commons.json (add more routes here)", dynamic: false });
+      return { routes };
+  }
+}
+
 export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
   let framework: RepoInspection["framework"] = "unknown";
   let name = path.basename(repoPath);
   try {
     const pkg = JSON.parse(await fs.readFile(path.join(repoPath, "package.json"), "utf8"));
     if (pkg.name) name = pkg.name;
-    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-    if (deps.next) framework = "nextjs";
-    else if (deps["expo-router"] || deps.expo || deps["react-native"]) framework = "expo";
-    else if (deps.vite) framework = "vite";
+    framework = detectStack({ ...pkg.dependencies, ...pkg.devDependencies })?.id ?? "unknown";
   } catch {
     // No package.json — leave as unknown; caller surfaces the error state.
   }
@@ -450,7 +506,7 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
   // adopts the best child app as the project path. Web apps win over
   // mobile; the repo root still owns git via the subfolder.
   if (framework === "unknown" && !config) {
-    const candidates: { path: string; framework: RepoInspection["framework"] }[] = [];
+    const candidates: { path: string; rank: number }[] = [];
     try {
       for (const entry of await fs.readdir(repoPath, { withFileTypes: true })) {
         if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "node_modules") continue;
@@ -459,10 +515,10 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
             await fs.readFile(path.join(repoPath, entry.name, "package.json"), "utf8")
           );
           const childDeps = { ...childPkg.dependencies, ...childPkg.devDependencies };
-          if (childDeps.next) candidates.push({ path: entry.name, framework: "nextjs" });
-          else if (childDeps.vite) candidates.push({ path: entry.name, framework: "vite" });
-          else if (childDeps["expo-router"] && childDeps["react-native-web"])
-            candidates.push({ path: entry.name, framework: "expo" });
+          const stack = detectStack(childDeps);
+          if (stack && stack.adoptWhen.every((dep) => dep in childDeps)) {
+            candidates.push({ path: entry.name, rank: stack.adoptRank });
+          }
         } catch {
           // Not an app folder — skip.
         }
@@ -470,8 +526,7 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
     } catch {
       // Unreadable dir — fall through to the unknown result.
     }
-    const rank = { nextjs: 0, vite: 1, expo: 2 } as Record<string, number>;
-    candidates.sort((a, b) => rank[a.framework] - rank[b.framework] || a.path.localeCompare(b.path));
+    candidates.sort((a, b) => a.rank - b.rank || a.path.localeCompare(b.path));
     if (candidates.length > 0) {
       // Still adopt the top-ranked app so nothing regresses — but report the
       // others. Silently choosing between a repo's web and mobile apps and
@@ -483,6 +538,7 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
   }
 
   const routes: DiscoveredRoute[] = [];
+  let navigatorScreens: string[] | undefined;
   // Declared routes beat discovery — deterministic across every framework.
   if (config?.routes?.length) {
     for (const r of config.routes) {
@@ -495,58 +551,15 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
         title: r.title,
       });
     }
-  } else if (framework === "vite") {
-    // No filesystem routing convention to walk — start with the root and
-    // point people at commons.json for the rest.
-    routes.push({ path: "/", file: "commons.json (add more routes here)", dynamic: false });
   }
-  if (routes.length === 0 && framework === "expo") {
-    for (const appDir of ["app", "src/app"]) {
-      const abs = path.join(repoPath, appDir);
-      if (await exists(abs)) {
-        await walkExpoDir(abs, [], repoPath, routes);
+  if (routes.length === 0) {
+    // Otherwise the stack's own screen sources, in order, until one finds screens.
+    for (const source of stackById(framework)?.screens ?? []) {
+      const found = await readScreens(source, repoPath);
+      if (found.navigatorScreens) navigatorScreens = found.navigatorScreens;
+      if (found.routes.length > 0) {
+        routes.push(...found.routes);
         break;
-      }
-    }
-  }
-
-  // Still nothing: a classic React Navigation app. Its screens are declared in
-  // JSX rather than on disk, so read them from the navigators. They become
-  // real routes only when the app has a linking config to give them URLs.
-  let navigatorScreens: string[] | undefined;
-  if (routes.length === 0 && framework === "expo") {
-    const found = await discoverNavigatorScreens(repoPath);
-    if (found.screens.length > 0) {
-      navigatorScreens = found.screens;
-      if (found.linkingPaths) {
-        for (const name of found.screens) {
-          const mapped = found.linkingPaths[name];
-          if (!mapped) continue;
-          routes.push({
-            path: mapped.startsWith("/") ? mapped : `/${mapped}`,
-            file: "react-navigation",
-            title: name,
-            dynamic: /:|\[/.test(mapped),
-          });
-        }
-      }
-    }
-  }
-  if (routes.length === 0 && framework === "nextjs") {
-    for (const appDir of ["app", "src/app"]) {
-      const abs = path.join(repoPath, appDir);
-      if (await exists(abs)) {
-        await walkAppDir(abs, [], repoPath, routes);
-        break;
-      }
-    }
-    if (routes.length === 0) {
-      for (const pagesDir of ["pages", "src/pages"]) {
-        const abs = path.join(repoPath, pagesDir);
-        if (await exists(abs)) {
-          await walkPagesDir(abs, [], repoPath, routes);
-          break;
-        }
       }
     }
   }

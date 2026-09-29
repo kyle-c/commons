@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import net from "net";
 import http from "http";
-import type { DevServerStatus } from "@commons/shared";
+import { devCommandFor, stackById, STACKS, type DevServerStatus } from "@commons/shared";
 import { inspectRepo, readCommonsConfig } from "./routeDiscovery";
 
 interface RunningServer {
@@ -108,10 +108,13 @@ export async function start(repoPath: string, name?: string): Promise<DevServerS
 
   const inspection = await inspectRepo(repoPath);
   const config = await readCommonsConfig(repoPath);
-  if (inspection.framework === "unknown" && !config?.devCommand) {
+  const stack = stackById(inspection.framework);
+  // Without a known stack there's no default command to fall back on (a
+  // commons.json with routes but no devCommand used to run `next dev`).
+  if (!stack && !config?.devCommand?.length) {
     const status: DevServerStatus = {
       state: "error",
-      message: "Add a commons.json with a devCommand to run this project (Next.js, Expo, and Vite are automatic)",
+      message: `Add a commons.json with a devCommand to run this project (${STACKS.map((s) => s.label).join(", ")} are automatic)`,
     };
     setStatus(repoPath, status);
     return status;
@@ -145,16 +148,11 @@ export async function start(repoPath: string, name?: string): Promise<DevServerS
   const url = `http://localhost:${port}`;
 
   const execBin = { pnpm: "pnpm", yarn: "yarn", bun: "bunx", npm: "npx" }[inspection.packageManager];
-  // commons.json devCommand wins ({port} substituted); otherwise per-framework
-  // defaults. expo serves the web build from metro (--web); vite --strictPort
-  // keeps the frame URLs honest.
+  // commons.json devCommand wins ({port} substituted); otherwise the stack's
+  // own (the shared stack table in @commons/shared).
   const devCommand = config?.devCommand?.length
     ? config.devCommand.map((part) => part.replace("{port}", String(port)))
-    : inspection.framework === "expo"
-      ? ["expo", "start", "--web", "--port", String(port)]
-      : inspection.framework === "vite"
-        ? ["vite", "--port", String(port), "--strictPort"]
-        : ["next", "dev", "-p", String(port)];
+    : devCommandFor(stack!, port);
   // A full devCommand names its own binary; framework defaults run via the
   // package manager's exec shim.
   const useExec = !config?.devCommand?.length;

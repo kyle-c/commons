@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
+import { detectStack } from "@commons/shared";
 
 /**
  * The two scripts that execute in other people's CI.
@@ -125,6 +126,18 @@ describe("scripts that run in customer CI", () => {
     expect(workflow).toMatch(/ANTHROPIC_API_KEY:\s*\$\{\{\s*secrets\.ANTHROPIC_API_KEY\s*\}\}/);
     expect(workflow).toMatch(/COMMONS_PAYLOAD:\s*\$\{\{\s*toJson\(github\.event\.client_payload\)\s*\}\}/);
     expect(runner).toMatch(/process\.env\.COMMONS_PAYLOAD/);
+  });
+
+  it("the preview build's special cases match the shared stack table", () => {
+    // The runner can't read @commons/shared (nothing is spliced into it), and
+    // it mostly doesn't need to: it runs the repo's own build and finds the
+    // output. Its few stack-specific branches key off dependency names, so
+    // each has to name a dependency the stack table recognizes as that stack,
+    // or a renamed entry would quietly send those apps down the wrong branch.
+    const runner = served("cloudAgents.ts", "RUNNER_SCRIPT");
+    const branches = [...runner.matchAll(/\} else if \(deps\.(\w+)\)/g)].map((m) => m[1]);
+    expect(branches).toEqual(["next", "expo", "vite"]);
+    expect(branches.map((dep) => detectStack({ [dep]: "*" })?.id)).toEqual(["nextjs", "expo", "vite"]);
   });
 
   it("the workflow asks for write access, because the runner pushes", () => {
