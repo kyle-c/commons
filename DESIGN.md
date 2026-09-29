@@ -21,8 +21,10 @@ and the account menu's "Match system appearance" hands it back.
 language as trycommons.app. The site's structural idea carries through: anything you can
 pick up is a *sheet* with an edge and a ledge (`--sheet-edge`, `--sheet-ledge`,
 `--shadow-sheet`): the screens on the canvas, every panel, popover, and chip that floats
-over them, the canvas dock, the minimap, project cards, and the tab you're on. The view
-switcher is a row of keys with the current one pressed in ink, Share is the project
+over them, the canvas dock, the minimap, and project cards. Controls inside the bars
+(tabs, the view switcher) take no outline: a heavy edge there reads as clunky beside the
+ghost tools, so the current tab is a quiet sand pill and the view switcher a sand trough
+with the current view pressed in ink. Share is the project
 chrome's one ember action, section and group names speak Fraunces, and nothing is set in
 tracked capitals. Toolbars stay ghost and the user's own screens stay unpainted; the
 screens people review are still the hero. The first pass (2026-09-27) covered only the
