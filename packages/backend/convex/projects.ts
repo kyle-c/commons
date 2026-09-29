@@ -1,7 +1,8 @@
 import { mutation, query, internalQuery, internalMutation, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
+import { COVER_MAX, COVER_PROBE, coverCapacity, firstName, rankCoverFrames } from "./coverScreens";
 import type { MutationCtx } from "./_generated/server";
 import {
   accessibleProject,
@@ -133,6 +134,43 @@ export const listWithActivity = query({
         const newThreadsSinceVisit = since
           ? threads.filter((t) => t._creationTime > since && t.createdBy !== userId).length
           : 0;
+        // The card's cover: a few of the project's own screens, shaped like
+        // its frames, with the newest open comment pinned where it was left.
+        // Snapshot probes are capped, and thumbnails win over full captures.
+        const newestOpen = threads.find((t) => !t.resolvedAt);
+        const probed: { frame: (typeof frames)[number]; snap: Doc<"frameSnapshots"> | null }[] = [];
+        for (const frame of rankCoverFrames(frames, newestOpen?.frameId).slice(0, COVER_PROBE)) {
+          const snap = await ctx.db
+            .query("frameSnapshots")
+            .withIndex("by_frame", (q) => q.eq("frameId", frame._id))
+            .unique();
+          probed.push({ frame, snap });
+          if (probed.filter((p) => p.snap).length >= COVER_MAX) break;
+        }
+        // Screens with pictures when there are any; otherwise blank sheets
+        // that still show the project's shape.
+        const shown = probed.some((p) => p.snap) ? probed.filter((p) => p.snap) : probed;
+        const coverScreens = await Promise.all(
+          shown.slice(0, coverCapacity(shown[0]?.frame)).map(async ({ frame, snap }) => ({
+            frameId: frame._id,
+            width: frame.width,
+            height: frame.height,
+            url: snap ? await ctx.storage.getUrl(snap.thumbStorageId ?? snap.storageId) : null,
+            // A full-size capture with no thumbnail yet: the client makes one.
+            thumbFrom: snap && !snap.thumbStorageId ? snap.storageId : undefined,
+            pin:
+              newestOpen && newestOpen.frameId === frame._id && newestOpen.fx != null && newestOpen.fy != null
+                ? { fx: newestOpen.fx, fy: newestOpen.fy }
+                : undefined,
+          }))
+        );
+        const opening = newestOpen
+          ? await ctx.db
+              .query("messages")
+              .withIndex("by_thread", (q) => q.eq("threadId", newestOpen._id))
+              .first()
+          : null;
+        const openingAuthor = opening?.authorId ? (await ctx.db.get(opening.authorId))?.name : opening?.guestName;
         return {
           ...project,
           coverUrl: project.coverImageId ? await ctx.storage.getUrl(project.coverImageId) : null,
@@ -143,6 +181,8 @@ export const listWithActivity = query({
           openThreadCount: threads.filter((t) => !t.resolvedAt).length,
           pinned: pinned.has(project._id),
           newThreadsSinceVisit,
+          coverScreens,
+          openThread: opening ? { author: firstName(openingAuthor ?? "Someone"), body: opening.body.slice(0, 180) } : null,
         };
       })
     );
@@ -181,6 +221,7 @@ export const saveFrameSnapshot = mutation({
   args: {
     frameId: v.id("frames"),
     storageId: v.id("_storage"),
+    thumbStorageId: v.optional(v.id("_storage")),
     userId: v.id("users"),
     sessionToken: v.optional(v.string()),
   },
@@ -196,14 +237,47 @@ export const saveFrameSnapshot = mutation({
       .unique();
     if (existing) {
       await ctx.storage.delete(existing.storageId).catch(() => {});
+      if (existing.thumbStorageId) await ctx.storage.delete(existing.thumbStorageId).catch(() => {});
       await ctx.db.delete(existing._id);
     }
     await ctx.db.insert("frameSnapshots", {
       frameId: args.frameId,
       projectId: frame.projectId,
       storageId: args.storageId,
+      ...(args.thumbStorageId ? { thumbStorageId: args.thumbStorageId } : {}),
       capturedAt: Date.now(),
     });
+  },
+});
+
+/**
+ * Home made a thumbnail from a full-size capture it had to show. Attached only
+ * if that exact capture is still the frame's snapshot and nobody beat us to it;
+ * otherwise the upload is deleted rather than orphaned.
+ */
+export const attachFrameThumb = mutation({
+  args: {
+    frameId: v.id("frames"),
+    fromStorageId: v.id("_storage"),
+    thumbStorageId: v.id("_storage"),
+    userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const frame = await ctx.db.get(args.frameId);
+    if (!frame || !(await accessibleProject(ctx, frame.projectId, await resolveViewer(ctx, args)))) {
+      await ctx.storage.delete(args.thumbStorageId).catch(() => {});
+      throw new Error("Not allowed");
+    }
+    const snapshot = await ctx.db
+      .query("frameSnapshots")
+      .withIndex("by_frame", (q) => q.eq("frameId", args.frameId))
+      .unique();
+    if (!snapshot || snapshot.storageId !== args.fromStorageId || snapshot.thumbStorageId) {
+      await ctx.storage.delete(args.thumbStorageId).catch(() => {});
+      return;
+    }
+    await ctx.db.patch(snapshot._id, { thumbStorageId: args.thumbStorageId });
   },
 });
 
@@ -763,6 +837,7 @@ export const cascadeDeleteProject = internalMutation({
       .take(BUDGET - spent);
     for (const snap of snaps) {
       await ctx.storage.delete(snap.storageId).catch(() => {});
+      if (snap.thumbStorageId) await ctx.storage.delete(snap.thumbStorageId).catch(() => {});
       await ctx.db.delete(snap._id);
       spent += 1;
     }

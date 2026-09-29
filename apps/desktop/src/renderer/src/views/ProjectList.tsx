@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
@@ -15,7 +15,8 @@ import Team from "./Team";
 import Inbox from "./Inbox";
 import AccountMenu from "./AccountMenu";
 import Icon from "../components/icons";
-import RibbonCover from "../components/RibbonCover";
+import ScreensCover from "../components/ScreensCover";
+import { makeThumb, uploadBlob } from "../lib/thumbs";
 import { AppChoice } from "./AppChoice";
 import GettingStarted from "./GettingStarted";
 import { vacuumFrom } from "../lib/celebrate";
@@ -39,24 +40,27 @@ function fallbackColors(name: string): [string, string] {
   return [`hsl(${h}, 45%, 38%)`, `hsl(${(h + 45) % 360}, 50%, 26%)`];
 }
 
-/** Card cover: ribbon-routes art seeded by the project (uploaded covers win).
- *  Children (the inline rename input) replace the name while editing. */
+/** Card cover: the project's own screens on a little table, shaped like its
+ *  frames (uploaded covers win). No screens yet shows the empty slot. */
 function ProjectCover({
-  name,
   seed,
   coverUrl,
-  children,
+  screens,
 }: {
-  name: string;
-  /** Stable per-project seed for the generated cover (the project id). */
+  /** Stable per-project seed for the table's hand-placed tilt (the project id). */
   seed: string;
   coverUrl?: string | null;
-  children?: React.ReactNode;
+  screens: React.ComponentProps<typeof ScreensCover>["screens"];
 }) {
   return (
-    <div className="project-cover">
-      {coverUrl ? <img className="cover-img" src={coverUrl} alt="" /> : <RibbonCover seed={seed} />}
-      {children ?? <span>{name}</span>}
+    <div className="project-cover" aria-hidden>
+      {coverUrl ? (
+        <img className="cover-img" src={coverUrl} alt="" />
+      ) : screens.length > 0 ? (
+        <ScreensCover screens={screens} seed={seed} />
+      ) : (
+        <span className="cover-empty">No screens yet</span>
+      )}
     </div>
   );
 }
@@ -110,6 +114,43 @@ export default function ProjectList({
     });
   };
   const generateUploadUrl = useMutation(api.comments.generateUploadUrl);
+  const attachFrameThumb = useMutation(api.projects.attachFrameThumb);
+  // Screens captured before thumbnails existed come down full size. Shrink
+  // each one once, quietly and one at a time, so the next visit is light.
+  const thumbed = useRef(new Set<string>());
+  useEffect(() => {
+    const todo = (projects ?? []).flatMap((p) =>
+      p.coverScreens.filter((s) => s.thumbFrom && s.url && !thumbed.current.has(s.frameId))
+    );
+    if (todo.length === 0) return;
+    let stopped = false;
+    void (async () => {
+      for (const screen of todo) {
+        if (stopped || !screen.url || !screen.thumbFrom) return;
+        thumbed.current.add(screen.frameId);
+        try {
+          const full = await fetch(screen.url).then((r) => (r.ok ? r.blob() : null));
+          const thumb = full && (await makeThumb(full));
+          if (!thumb) continue;
+          const uploaded = await uploadBlob(await generateUploadUrl({ userId: me._id, sessionToken: sessionToken() }), thumb);
+          if (!uploaded) continue;
+          await attachFrameThumb({
+            frameId: screen.frameId,
+            fromStorageId: screen.thumbFrom,
+            thumbStorageId: uploaded,
+            userId: me._id,
+            sessionToken: sessionToken(),
+          });
+        } catch {
+          // The card already shows the full capture; a later visit tries again.
+        }
+      }
+    })();
+    return () => {
+      stopped = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects]);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverTarget, setCoverTarget] = useState<Id<"projects"> | null>(null);
   const uploadCover = async (file: File) => {
@@ -429,23 +470,7 @@ export default function ProjectList({
               }
             }}
           >
-            <ProjectCover name={project.name} seed={project._id} coverUrl={project.coverUrl}>
-              {renaming?.id === project._id ? (
-                <input
-                  className="cover-rename"
-                  autoFocus
-                  value={renaming.value}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
-                  onBlur={() => void commitRename()}
-                  onKeyDown={(e) => {
-                    e.stopPropagation();
-                    if (e.key === "Enter") void commitRename();
-                    if (e.key === "Escape") setRenaming(null);
-                  }}
-                />
-              ) : undefined}
-            </ProjectCover>
+            <ProjectCover seed={project._id} coverUrl={project.coverUrl} screens={project.coverScreens} />
             <span className="card-actions">
               <button
                 className={`btn ghost icon-btn card-edit ${project.pinned ? "pinned" : ""}`}
@@ -502,6 +527,23 @@ export default function ProjectList({
                 <Icon name="archive" size={13} />
               </button>
             </span>
+            {renaming?.id === project._id ? (
+              <input
+                className="card-rename"
+                autoFocus
+                value={renaming.value}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
+                onBlur={() => void commitRename()}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") void commitRename();
+                  if (e.key === "Escape") setRenaming(null);
+                }}
+              />
+            ) : (
+              <div className="card-name">{project.name}</div>
+            )}
             <div className="meta">
               <span>
                 {project.framework === "nextjs"
@@ -516,6 +558,11 @@ export default function ProjectList({
               {project.creator && project.creator._id !== me._id && <span>by {project.creator.name}</span>}
               <span>active {timeAgo(project.lastActivityAt ?? project._creationTime)} ago</span>
             </div>
+            {project.openThread && (
+              <div className="card-said" title={`${project.openThread.author}: ${project.openThread.body}`}>
+                <b>{project.openThread.author}:</b> {project.openThread.body}
+              </div>
+            )}
             <div className="foot">
               {/* Left-aligned plain-text signals, status first — it's the
                   card's primary "what does this project want" line. Frame
@@ -647,7 +694,8 @@ export default function ProjectList({
                       aria-label={`Open ${project.name} (archived)`}
                       onClick={() => setNav({ screen: "project", projectId: project._id, view: "canvas" })}
                     >
-                      <ProjectCover name={project.name} seed={project._id} coverUrl={project.coverUrl} />
+                      <ProjectCover seed={project._id} coverUrl={project.coverUrl} screens={project.coverScreens} />
+                      <div className="card-name">{project.name}</div>
                       <div className="meta">
                         {confirmDelete === project._id ? (
                           <>

@@ -443,3 +443,12 @@ export function parseDeepLink(raw: string): DeepLink | null {
     return null;
   }
 }
+
+/**
+ * A project card lays its screens on a little table: phones (anything taller
+ * than wide) fan out three abreast, wider screens stack two deep. Shared so the
+ * backend picks as many screens as the renderer will place.
+ */
+export function isPortraitScreen(size: { width: number; height: number }): boolean {
+  return size.height > size.width * 1.1;
+}

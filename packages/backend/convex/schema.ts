@@ -396,6 +396,10 @@ export default defineSchema({
     frameId: v.id("frames"),
     projectId: v.id("projects"),
     storageId: v.id("_storage"),
+    // A small JPEG of the same capture for the home card covers, which would
+    // otherwise pull full-size PNGs. Absent on older captures until a recapture
+    // or the first home view makes one (projects.attachFrameThumb).
+    thumbStorageId: v.optional(v.id("_storage")),
     capturedAt: v.number(),
   })
     .index("by_frame", ["frameId"])

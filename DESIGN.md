@@ -63,8 +63,13 @@ redirect). Each falls back to a system stack if loading fails.
   warm grey edge over a black ledge, because an ink edge vanishes into a dark canvas.
 - **Pressed and selected** is ink: the current view key and a toggled canvas mode fill
   with `--text-primary` and take `--bg-panel` for their icon, inverting in dark mode.
-- Project card covers are the one expressive surface: brand-color gradients mined from
-  the repo, name-hash fallback otherwise. Gradients appear nowhere else.
+- Project card covers show the project itself: its own screens on a little table
+  (`components/ScreensCover`), each shaped like its frame, so a phone app fans out phones
+  and a web app stacks browser windows. The newest open comment is pinned where it was
+  left, and its opening line sits under the name in the marker hand. Uploaded covers
+  win; no screens yet is a dashed slot. Covers load thumbnails (`frameSnapshots.
+  thumbStorageId`), made at capture time or by home the first time it has to show a
+  full-size capture.
 
 ## Density & geometry
 
@@ -276,7 +281,7 @@ it.
 
 ## Anti-patterns (audit-enforced)
 
-- Gradients outside project covers · icon-in-circle grids · centered-everything ·
+- Decorative gradients · icon-in-circle grids · centered-everything ·
   decorative blobs/dividers · happy talk · "OK/Submit" buttons · hardcoded colors ·
   wrapping/clipping bars (degrade like the titlebar instead) · blank loading panels ·
   dev vocabulary in designer-facing labels · tracked all-caps labels.

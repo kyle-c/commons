@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
+import { makeThumb, uploadBlob } from "../lib/thumbs";
 import type { Doc, Id } from "@commons/backend/convex/_generated/dataModel";
 import type { AgentSessionEvent, AgentSessionInfo, DevServerStatus, GitRepoStatus } from "@commons/shared";
 import { buildDeepLink } from "@commons/shared";
@@ -1538,6 +1539,25 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
   const postAgentReply = useMutation(api.comments.postAgentReply);
   const generateUploadUrl = useMutation(api.comments.generateUploadUrl);
   const saveFrameSnapshot = useMutation(api.projects.saveFrameSnapshot);
+  // Store a capture and its card thumbnail (lib/thumbs), then make it the
+  // frame's snapshot. A thumbnail that fails is skipped: home falls back to
+  // the full capture and makes one itself.
+  const saveCapture = async (frameId: Id<"frames">, png: BlobPart) => {
+    const full = new Blob([png], { type: "image/png" });
+    const storageId = await uploadBlob(await generateUploadUrl({ userId: me._id, sessionToken: sessionToken() }), full);
+    if (!storageId) throw new Error("snapshot upload failed");
+    const thumb = await makeThumb(full);
+    const thumbStorageId = thumb
+      ? await uploadBlob(await generateUploadUrl({ userId: me._id, sessionToken: sessionToken() }), thumb).catch(() => null)
+      : null;
+    await saveFrameSnapshot({
+      frameId,
+      storageId,
+      ...(thumbStorageId ? { thumbStorageId } : {}),
+      userId: me._id,
+      sessionToken: sessionToken(),
+    });
+  };
 
   // SNAP-3: while this machine has live frames, keep one fresh snapshot per
   // frame (stale after 30 min). Captures run serially in the main process;
@@ -1559,14 +1579,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
         try {
           const png = await window.commons.captureSnapshot(url, { width: frame.width, height: frame.height });
           if (!png) continue;
-          const uploadUrl = await generateUploadUrl({ userId: me._id, sessionToken: sessionToken() });
-          const res = await fetch(uploadUrl, {
-            method: "POST",
-            headers: { "Content-Type": "image/png" },
-            body: new Blob([png as BlobPart], { type: "image/png" }),
-          });
-          const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
-          await saveFrameSnapshot({ frameId: frame._id, storageId, userId: me._id, sessionToken: sessionToken() });
+          await saveCapture(frame._id, png as BlobPart);
         } catch (err) {
           console.warn("frame snapshot failed", frame.title, err);
         }
@@ -1598,14 +1611,7 @@ export default function ProjectView({ me, nav, setNav, tabStrip, onProjectName, 
             height: frame.height,
           });
           if (!png) continue;
-          const uploadUrl = await generateUploadUrl({ userId: me._id, sessionToken: sessionToken() });
-          const res = await fetch(uploadUrl, {
-            method: "POST",
-            headers: { "Content-Type": "image/png" },
-            body: new Blob([png as BlobPart], { type: "image/png" }),
-          });
-          const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
-          await saveFrameSnapshot({ frameId: frame._id, storageId, userId: me._id, sessionToken: sessionToken() });
+          await saveCapture(frame._id, png as BlobPart);
         } catch (err) {
           console.warn("post-deploy snapshot failed", frame.title, err);
         }

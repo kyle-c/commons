@@ -235,7 +235,9 @@ export const recordRender = internalMutation({
       .unique();
     if (existing) {
       await ctx.storage.delete(existing.storageId);
-      await ctx.db.patch(existing._id, { storageId: args.storageId, capturedAt: Date.now() });
+      // The old thumbnail pictured the old render.
+      if (existing.thumbStorageId) await ctx.storage.delete(existing.thumbStorageId).catch(() => {});
+      await ctx.db.patch(existing._id, { storageId: args.storageId, thumbStorageId: undefined, capturedAt: Date.now() });
     } else {
       await ctx.db.insert("frameSnapshots", {
         frameId: args.frameId,

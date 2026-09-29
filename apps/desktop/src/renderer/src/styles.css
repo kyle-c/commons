@@ -1899,77 +1899,12 @@ kbd {
   flex: 1;
 }
 
-/* Project card cover: name over brand-color gradient */
+/* Project card cover: the project's own screens on a little table (see the
+   brand layer at the end). Uploaded covers fill it edge to edge. */
 .project-cover {
   position: relative;
   width: 100%;
-  aspect-ratio: 21 / 9;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
   overflow: hidden;
-}
-/* The scrim only exists for photographic covers: photos have uncontrolled
-   contrast everywhere, so they get dimmed. The generated ribbon art runs at
-   full saturation — dimming the whole cover to protect three words was
-   backwards. The words protect themselves now (see the span). */
-.project-cover:has(.cover-img)::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(rgba(16, 16, 18, 0.2), rgba(16, 16, 18, 0.45));
-}
-.project-cover span {
-  position: relative;
-  /* The name speaks the app's editorial voice: same serif as the "Projects"
-     header, so covers read as titled works rather than labeled tiles. Serif
-     sets visually smaller than sans at equal px, hence the nudge. */
-  font-family: var(--font-display);
-  font-size: calc(var(--text-xl) + 3px);
-  font-weight: 600;
-  letter-spacing: 0.005em;
-  /* Theme ink + map-label halo: the letterforms carry their own ground (a
-     tight ring of the surface color, then a wide soft pool) so contrast is
-     guaranteed on any ribbon in either mode — the cartographer's trick for
-     text over terrain. The feathered radial keeps it a glow, never a box. */
-  color: var(--text-primary);
-  /* The halo IS the scrim: a tight ring for edge contrast, then two wide
-     pools that soften the art around the words. Shadows feather with the
-     letterforms, so unlike a background gradient this can never print a
-     rectangle behind a long name. */
-  text-shadow:
-    0 1px 0 color-mix(in srgb, var(--bg-canvas) 90%, transparent),
-    0 -1px 0 color-mix(in srgb, var(--bg-canvas) 90%, transparent),
-    1px 0 0 color-mix(in srgb, var(--bg-canvas) 90%, transparent),
-    -1px 0 0 color-mix(in srgb, var(--bg-canvas) 90%, transparent),
-    0 0 8px color-mix(in srgb, var(--bg-canvas) 88%, transparent),
-    0 2px 26px color-mix(in srgb, var(--bg-canvas) 80%, transparent),
-    0 4px 52px color-mix(in srgb, var(--bg-canvas) 55%, transparent);
-  padding: 6px 12px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* Uploaded cover images are usually photographic — cream-on-scrim in both
-   modes, since a photo's local contrast answers to nobody's theme tokens. */
-.project-cover .cover-img + span {
-  font-family: var(--font-ui);
-  font-weight: 700;
-  background: none;
-  color: rgba(250, 248, 240, 0.95);
-  text-shadow:
-    0 1px 2px rgba(15, 15, 10, 0.5),
-    0 1px 14px rgba(15, 15, 10, 0.45);
-}
-:root[data-theme="light"] .project-cover .cover-img + span {
-  color: rgba(250, 248, 240, 0.95);
-  text-shadow:
-    0 1px 2px rgba(15, 15, 10, 0.5),
-    0 1px 14px rgba(15, 15, 10, 0.45);
 }
 
 /* Popover menus (add-project, account) + sharing member rows */
@@ -2723,41 +2658,6 @@ kbd {
   background: var(--bg-panel);
   color: var(--text-primary);
 }
-/* Editing the name should add an affordance, not restyle the text — so this
-   matches .project-cover span exactly: same size, weight, ink and halo.
-   It previously used --text-inverse, which is near-black in dark theme and
-   therefore invisible on the very cover it sits over, and was a size and
-   weight off besides, so the title jumped the moment you clicked the pen. */
-.cover-rename {
-  width: 80%;
-  text-align: center;
-  font-size: var(--text-xl);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: rgba(250, 248, 240, 0.95);
-  caret-color: rgba(250, 248, 240, 0.95);
-  text-shadow:
-    0 1px 2px rgba(15, 15, 10, 0.5),
-    0 1px 14px rgba(15, 15, 10, 0.45);
-  background: rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(255, 255, 255, 0.45);
-}
-:root[data-theme="light"] .cover-rename {
-  color: rgba(38, 37, 30, 0.92);
-  caret-color: rgba(38, 37, 30, 0.92);
-  text-shadow:
-    0 1px 2px rgba(250, 248, 240, 0.9),
-    0 0 14px rgba(250, 248, 240, 0.75);
-  /* A dark scrim under dark ink would undo the fix in light theme. */
-  background: rgba(250, 248, 240, 0.42);
-  border-color: rgba(15, 15, 10, 0.3);
-}
-.cover-rename:focus {
-  border-color: rgba(255, 255, 255, 0.8);
-}
-:root[data-theme="light"] .cover-rename:focus {
-  border-color: rgba(15, 15, 10, 0.55);
-}
 
 /* Prototype: route drawer + toolbar */
 .proto-body {
@@ -3024,65 +2924,9 @@ kbd {
   height: 100%;
   object-fit: cover;
 }
-/* Generated ribbon covers fill the same slot as uploaded images. Band glaze
-   is theme-tuned: darker surfaces want quieter bands, sand wants more ink. */
-.ribbon-cover {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-.ribbon-cover .band {
-  opacity: 0.46;
-}
-/* The bands breathe. Vertical only — the ribbons span the full width, so any
-   horizontal drift would walk their ends into view. Amplitude is a few pixels
-   over ~half a minute: at a glance the card is still, and you only notice it
-   is alive if you rest on it, which is the point.
-
-   No shaders here on purpose. A WebGL context per card would mean dozens of
-   contexts on the home screen (browsers cap them, and the oldest get dropped),
-   plus real battery cost, to animate something the eye is barely meant to
-   catch. A transform on a group the SVG already had costs nothing to add and
-   nothing to maintain. */
-@media (prefers-reduced-motion: no-preference) {
-  .ribbon-cover .band {
-    /* Pin the reference box so the offsets below are viewBox user units
-       (400 x 220), not a percentage of some bounding box that differs per
-       band and per browser. */
-    transform-box: view-box;
-    animation-name: band-drift;
-    animation-timing-function: ease-in-out;
-    animation-iteration-count: infinite;
-    animation-direction: alternate;
-    /* duration and delay are set per band in RibbonCover */
-  }
-}
-/* 22 viewBox units of travel over 11-21s. On a cover rendering ~160px tall
-   that is ~16px on screen at ~1.5px/sec — above the ~1px/sec floor where slow
-   drift stops registering as motion at all. The first pass used 7 units over
-   23s, which computes to 0.22px/sec: running perfectly, and invisible. */
-@keyframes band-drift {
-  from {
-    transform: translate3d(0, -10px, 0);
-  }
-  to {
-    transform: translate3d(0, 12px, 0);
-  }
-}
-:root[data-theme="light"] .ribbon-cover .band {
-  opacity: 0.68;
-}
-.project-cover span {
-  position: relative;
-  z-index: 1;
-}
 .project-card .meta,
 .project-card .foot {
   padding: 0 16px;
-}
-.project-card .cover-rename {
-  z-index: 1;
 }
 .card-actions {
   position: absolute;
@@ -4934,29 +4778,132 @@ kbd {
   box-shadow: 0 6px 0 var(--sheet-ledge);
 }
 
-/* Home: project cards are sheets you pick up. */
+/* Home: project cards. The cover is a little table holding the project's
+   own screens, each shaped like its frame (components/ScreensCover). At rest
+   the card is quiet, a hairline and a soft shadow; picking it up (hover)
+   brings the sheet edge and ledge. */
 .home-header h1 {
   font-size: 30px;
   letter-spacing: -0.01em;
 }
 .project-card {
-  border: 1.5px solid var(--sheet-edge);
-  border-radius: var(--radius-sheet);
-  box-shadow: 0 4px 0 var(--sheet-ledge);
+  gap: 0;
+  padding: 0 0 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
 }
 .project-card:hover {
   border-color: var(--sheet-edge);
   background: var(--bg-panel);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 0 var(--sheet-ledge);
+  transform: translateY(-3px);
+  box-shadow: 0 5px 0 var(--sheet-ledge), var(--shadow-card);
 }
 .project-card:active {
-  transform: translateY(2px);
-  box-shadow: 0 2px 0 var(--sheet-ledge);
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 var(--sheet-ledge);
 }
 .project-card.skeleton-card {
-  border-color: var(--border-default);
   box-shadow: none;
+}
+.project-cover {
+  aspect-ratio: 19 / 10; /* ScreensCover's TABLE */
+  border-bottom: 1px solid var(--border-subtle);
+  background-color: var(--bg-canvas);
+  background-image: radial-gradient(circle, var(--canvas-dot) 1px, transparent 1.2px);
+  background-size: 16px 16px;
+}
+.screens-cover {
+  position: absolute;
+  inset: 0;
+}
+.cover-screen {
+  position: absolute;
+  overflow: hidden;
+  background: #fff; /* the user's app surface, as on the canvas */
+  box-shadow:
+    0 0 0 1.5px var(--sheet-edge),
+    0 3px 0 1.5px var(--sheet-ledge),
+    var(--shadow-screen);
+}
+.cover-screen img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+/* Captured nothing yet: a blank page in the frame's shape, top bar only. It
+   is a placeholder, not the user's app, so it takes the theme's colors. */
+.cover-blank {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-panel);
+}
+.cover-blank::before {
+  content: "";
+  position: absolute;
+  inset: 8% 10% auto;
+  height: 6%;
+  border-radius: 3px;
+  background: var(--border-default);
+}
+/* The newest open comment, pinned where it was left. */
+.cover-pin {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50% 50% 50% 3px;
+  background: var(--comment);
+  box-shadow:
+    0 0 0 1.5px #fff,
+    0 2px 5px rgba(0, 0, 0, 0.3);
+  transform: translate(-3px, -100%);
+}
+.cover-empty {
+  position: absolute;
+  inset: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 12px;
+  font: 500 14px/1.3 var(--font-hand);
+  color: var(--text-tertiary);
+}
+.card-name {
+  padding: 12px 16px 2px;
+  font: 600 19px/1.2 var(--font-display);
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-rename {
+  margin: 8px 11px 0;
+  padding: 3px 5px;
+  font: 600 18px/1.2 var(--font-display);
+  color: var(--text-primary);
+}
+.project-card .meta {
+  margin-top: 2px;
+}
+.card-said {
+  margin: 6px 16px 0;
+  font: 500 13.5px/1.35 var(--font-hand);
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card-said b {
+  font-weight: 500;
+  color: var(--comment);
+}
+.project-card .foot {
+  margin-top: 10px;
 }
 
 /* Sentence case everywhere, as on the site: no tracked capitals. Group
