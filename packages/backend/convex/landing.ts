@@ -96,7 +96,7 @@ export function landingHtml({ version, releasedAt, site, now = Date.now() }: Lan
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Commons: design on the product, not pictures of it</title>
-<meta name="description" content="Commons puts your running app on a shared canvas. Comment on the real screens, hand feedback to a coding agent, and get a working draft back with the reasoning attached." />
+<meta name="description" content="Commons puts all your company's apps and prototypes on shared canvases for easier collaboration. Comment on the real screens, hand feedback to a coding agent, and get a working draft back with the reasoning attached." />
 <link rel="canonical" href="${origin}/" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Commons" />
@@ -686,9 +686,9 @@ export function landingHtml({ version, releasedAt, site, now = Date.now() }: Lan
     <div>
       <h1>Design on the <span class="mk">product,<svg viewBox="0 0 220 90" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M34 20 C78 3, 172 1, 202 26 C224 45, 202 77, 130 85 C68 91, 10 78, 7 52 C4 29, 42 11, 98 7" /></svg></span> not pictures of it.</h1>
       <p class="lede">
-        Commons puts your running app on a shared canvas. Your team comments on the real
-        screens, hands the feedback to a coding agent, and gets a working draft back with the
-        reasoning attached.
+        Commons puts all your company's apps and prototypes on shared canvases for easier
+        collaboration. Your team comments on the real screens, hands the feedback to a coding
+        agent, and gets a working draft back with the reasoning attached.
       </p>
       <div class="actions">
         <a class="btn do big" href="${APP_URL}">Open Commons in your browser</a>
