@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="824" height="824" viewBox="0 0 824 824">
+<!-- Commons app icon, light: the light-mode Dock (swapped at runtime, see src/main/index.ts).
+     The 824px body of a 1024px macOS icon. To rebuild the PNGs: render at 2x and downsample,
+     mask with the squircle in build/dock-dark.png (body inset 100px), add a soft drop shadow
+     (offset 10px, blur 14px) in the margin, and build icon.icns from the dark one with iconutil.
+     Glyphs come from the commons-direction-1-3 sheet. -->
+
+  <defs><linearGradient id="t" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#FDFBF5"/><stop offset="1" stop-color="#F1EDE0"/></linearGradient></defs>
+  <rect width="824" height="824" fill="url(#t)"/><g transform="translate(44.667 -233.699) scale(26.13108)"><path d="M21.28 16.09 C19.45 15.48 17.39 15.25 15.47 15.25 C14.69 15.25 14.0795 15.328 13.4 15.43 L14.24 20.86 C14.614 20.804 14.83 20.76 15.17 20.76 C16.56 20.76 18.02 21.1 19.07 21.68 C19.5 21.92 19.98 22.07 20.49 22.07 C22.17 22.07 23.46 20.72 23.46 19.05 C23.46 17.62 22.54 16.51 21.28 16.09 Z" fill="#E5AE7C"/><path d="M18.33 27.15 C17.49 28.11 16.09 28.8 14.77 28.8 C12.56 28.8 10.85 27.04 10.85 24.77 C10.85 22.75 12.37 21.14 14.24 20.86 C15.362 20.692 16.15 19.47 16.15 18.15 C16.15 16.59 14.759 15.226 13.4 15.43 C8.87 16.11 5.42 20.01 5.42 24.77 C5.42 30.31 9.76 34.17 14.88 34.17 C17.02 34.17 19.12 33.65 20.5 32.8 L20.5 27.15 Z" fill="#282720"/><path d="M14.12321 28.74845 C14.333 28.7824 14.549 28.8 14.77 28.8 C16.09 28.8 17.49 28.11 18.33 27.15 L20.5 27.15 L20.5 32.8 C19.12 33.65 17.02 34.17 14.88 34.17 C14.5728 34.17 14.268408 34.156104 13.96759296 34.12878288 C15.28 33.9 16.29 32.9 16.29 31.57 C16.29 30.14 15.38195 28.95215 14.12321 28.74845 Z" fill="#3A382F"/><path d="M20.45 26.27 C22.11 26.27 23.46 27.62 23.46 29.29 C23.46 30.25 23.11 31.03 22.54 31.58 C21.76 32.33 20.64 33.01 19.68 33.01 C18.07 33.01 16.64 31.75 16.64 30.02 C16.64 28.29 18.73 26.27 20.45 26.27 Z" fill="#D38A52"/></g></svg>
