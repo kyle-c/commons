@@ -1,6 +1,7 @@
 import type { Framework } from "./stacks";
 
 export * from "./stacks";
+export * from "./brand";
 
 /** A route discovered in a local Next.js project. */
 export interface DiscoveredRoute {

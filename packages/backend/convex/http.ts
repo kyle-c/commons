@@ -5,7 +5,7 @@ import { isLandingEvent } from "./landingEvents";
 import { ogImageBytes } from "./ogImage";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { buildAuthCallbackUrl } from "@commons/shared";
+import { buildAuthCallbackUrl, COMMONS_FAVICON_HREF } from "@commons/shared";
 
 const http = httpRouter();
 
@@ -366,7 +366,7 @@ const SETUP_REASONS: Record<string, string> = {
 function setupPage(title: string, body: string): Response {
   return new Response(
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-     <title>${escapeHtml(title)} · Commons</title><style>
+     <title>${escapeHtml(title)} · Commons</title><link rel="icon" href="${COMMONS_FAVICON_HREF}"><style>
      :root{color-scheme:light dark}
      body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f3f0e8;color:#26251e;
        font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:24px}
@@ -1046,6 +1046,7 @@ function page(title: string, body: string, deepLink?: string): Response {
 <head>
 <meta charset="utf-8" />
 <title>${title} — Commons</title>
+<link rel="icon" href="${COMMONS_FAVICON_HREF}" />
 ${deepLink ? `<meta http-equiv="refresh" content="0;url=${deepLink}" />` : ""}
 <style>
   body { margin: 0; height: 100vh; display: flex; align-items: center; justify-content: center;
@@ -1108,6 +1109,7 @@ function testerHarnessHtml(test: TestDoc, previewUrl: string): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${escapeHtml(test.title)} — usability test</title>
+<link rel="icon" href="${COMMONS_FAVICON_HREF}" />
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -1456,6 +1458,7 @@ function reportHtml(data: {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${escapeHtml(test.title)} — test report</title>
+<link rel="icon" href="${COMMONS_FAVICON_HREF}" />
 <style>
   :root { color-scheme: dark; }
   body { margin: 0; padding: 40px 24px; background: #1a1b17; color: #edebe0;

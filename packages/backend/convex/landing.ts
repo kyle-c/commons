@@ -29,6 +29,8 @@
  * .ph or .vig block for an <img> when real captures exist.
  */
 
+import { COMMONS_FAVICON_HREF, commonsMarkSvg } from "@commons/shared";
+
 const APP_URL = "/app";
 // Stable URL, resolved per request against the published release (see the
 // /download route). Never hard-code a versioned artifact here: the filename
@@ -37,11 +39,7 @@ const DOWNLOAD_URL = "/download";
 
 const CURSOR = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.2 1.4l10.6 6.3-4.6 1.2-2.3 4.3z" fill="currentColor" stroke="#26251e" stroke-width="1.1" stroke-linejoin="round"/></svg>`;
 
-const MARK = (size: number) => `<svg width="${size}" height="${size}" viewBox="0 0 32 32" aria-hidden="true">
-        <rect width="32" height="32" rx="9" fill="#26251e"/>
-        <path d="M21.5 11.5a6 6 0 1 0 0 9" fill="none" stroke="#d98a54" stroke-width="3" stroke-linecap="round"/>
-        <path d="M14 11.5a6 6 0 1 0 0 9" fill="none" stroke="#fbf9f4" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
-      </svg>`;
+const MARK = commonsMarkSvg;
 
 // The product's critique vocabulary, in dock order: emoji (as an HTML
 // entity), its name, and the voice key the synthesizer plays for it.
@@ -113,7 +111,7 @@ export function landingHtml({ version, releasedAt, site, now = Date.now() }: Lan
 <meta name="twitter:image" content="${origin}/og.jpg" />
 <meta name="theme-color" content="#fbf9f4" />
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Commons","url":"${origin}/","applicationCategory":"DesignApplication","operatingSystem":"macOS, Web","description":"A shared canvas showing your running app. Comment on real screens, hand feedback to a coding agent, and get a working draft back.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD","description":"Free while in preview"}}</script>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2326251e'/%3E%3Cpath d='M21.5 11.5a6 6 0 1 0 0 9' fill='none' stroke='%23d98a54' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
+<link rel="icon" href="${COMMONS_FAVICON_HREF}" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,600,100,1&display=swap" />
