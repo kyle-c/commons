@@ -38,6 +38,14 @@ if (!version) throw new Error("latest-mac.yml has no version field");
 const names = [...new Set([...channelYml.matchAll(/^\s+- url:\s*(.+)$|^path:\s*(.+)$/gm)].map((m) => (m[1] ?? m[2]).trim()))];
 console.log(`Publishing ${version} to ${prod ? "PROD" : "dev"} — files: ${names.join(", ")}`);
 
+// /download redirects straight to the stored file, and storage serves it with
+// the type it was uploaded with and no filename. Browsers name such a download
+// after the storage id and add an extension only from the type: as
+// application/octet-stream the DMG arrived extensionless, and macOS wouldn't
+// open it as a disk image.
+const CONTENT_TYPES = { ".dmg": "application/x-apple-diskimage", ".zip": "application/zip" };
+const contentTypeFor = (name) => CONTENT_TYPES[path.extname(name)] ?? "application/octet-stream";
+
 // These ~200MB uploads flake (node fetch EPIPEs, curl hits send errors on a
 // bad network moment). Retry with backoff, minting a fresh upload URL each
 // attempt — a partially consumed URL can't be trusted twice.
@@ -50,7 +58,7 @@ async function upload(filePath) {
         "curl",
         // Full-speed uploads hit SSL "bad record mac" on flaky moments; a
         // capped rate has been reliable and only adds ~30s per file.
-        ["-sS", "--fail", "--limit-rate", "8M", "-X", "POST", "-H", "Content-Type: application/octet-stream", "--data-binary", `@${filePath}`, uploadUrl],
+        ["-sS", "--fail", "--limit-rate", "8M", "-X", "POST", "-H", `Content-Type: ${contentTypeFor(filePath)}`, "--data-binary", `@${filePath}`, uploadUrl],
         { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 }
       );
       return JSON.parse(out).storageId;
@@ -93,7 +101,7 @@ function ingestViaGitHub(name) {
     ?.replace(/^location:\s*/i, "")
     .trim();
   if (!signedUrl) throw new Error(`no signed URL for asset ${name}`);
-  return convexRun("updateIngest:fromUrl", { url: signedUrl }).storageId;
+  return convexRun("updateIngest:fromUrl", { url: signedUrl, contentType: contentTypeFor(name) }).storageId;
 }
 
 const files = [];

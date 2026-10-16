@@ -12,14 +12,16 @@ import { internal } from "./_generated/api";
  * Internal-only; used by scripts/publish-update.mjs as a fallback.
  */
 export const fromUrl = internalAction({
-  args: { url: v.string() },
-  handler: async (ctx, { url }) => {
+  // contentType: what storage serves the file as, so a DMG downloads as a DMG
+  // (see contentTypeFor in scripts/publish-update.mjs).
+  args: { url: v.string(), contentType: v.optional(v.string()) },
+  handler: async (ctx, { url, contentType }) => {
     const uploadUrl: string = await ctx.runMutation(internal.updates.createUploadUrl, {});
     const res = await fetch(url);
     if (!res.ok || !res.body) throw new Error(`asset fetch failed: ${res.status}`);
     const upload = await fetch(uploadUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/octet-stream" },
+      headers: { "Content-Type": contentType ?? "application/octet-stream" },
       body: res.body,
       // Node fetch requires half-duplex for streamed request bodies.
       duplex: "half",
