@@ -18,6 +18,22 @@
 export const SESSION_STORAGE_KEY = "commons.session";
 
 /**
+ * A web address, the only kind Commons frames or opens. The others are not
+ * places: a `javascript:` address is a script, and one given to a frame or to
+ * window.open runs as the page that used it, whatever sandbox the frame has.
+ * Preview addresses are data (a teammate types them, a deploy reports them),
+ * so every path from that data to a frame or a new window asks this first.
+ */
+export function isWebUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * What an embedded screen may do: everything a working app needs, nothing
  * that reaches the page around it. Top navigation is the token withheld on
  * purpose. Without it a framed app cannot replace the Commons tab, which is
@@ -52,13 +68,10 @@ const NOT_ON_OUR_ORIGIN: readonly string[] = ["allow-same-origin", "allow-popups
  * own. An address that cannot be read gets the same strict treatment.
  */
 export function frameSandbox(frameUrl: string, embedderOrigin: string): string {
-  let ours = true;
-  try {
-    // Absolute addresses only. The desktop app's own page has no origin to
-    // resolve against ("null"), and a relative address is ours by definition.
-    ours = new URL(frameUrl).origin === embedderOrigin;
-  } catch {
-    // Relative or unreadable: stays ours.
-  }
+  // Absolute web addresses only. A relative address is ours by definition
+  // (and the desktop app's own page has no origin to resolve it against);
+  // anything that is not a web address gets the strict treatment and is not
+  // framed at all by AppFrame.
+  const ours = !isWebUrl(frameUrl) || new URL(frameUrl).origin === embedderOrigin;
   return FRAME_SANDBOX.filter((token) => !(ours && NOT_ON_OUR_ORIGIN.includes(token))).join(" ");
 }

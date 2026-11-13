@@ -11,6 +11,7 @@ import {
   requireViewer,
   resolveViewer, randomToken } from "./access";
 import { isMember, ensurePersonalWorkspace } from "./workspaces";
+import { requireWebPattern, requireWebUrl } from "./urls";
 
 export const create = mutation({
   args: {
@@ -1230,6 +1231,9 @@ export const setPreviewUrl = mutation({
     const { projectId, previewUrl, branchPreviewPattern, hasBranchPattern } = args;
     const project = await accessibleProject(ctx, projectId, await resolveViewer(ctx, args));
     if (!project) throw new Error("You don't have access to this project.");
+    // Both get framed for everyone who opens the project.
+    if (previewUrl) requireWebUrl(previewUrl, "The preview URL");
+    if (hasBranchPattern && branchPreviewPattern) requireWebPattern(branchPreviewPattern, "The draft preview pattern");
     const pattern = hasBranchPattern ? branchPreviewPattern || undefined : project.branchPreviewPattern;
 
     /**

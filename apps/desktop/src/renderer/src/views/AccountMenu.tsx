@@ -8,6 +8,7 @@ import { useSurfaceExclusivity } from "../lib/surfaces";
 import { useClickOutside } from "../lib/useClickOutside";
 import { effectiveTheme, getThemePreference, onSystemThemeChange, setThemePreference } from "../lib/theme";
 import { registerShortcut } from "../lib/shortcuts";
+import { openUrl } from "../lib/openUrl";
 
 /**
  * Titlebar avatar menu: change photo (uploaded to Convex storage), reset to
@@ -78,8 +79,7 @@ export default function AccountMenu({ me, onSignOut }: { me: Doc<"users">; onSig
   const linkAnother = async () => {
     const { state, url } = await startAuth({ linkSessionToken: sessionToken() });
     setLinkState(state);
-    if (window.commons) await window.commons.openExternal(url);
-    else window.open(url);
+    openUrl(url);
   };
 
   const uploadPhoto = async (file: File) => {

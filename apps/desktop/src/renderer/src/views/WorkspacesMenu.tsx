@@ -8,6 +8,7 @@ import { playConnected } from "../lib/sounds";
 import { useClickOutside } from "../lib/useClickOutside";
 import Icon from "../components/icons";
 import { InlineField } from "../components/popover";
+import { openUrl } from "../lib/openUrl";
 
 const CREATE_ERRORS: Record<string, string> = {
   invalid_name: "Give the workspace a name.",
@@ -74,8 +75,7 @@ function GithubPanel({ me, workspace }: { me: Doc<"users">; workspace: Workspace
             .join(", ")}.`
         : "Finish in the browser, then come back — connected accounts show up here."
     );
-    if (window.commons) void window.commons.openExternal(result.url);
-    else window.open(result.url, "_blank");
+    openUrl(result.url);
   };
 
   return (
@@ -277,8 +277,7 @@ export default function WorkspacesMenu({ me }: { me: Doc<"users"> }) {
                             className="hint-link"
                             onClick={() => {
                               const guide = "https://api.slack.com/messaging/webhooks";
-                              if (window.commons) void window.commons.openExternal(guide);
-                              else window.open(guide, "_blank");
+                              openUrl(guide);
                             }}
                           >
                             Slack's 2-minute guide ↗

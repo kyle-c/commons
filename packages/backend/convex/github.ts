@@ -6,6 +6,7 @@ import { accessibleProject, requireViewer, resolveViewer, randomToken, isWorkspa
 import { internal } from "./_generated/api";
 import { normalizeRemote, slugifyBranch, inferBranchPattern, vercelAliasCandidates, isProductionDeploy, chooseAutoWorkspace } from "./previewLogic";
 import type { DeploySample } from "./previewLogic";
+import { isWebUrl } from "@commons/shared";
 
 /**
  * The GitHub App listener: Commons learns each project's preview URL and its
@@ -437,6 +438,10 @@ async function applyDeploy(
   project: Doc<"projects">,
   deploy: { url: string; branch: string; sha?: string; production: boolean; environment?: string }
 ): Promise<void> {
+  // A deploy's address becomes the project's preview and is framed for the
+  // whole team. It arrives from the repo's CI by way of GitHub, so it is
+  // data like any other: only a web address is taken.
+  if (!isWebUrl(deploy.url)) return;
   const patch: Record<string, unknown> = {};
 
   // The log is unconditional: history that only remembers some deploys reads

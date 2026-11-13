@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import { accessibleProject, resolveViewer, randomToken } from "./access";
+import { requireWebUrl } from "./urls";
 
 /**
  * Maze-style usability tests. Team members build tests in Commons; testers run
@@ -54,12 +55,16 @@ export const create = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const project = await accessibleProject(ctx, args.projectId, await resolveViewer(ctx, args));
-    if (!project) throw new Error("Project not found");
+    const viewerId = await resolveViewer(ctx, args);
+    const project = await accessibleProject(ctx, args.projectId, viewerId);
+    if (!project || !viewerId) throw new Error("Project not found");
     if (!project.previewUrl) throw new Error("Set a preview URL first — testers open the deployed app.");
+    // The variant is framed for every tester who draws it.
+    if (args.variant) requireWebUrl(args.variant.url, "The variant URL");
     const testId = await ctx.db.insert("tests", {
       projectId: args.projectId,
-      createdBy: args.userId,
+      // Whoever the session says, not the userId argument.
+      createdBy: viewerId,
       title: args.title,
       // Rate clamped here so a typo'd 90 becomes the intended 0.9 and no
       // snippet ever intercepts everybody.

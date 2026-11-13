@@ -6,7 +6,7 @@ import { isLandingEvent } from "./landingEvents";
 import { ogImageBytes } from "./ogImage";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { buildAuthCallbackUrl, COMMONS_FAVICON_HREF, frameSandbox } from "@commons/shared";
+import { buildAuthCallbackUrl, COMMONS_FAVICON_HREF, frameSandbox, isWebUrl } from "@commons/shared";
 
 const http = httpRouter();
 
@@ -951,7 +951,9 @@ http.route({
     if (!data) return page("Test not found", "This link is broken or the test was deleted.");
     if (data.test.status !== "live")
       return page("Test closed", "This usability test is no longer accepting responses. Thanks for your interest!");
-    if (!data.previewUrl)
+    // Nothing but a web address goes in the harness frame (isWebUrl has the why).
+    const framed = [data.previewUrl, data.test.variant?.url].filter((url): url is string => !!url);
+    if (!data.previewUrl || !framed.every(isWebUrl))
       return page("Test not ready", "The team hasn't published a preview of the app yet. Check back soon.");
     return new Response(testerHarnessHtml(data.test, data.previewUrl), {
       status: 200,

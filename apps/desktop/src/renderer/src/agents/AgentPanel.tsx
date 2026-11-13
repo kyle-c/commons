@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AgentSessionEvent, AgentSessionStatus, MergePreview } from "@commons/shared";
+import { openUrl } from "../lib/openUrl";
 
 /** Panel view of a mirrored agent session (source of truth: Convex). */
 export interface PanelSession {
@@ -202,10 +203,6 @@ function DraftActions({
  * never started" is indistinguishable from "it is booting" — the honest UI
  * for that ambiguity is the setup checklist, which is also the fix.
  */
-function openUrl(url: string) {
-  if (window.commons) void window.commons.openExternal(url);
-  else window.open(url, "_blank", "noopener");
-}
 
 /**
  * One-time cloud-agent setup, without a terminal.

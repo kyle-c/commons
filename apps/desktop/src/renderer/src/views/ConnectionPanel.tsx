@@ -3,6 +3,7 @@ import { useAction } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import type { Id } from "@commons/backend/convex/_generated/dataModel";
 import { sessionToken } from "../lib/session";
+import { openUrl } from "../lib/openUrl";
 
 /**
  * "Why isn't my preview updating?", answered without a terminal.
@@ -28,10 +29,6 @@ type Finding = {
   fixUrl?: string;
 };
 
-function openUrl(url: string) {
-  if (window.commons) void window.commons.openExternal(url);
-  else window.open(url);
-}
 
 export function ConnectionPanel({
   projectId,

@@ -8,6 +8,7 @@ import Icon, { type IconName } from "../components/icons";
 import AppFrame from "../components/AppFrame";
 import PreviewAppearanceButton from "../components/PreviewAppearanceButton";
 import { usePublicSiteUrl } from "../lib/publicUrl";
+import { openUrl } from "../lib/openUrl";
 
 // height > 0 marks a framed device — "Open in browser" wraps those in the
 // device-sized preview harness so the browser keeps the form factor.
@@ -157,12 +158,11 @@ export default function PrototypeView({
             }
             onClick={async () => {
               if (shareUrl) {
-                if (window.commons) await window.commons.openExternal(shareUrl);
-                else window.open(shareUrl);
+                openUrl(shareUrl);
                 return;
               }
               if (!window.commons) {
-                window.open(url);
+                if (url) openUrl(url);
                 return;
               }
               // Carry the form factor into the browser: framed devices open

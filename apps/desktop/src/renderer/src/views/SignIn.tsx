@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@commons/backend/convex/_generated/api";
 import { setStoredSession, type StoredSession } from "../lib/session";
+import { openUrl } from "../lib/openUrl";
 
 const FAIL_MESSAGES: Record<string, string> = {
   expired: "The sign-in took too long. Try again.",
@@ -66,8 +67,7 @@ export default function SignIn({ onSignedIn }: { onSignedIn: (session: StoredSes
     try {
       const { state: newState, url } = await start({});
       setState(newState);
-      if (window.commons) await window.commons.openExternal(url);
-      else window.open(url, "_blank");
+      openUrl(url);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start sign-in.");
     }

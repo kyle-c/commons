@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { frameSandbox, SESSION_STORAGE_KEY } from "./isolation";
+import { frameSandbox, isWebUrl, SESSION_STORAGE_KEY } from "./isolation";
 
 const APP = "https://www.trycommons.app";
 
@@ -49,5 +49,41 @@ describe("frame sandbox", () => {
 
   it("names the session key the renderer stores under", () => {
     expect(SESSION_STORAGE_KEY).toBe("commons.session");
+  });
+});
+
+describe("web addresses", () => {
+  // Each of these, saved as a project's preview URL, ran inside the app until
+  // 2026-11-13: the canvas framed whatever was stored.
+  const SCRIPTS = [
+    "javascript:alert(1)",
+    "JavaScript:alert(1)",
+    "  javascript:alert(1)",
+    "java\tscript:alert(1)",
+    "javascript:void(top.postMessage(top.localStorage.getItem('commons.session'),'*'))//x/",
+    "data:text/html,<script>alert(1)</script>",
+    "blob:https://www.trycommons.app/5b0c9f2e",
+    "vbscript:msgbox(1)",
+    "file:///etc/passwd",
+    "about:blank",
+  ];
+
+  it("are http and https, and nothing else", () => {
+    for (const url of ["https://staging.example.com/x", "http://localhost:4310/", "HTTPS://EXAMPLE.COM"]) expect(isWebUrl(url), url).toBe(true);
+    for (const url of [...SCRIPTS, "", "/relative/path", "example.com", "//example.com/x", "ftp://example.com"]) {
+      expect(isWebUrl(url), JSON.stringify(url)).toBe(false);
+    }
+  });
+
+  it("never get our origin when they are not web addresses", () => {
+    // A script address runs as the page that frames it. The frame component
+    // refuses these outright; the sandbox is strict as well, so neither one
+    // is the only thing in the way.
+    for (const url of SCRIPTS) {
+      const tokens = frameSandbox(url, "https://www.trycommons.app").split(" ");
+      expect(tokens, url).not.toContain("allow-same-origin");
+      expect(tokens, url).not.toContain("allow-popups-to-escape-sandbox");
+    }
+    expect(frameSandbox("javascript:alert(1)", "null").split(" ")).not.toContain("allow-same-origin");
   });
 });

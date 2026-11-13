@@ -37,6 +37,7 @@ import CoverageLedger from "./CoverageLedger";
 import { PopSection, RevealField } from "../components/popover";
 import { ConnectionPanel } from "./ConnectionPanel";
 import { PublishPanel } from "./PublishPanel";
+import { openUrl } from "../lib/openUrl";
 
 /** "Fix savings header" → "fix-savings-header" (draft branch slugs). */
 function slugify(text: string): string {
@@ -417,7 +418,7 @@ function DeployHistoryBody({ projectId, me }: { projectId: Id<"projects">; me: D
           key={d._id}
           className="deploy-row"
           title="Open this version in your browser"
-          onClick={() => (window.commons ? void window.commons.openExternal(d.url) : window.open(d.url))}
+          onClick={() => openUrl(d.url)}
         >
           <span className={`deploy-dot ${d.production ? "prod" : ""}`} />
           <span className="deploy-when">{timeAgo(d.at)}</span>
@@ -611,7 +612,7 @@ function UrlSettingBody({
           <button
             className="setting-value linked"
             title={`${value}\n\nOpens in your browser`}
-            onClick={() => value && (window.commons ? void window.commons.openExternal(value) : window.open(value))}
+            onClick={() => value && openUrl(value)}
           >
             {value}
           </button>

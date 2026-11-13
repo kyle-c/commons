@@ -8,6 +8,7 @@ import GuestComposer from "./GuestComposer";
 import { postGuestReply } from "../lib/guestApi";
 import MessageText from "./MessageText";
 import { initials, sessionToken, timeAgo } from "../lib/session";
+import { openUrl } from "../lib/openUrl";
 
 interface Props {
   thread: ThreadWithMessages;
@@ -95,7 +96,7 @@ export default function ThreadPanel({ thread, me, guestToken, users, mentionUser
                     <button
                       key={i}
                       title="Open full size"
-                      onClick={() => (window.commons ? void window.commons.openExternal(url) : window.open(url))}
+                      onClick={() => openUrl(url)}
                     >
                       <img src={url} alt={`attachment ${i + 1}`} />
                     </button>
