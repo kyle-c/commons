@@ -28,8 +28,16 @@ const convexDir = path.resolve(
 );
 
 /**
- * Anything that establishes identity from the session, or checks access using
- * an already-resolved identity. A body mentioning none of these is ungated.
+ * Anything that establishes identity from the session, or checks access to a
+ * project (which every caller does with an identity it resolved first). A
+ * body mentioning none of these is ungated.
+ *
+ * Membership checks (isMember, isWorkspaceMember) are deliberately not here.
+ * They answer "is this id in that workspace", which says nothing about who
+ * is asking: projects.create ran one against a claimed createdBy and passed
+ * this scan for months while accepting requests with no session (found
+ * 2026-11-13). A function that checks membership must also resolve who the
+ * member is.
  */
 const GATES = [
   "requireViewer",
@@ -38,8 +46,6 @@ const GATES = [
   "resolveViewer",
   "accessibleProject",
   "canAccessProject",
-  "isWorkspaceMember",
-  "isMember",
 ];
 
 /**

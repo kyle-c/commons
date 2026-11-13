@@ -15,7 +15,13 @@ import { isMember, ensurePersonalWorkspace } from "./workspaces";
 export const create = mutation({
   args: {
     name: v.string(),
-    createdBy: v.id("users"),
+    // A claim, kept so shipped clients still validate. The creator is whoever
+    // the session says. Until 2026-11-13 this claim WAS the check: the
+    // workspace test ran against it, so anyone who knew a member's id (ids
+    // ride in links) could create projects in that member's workspace with no
+    // session at all.
+    createdBy: v.optional(v.id("users")),
+    sessionToken: v.optional(v.string()),
     // Destination workspace; legacy clients omit it → creator's playground.
     workspaceId: v.optional(v.id("workspaces")),
     visibility: v.optional(v.union(v.literal("team"), v.literal("private"))),
@@ -42,18 +48,19 @@ export const create = mutation({
   // machine-local paths live in repoLinks, one per (user, machine). Writing a
   // single shared path onto the project was the pre-repoLinks model and every
   // reader of it is gone.
-  handler: async (ctx, { frames, repoPath: _legacy, ...project }) => {
+  handler: async (ctx, { frames, repoPath: _legacy, createdBy: _claim, sessionToken, ...project }) => {
+    const createdBy = await requireViewer(ctx, { sessionToken });
     // Every project lands in a workspace: the requested one (creator must be
     // a member) or, for legacy clients that don't send one, the playground.
     let workspaceId = project.workspaceId;
     if (workspaceId) {
-      if (!(await isMember(ctx, workspaceId, project.createdBy))) throw new Error("Not in that workspace");
+      if (!(await isMember(ctx, workspaceId, createdBy))) throw new Error("Not in that workspace");
     } else {
-      const creator = await ctx.db.get(project.createdBy);
+      const creator = await ctx.db.get(createdBy);
       if (!creator) throw new Error("Unknown user");
       workspaceId = await ensurePersonalWorkspace(ctx, creator);
     }
-    const projectId = await ctx.db.insert("projects", { ...project, workspaceId });
+    const projectId = await ctx.db.insert("projects", { ...project, createdBy, workspaceId });
     for (const frame of frames) {
       await ctx.db.insert("frames", { projectId, ...frame });
     }

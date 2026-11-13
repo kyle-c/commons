@@ -207,6 +207,7 @@ export default function ProjectList({
     const projectId = await create({
       name: inspection.name,
       createdBy: me._id,
+      sessionToken: sessionToken(),
       workspaceId,
       visibility: "team",
       gitRemote: inspection.gitRemote,
