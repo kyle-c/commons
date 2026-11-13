@@ -1,6 +1,15 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { detectStack, stackById, type DiscoveredRoute, type RepoInspection, type AppCandidate, type ScreenSource } from "@commons/shared";
+import {
+  detectStack,
+  humanizeSegment,
+  sectionByFirstSegment,
+  stackById,
+  type DiscoveredRoute,
+  type RepoInspection,
+  type AppCandidate,
+  type ScreenSource,
+} from "@commons/shared";
 
 const PAGE_FILES = ["page.tsx", "page.jsx", "page.ts", "page.js"];
 const PAGE_EXTS = [".tsx", ".jsx", ".ts", ".js"];
@@ -15,13 +24,6 @@ async function exists(p: string): Promise<boolean> {
 }
 
 /** "(tabs)" → "Tabs", "family-member" → "Family Member". */
-function humanizeSegment(segment: string): string {
-  return segment
-    .replace(/^\(|\)$/g, "")
-    .split(/[-_]/)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
 
 /** Walk a Next.js app-router directory collecting routes for every page file. */
 async function walkAppDir(
@@ -565,19 +567,8 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
   }
 
   // Sections not set by an explicit router group fall back to the first URL
-  // segment — but only when at least two routes share it (singletons stay
-  // ungrouped rather than becoming one-frame sections).
-  const segmentCounts = new Map<string, number>();
-  for (const route of routes) {
-    if (route.section) continue;
-    const first = route.path.split("/")[1];
-    if (first) segmentCounts.set(first, (segmentCounts.get(first) ?? 0) + 1);
-  }
-  for (const route of routes) {
-    if (route.section) continue;
-    const first = route.path.split("/")[1];
-    if (first && (segmentCounts.get(first) ?? 0) >= 2) route.section = humanizeSegment(first);
-  }
+  // segment, when at least two routes share it.
+  sectionByFirstSegment(routes);
 
   routes.sort((a, b) => a.path.localeCompare(b.path));
   return {

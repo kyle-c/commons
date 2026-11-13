@@ -5,8 +5,9 @@ import {
   detectGate,
   newScreens,
   nextToVisit,
+  signatureOf,
   type PageObservation,
-} from "./surveyLogic";
+} from "@commons/shared";
 
 /**
  * The runtime survey: drive the app the user actually runs and report what
@@ -62,12 +63,6 @@ const OBSERVE = `(() => {
   };
 })()`;
 
-function hash(text: string): string {
-  let h = 0;
-  for (let i = 0; i < text.length; i += 1) h = (Math.imul(h, 31) + text.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(36);
-}
-
 export async function surveyApp(
   baseUrl: string,
   knownRoutes: { path: string; dynamic: boolean }[],
@@ -107,7 +102,7 @@ export async function surveyApp(
         const observation: PageObservation = {
           requestedPath: path,
           landedPath: raw.path,
-          signature: hash(raw.skeleton),
+          signature: signatureOf(raw.skeleton),
           hasCredentialFields: raw.hasCredentialFields,
           title: raw.title,
           linkedPaths: raw.links,
