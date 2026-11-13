@@ -4,7 +4,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { accessibleProject, randomToken, resolveViewer } from "./access";
 import { normalizeRemote } from "./previewLogic";
-import { siteUrl } from "./siteUrl";
+import { previewSiteUrl, siteUrl } from "./siteUrl";
 
 /**
  * Commons-hosted previews: the link the system mints when nobody has Vercel.
@@ -228,7 +228,8 @@ export const finishBuild = internalMutation({
     // The link writes itself — for the default ref, when no human set one.
     const project = await ctx.db.get(build.projectId);
     if (!project) return;
-    const url = `${siteUrl()}/preview/${project.previewToken}/${encodeURIComponent(build.ref || "main")}/`;
+    // On the preview host, never the app's: see hostSplit.ts.
+    const url = `${previewSiteUrl()}/preview/${project.previewToken}/${encodeURIComponent(build.ref || "main")}/`;
     if (args.defaultRef && (!project.previewUrl || project.previewSource === "commons")) {
       await ctx.db.patch(build.projectId, {
         previewUrl: url.replace(/\/$/, ""),
@@ -313,5 +314,40 @@ export const sweepStalled = internalMutation({
         files: [],
       });
     }
+  },
+});
+
+/**
+ * One-off, for the day the hosts were split: links minted while previews were
+ * still served from the app's host move to the preview host. The old
+ * addresses keep working (they redirect), but an address on the app's own
+ * origin is sandboxed without an origin when the browser app frames it, and
+ * a preview with no origin has no storage. Run it once after deploying:
+ *
+ *   npx convex run previews:rehostLinks
+ *
+ * Idempotent, and a no-op wherever the two hosts are one.
+ */
+export const rehostLinks = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { cursor }): Promise<{ moved: number; done: boolean }> => {
+    const from = `${siteUrl()}/preview/`;
+    const to = `${previewSiteUrl()}/preview/`;
+    if (from === to) return { moved: 0, done: true };
+    const page = await ctx.db.query("projects").paginate({ numItems: 100, cursor: cursor ?? null });
+    let moved = 0;
+    for (const project of page.page) {
+      const patch: { previewUrl?: string; branchPreviewPattern?: string } = {};
+      if (project.previewUrl?.startsWith(from)) patch.previewUrl = to + project.previewUrl.slice(from.length);
+      if (project.branchPreviewPattern?.startsWith(from)) {
+        patch.branchPreviewPattern = to + project.branchPreviewPattern.slice(from.length);
+      }
+      if (patch.previewUrl || patch.branchPreviewPattern) {
+        await ctx.db.patch(project._id, patch);
+        moved++;
+      }
+    }
+    if (!page.isDone) await ctx.scheduler.runAfter(0, internal.previews.rehostLinks, { cursor: page.continueCursor });
+    return { moved, done: page.isDone };
   },
 });

@@ -16,6 +16,7 @@ import { draftPreviewUrl } from "@commons/shared";
 import { tidyPositions } from "../lib/frameLayout";
 import { registerShortcut } from "../lib/shortcuts";
 import Icon from "../components/icons";
+import AppFrame from "../components/AppFrame";
 import PreviewAppearanceButton from "../components/PreviewAppearanceButton";
 import { burstEmoji } from "../lib/burst";
 import { markFirst } from "../lib/firsts";
@@ -474,7 +475,7 @@ const FrameLayer = memo(function FrameLayer({
                         ) : (
                           <div className="frame-booting" />
                         ))}
-                      <iframe
+                      <AppFrame
                         key={loadKey}
                         className={loaded ? "loaded" : ""}
                         src={url}

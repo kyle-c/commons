@@ -1,5 +1,8 @@
+import { SESSION_STORAGE_KEY } from "@commons/shared";
+
 const CONVEX_URL_KEY = "commons.convexUrl";
-const SESSION_KEY = "commons.session";
+// Shared with the backend, which forgets this key on the preview host (hostSplit.ts).
+const SESSION_KEY = SESSION_STORAGE_KEY;
 
 export function getConvexUrl(): string | null {
   return localStorage.getItem(CONVEX_URL_KEY) || import.meta.env.VITE_CONVEX_URL || null;

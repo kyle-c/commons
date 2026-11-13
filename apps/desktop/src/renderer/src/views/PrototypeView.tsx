@@ -5,6 +5,7 @@ import { resolveFrameUrl } from "../lib/frameUrl";
 import { registerShortcut } from "../lib/shortcuts";
 import UserTests from "./UserTests";
 import Icon, { type IconName } from "../components/icons";
+import AppFrame from "../components/AppFrame";
 import PreviewAppearanceButton from "../components/PreviewAppearanceButton";
 import { usePublicSiteUrl } from "../lib/publicUrl";
 
@@ -251,7 +252,7 @@ export default function PrototypeView({
             return (
               <div className="proto-device" style={device.width ? { width: device.width } : { flex: 1 }}>
                 {!loaded && <div className="frame-booting" />}
-                <iframe
+                <AppFrame
                   src={url}
                   title="Prototype"
                   className={loaded ? "loaded" : ""}

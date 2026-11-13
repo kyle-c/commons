@@ -1,19 +1,50 @@
 import { httpRouter } from "convex/server";
-import { googleCallbackUrl, siteUrl } from "./siteUrl";
+import { googleCallbackUrl, previewSiteUrl, siteUrl } from "./siteUrl";
+import { armorPreviewShell, isSplit, movedAppPage, splitVerdict, type Side } from "./hostSplit";
 import { landingHtml } from "./landing";
 import { isLandingEvent } from "./landingEvents";
 import { ogImageBytes } from "./ogImage";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { buildAuthCallbackUrl, COMMONS_FAVICON_HREF } from "@commons/shared";
+import { buildAuthCallbackUrl, COMMONS_FAVICON_HREF, frameSandbox } from "@commons/shared";
 
 const http = httpRouter();
+
+/**
+ * The origin split (hostSplit.ts): every page asks before it is served. Null
+ * means serve it here. Otherwise this is the answer, sending the request to
+ * the host its side lives on. Routes only machines fetch (the update feed,
+ * the CI runner files, the scripts other sites include) hold no session and
+ * no storage, so they answer on either host; tests/hostSplit.test.ts keeps
+ * the list of those honest.
+ */
+function elsewhere(side: Side, request: Request): Response | null {
+  const verdict = splitVerdict(side, request.url, siteUrl(), previewSiteUrl());
+  if (verdict.serve) return null;
+  return new Response(null, { status: 302, headers: { Location: verdict.location, "Cache-Control": "no-store" } });
+}
+
+/**
+ * The same question for the app itself. Where the app used to run on the
+ * preview host, a session may still be stored; the page that sends the
+ * browser on forgets it first.
+ */
+function appElsewhere(request: Request): Response | null {
+  const verdict = splitVerdict("app", request.url, siteUrl(), previewSiteUrl());
+  if (verdict.serve) return null;
+  return new Response(movedAppPage(verdict.location), {
+    status: 200,
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
 
 // trycommons.app lands here: the marketing page at the site root.
 http.route({
   path: "/",
   method: "GET",
-  handler: httpAction(async (ctx) => {
+  handler: httpAction(async (ctx, request) => {
+    const away = elsewhere("app", request);
+    if (away) return away;
     // The page shows which build /download will hand you and when it shipped,
     // so the claim on the button is checkable rather than a promise.
     const release = await ctx.runQuery(internal.updates.latest, {});
@@ -94,6 +125,8 @@ http.route({
   path: "/auth/google/callback",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
+    const away = elsewhere("app", request);
+    if (away) return away;
     const url = new URL(request.url);
     const state = url.searchParams.get("state");
     const code = url.searchParams.get("code");
@@ -177,6 +210,8 @@ http.route({
   pathPrefix: "/g/",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
+    const away = elsewhere("app", request);
+    if (away) return away;
     const rest = new URL(request.url).pathname.slice("/g/".length);
     // The unfurl image: /g/<token>/og.png answers with the home screen's
     // latest snapshot. Slack and friends fetch this from the og:image tag.
@@ -224,6 +259,8 @@ http.route({
   pathPrefix: "/p/",
   method: "GET",
   handler: httpAction(async (_ctx, request) => {
+    const away = elsewhere("app", request);
+    if (away) return away;
     const shareToken = new URL(request.url).pathname.slice("/p/".length).replace(/\/+$/, "");
     return new Response(null, {
       status: 302,
@@ -308,6 +345,8 @@ http.route({
   path: "/api/github/setup",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
+    const away = elsewhere("app", request);
+    if (away) return away;
     const params = new URL(request.url).searchParams;
     const installationId = Number(params.get("installation_id") ?? 0);
     const state = params.get("state") ?? "";
@@ -567,6 +606,10 @@ http.route({
   pathPrefix: "/preview/",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
+    // Someone else's script: served on the preview host only, never on the
+    // origin that holds the app's session.
+    const away = elsewhere("preview", request);
+    if (away) return away;
     const rest = new URL(request.url).pathname.slice("/preview/".length);
     const [previewToken, refRaw, ...pathParts] = rest.split("/");
     const ref = decodeURIComponent(refRaw ?? "");
@@ -584,9 +627,17 @@ http.route({
       }
     }
     // SPA fallback: the shell for anything unmatched, so client routing works.
-    return new Response(build.indexHtml ?? "", {
+    // Where the hosts are split, the shell first forgets any session the app
+    // left on this origin before the split. On a single host that key is the
+    // live session of whoever is looking, so it is left alone.
+    const shell = build.indexHtml ?? "";
+    return new Response(isSplit(siteUrl(), previewSiteUrl()) ? armorPreviewShell(shell) : shell, {
       status: 200,
-      headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" },
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "X-Content-Type-Options": "nosniff",
+      },
     });
   }),
 });
@@ -797,7 +848,9 @@ http.route({
 http.route({
   path: "/app",
   method: "GET",
-  handler: httpAction(async (ctx) => {
+  handler: httpAction(async (ctx, request) => {
+    const away = appElsewhere(request);
+    if (away) return away;
     const bundle = await ctx.runQuery(internal.updates.latestWebApp, {});
     if (!bundle) return page("Not published", "The Commons web app hasn't been published yet.");
     return new Response(bundle.indexHtml, {
@@ -811,6 +864,8 @@ http.route({
   pathPrefix: "/app/",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
+    const away = appElsewhere(request);
+    if (away) return away;
     // ?v=<publish> cache-buster rides the URL; the lookup ignores it.
     const name = decodeURIComponent(new URL(request.url).pathname.slice("/app/".length));
     const bundle = await ctx.runQuery(internal.updates.latestWebApp, {});
@@ -839,6 +894,8 @@ http.route({
   path: "/auth/email/callback",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
+    const away = elsewhere("app", request);
+    if (away) return away;
     const emailToken = new URL(request.url).searchParams.get("token");
     if (!emailToken) return page("Sign-in failed", "This link is malformed — request a new one from Commons.");
     const result = await ctx.runMutation(internal.auth.completeEmailSignIn, { emailToken });
@@ -887,6 +944,8 @@ http.route({
   pathPrefix: "/t/",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
+    const away = elsewhere("app", request);
+    if (away) return away;
     const token = new URL(request.url).pathname.slice("/t/".length).replace(/\/+$/, "");
     const data = token ? await ctx.runQuery(internal.userTests.pageData, { token }) : null;
     if (!data) return page("Test not found", "This link is broken or the test was deleted.");
@@ -1018,6 +1077,8 @@ http.route({
   pathPrefix: "/r/",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
+    const away = elsewhere("app", request);
+    if (away) return away;
     const reportToken = new URL(request.url).pathname.slice("/r/".length).replace(/\/+$/, "");
     const data = reportToken ? await ctx.runQuery(internal.userTests.reportData, { reportToken }) : null;
     if (!data) return page("Report not found", "This link is broken or the test was deleted.");
@@ -1092,12 +1153,17 @@ function inlineJson(value: unknown): string {
 }
 
 function testerHarnessHtml(test: TestDoc, previewUrl: string): string {
+  // The app under test is someone else's script inside our page: sandboxed
+  // like every embedded screen (frameSandbox), against this page's origin.
+  const here = new URL(siteUrl()).origin;
   const config = {
     token: test.token,
     title: test.title,
     previewUrl: previewUrl.replace(/\/+$/, ""),
     // Variant sessions (assigned server-side at start) load this base instead.
     variantUrl: test.variant ? test.variant.url.replace(/\/+$/, "") : null,
+    sandbox: frameSandbox(previewUrl, here),
+    variantSandbox: test.variant ? frameSandbox(test.variant.url, here) : null,
     startRoute: test.startRoute,
     device: test.device,
     tasks: test.tasks,
@@ -1170,7 +1236,7 @@ function testerHarnessHtml(test: TestDoc, previewUrl: string): string {
   <div class="card"><h1>That's it — thank you!</h1><p>Your responses were recorded. You can close this tab.</p></div>
 </div>
 
-<div class="stage pre" id="stage"><div class="device" id="device"><iframe id="app" title="App under test"></iframe></div></div>
+<div class="stage pre" id="stage"><div class="device" id="device"><iframe id="app" title="App under test" sandbox="${frameSandbox("", here)}"></iframe></div></div>
 <div class="bar" id="bar" style="display:none">
   <span class="step" id="step"></span>
   <span class="task" id="taskText"></span>
@@ -1329,10 +1395,13 @@ $("start").addEventListener("click", async () => {
   const res = await post("/api/t/start", { token: CONFIG.token, userAgent: navigator.userAgent });
   if (!res || !res.sessionId) { alert("This test is no longer accepting responses."); return; }
   sessionId = res.sessionId;
-  const base = res.variant === "b" && CONFIG.variantUrl ? CONFIG.variantUrl : CONFIG.previewUrl;
+  const onVariant = res.variant === "b" && CONFIG.variantUrl;
+  const base = onVariant ? CONFIG.variantUrl : CONFIG.previewUrl;
   $("intro").classList.add("hidden");
   $("stage").classList.remove("pre");
   $("bar").style.display = "flex";
+  // The sandbox is read when the frame navigates, so it is set before the address.
+  $("app").setAttribute("sandbox", onVariant ? CONFIG.variantSandbox : CONFIG.sandbox);
   $("app").src = base + CONFIG.startRoute;
   sizeDevice();
   taskIndex = 0;

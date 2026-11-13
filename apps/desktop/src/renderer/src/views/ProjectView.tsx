@@ -32,6 +32,7 @@ import { useClickOutside } from "../lib/useClickOutside";
 import { useMachineId } from "../lib/machine";
 import { getRecents, pushRecent } from "../lib/recents";
 import Icon, { type IconName } from "../components/icons";
+import AppFrame from "../components/AppFrame";
 import CoverageLedger from "./CoverageLedger";
 import { PopSection, RevealField } from "../components/popover";
 import { ConnectionPanel } from "./ConnectionPanel";
@@ -683,11 +684,11 @@ function CompareDraft({
         <div className="compare-panes">
           <div className="compare-pane">
             <span className="badge">current</span>
-            {mainUrl ? <iframe src={mainUrl} title="Current" /> : <div className="hint">No preview for main</div>}
+            {mainUrl ? <AppFrame src={mainUrl} title="Current" /> : <div className="hint">No preview for main</div>}
           </div>
           <div className="compare-pane">
             <span className="badge draft">draft</span>
-            <iframe src={draftUrl} title="Draft" />
+            <AppFrame src={draftUrl} title="Draft" />
           </div>
         </div>
       </div>
