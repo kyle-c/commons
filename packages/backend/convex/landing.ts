@@ -29,7 +29,7 @@
  * .ph or .vig block for an <img> when real captures exist.
  */
 
-import { COMMONS_FAVICON_HREF, commonsMarkSvg } from "@commons/shared";
+import { COMMONS_FAVICON_HREF, commonsMarkSvg, commonsTileSvg } from "@commons/shared";
 
 const APP_URL = "/app";
 // Stable URL, resolved per request against the published release (see the
@@ -40,6 +40,9 @@ const DOWNLOAD_URL = "/download";
 const CURSOR = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.2 1.4l10.6 6.3-4.6 1.2-2.3 4.3z" fill="currentColor" stroke="#26251e" stroke-width="1.1" stroke-linejoin="round"/></svg>`;
 
 const MARK = commonsMarkSvg;
+// The footer stands on the ember field, where the mark's orange end would
+// disappear into the ground. The tile brings its own.
+const TILE = commonsTileSvg;
 
 // The product's critique vocabulary, in dock order: emoji (as an HTML
 // entity), its name, and the voice key the synthesizer plays for it.
@@ -136,6 +139,7 @@ export function landingHtml({ version, releasedAt, site, now = Date.now() }: Lan
     --ember: #d98a54;
     --ember-deep: #c8743f;
     --ember-ink: #9c531f;
+    --on-ember: #3a2a1c;
     --bronze: #b8823a;
     --live: #3f9a5a;
     --blue-t: #e2eaf6;
@@ -163,7 +167,7 @@ export function landingHtml({ version, releasedAt, site, now = Date.now() }: Lan
     background-image: radial-gradient(circle, var(--dot) 1.2px, transparent 1.4px);
     background-size: 24px 24px; background-attachment: fixed;
     -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
-    overflow-x: clip; padding-bottom: 88px;
+    overflow-x: clip; position: relative;
   }
   ::selection { background: rgba(217, 138, 84, 0.35); }
   a { color: inherit; }
@@ -538,16 +542,24 @@ export function landingHtml({ version, releasedAt, site, now = Date.now() }: Lan
   summary:hover { color: var(--ember-ink); }
   details p { margin: -6px 0 22px; color: var(--ink-2); font-size: 16.5px; max-width: 66ch; }
 
-  /* ── Close: a full ember field, stickers on it ───────── */
-  .close {
-    margin-top: 40px; padding: 140px 0 130px; text-align: center; position: relative; overflow: hidden;
+  /* ── Close: a full ember field, stickers on it ─────────
+     The field runs on under the footer to the end of the page. */
+  .close, footer {
     background-color: var(--ember);
     background-image: radial-gradient(circle, rgba(38, 37, 30, 0.2) 1.3px, transparent 1.5px);
-    background-size: 24px 24px; border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink);
+    background-size: 24px 24px;
   }
+  /* The section hangs its dots from its bottom edge, which is where the
+     footer's begin, so the rows keep their step across the join. */
+  .close {
+    margin-top: 40px; padding: 140px 0 130px; text-align: center; position: relative; overflow: hidden;
+    background-position: 0 100%; border-top: 2px solid var(--ink);
+  }
+  .close :focus-visible, footer :focus-visible { outline-color: var(--ink); }
+  .close ::selection, footer ::selection { background: var(--ink); color: var(--page); }
   .close .wrap { position: relative; }
   .close h2 { font-size: clamp(48px, 6.4vw, 96px); max-width: 13ch; margin: 0 auto; }
-  .close .lede { margin: 22px auto 0; color: #3a2a1c; }
+  .close .lede { margin: 22px auto 0; color: var(--on-ember); }
   .close .actions { justify-content: center; }
   .close .btn.do { background: var(--ink); color: var(--page); }
   .close .btn.do:hover { background: #3a3930; }
@@ -557,12 +569,13 @@ export function landingHtml({ version, releasedAt, site, now = Date.now() }: Lan
   .close .you .cur span { margin-top: 15px; font-size: 12.5px; padding: 3px 9px; border-radius: 7px; background: #fff; color: var(--ink); }
   .close .stk { font-size: 54px; }
 
-  footer { padding: 44px 0 40px; color: var(--ink-3); font-size: 15px; }
+  /* The last 88px keep the footer's last line clear of the sticker dock. */
+  footer { padding: 44px 0 128px; color: var(--on-ember); font-size: 15px; }
   footer .wrap { display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: center; }
   footer .brand { font-size: 21px; }
   footer nav { display: flex; flex-wrap: wrap; gap: 6px 24px; margin-left: auto; }
-  footer a { text-decoration: none; color: var(--ink-2); font-weight: 500; }
-  footer a:hover { color: var(--ink); }
+  footer a { text-decoration: none; color: var(--on-ember); font-weight: 500; }
+  footer nav a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
   footer .v { width: 100%; font-size: 13.5px; margin: 0; }
 
   /* ── The sticker toy ─────────────────────────────────── */
@@ -590,8 +603,12 @@ export function landingHtml({ version, releasedAt, site, now = Date.now() }: Lan
     transition: opacity 300ms var(--ease);
   }
   .dock-hint.gone { opacity: 0; }
-  .layer { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 40; }
-  .placed { position: absolute; background: none; border: 0; padding: 0; cursor: pointer; font-size: 44px; line-height: 1;
+  /* Stickers land in a layer the size of the page (the body is its containing
+     block). One stuck on the last pixels is trimmed at the edge, as at the
+     other three, instead of growing the page by a strip of paper below the
+     ember field. */
+  .layer { position: absolute; inset: 0; z-index: 40; overflow: hidden; overflow: clip; pointer-events: none; }
+  .placed { position: absolute; background: none; border: 0; padding: 0; cursor: pointer; font-size: 44px; line-height: 1; pointer-events: auto;
             transform: translate(-50%, -50%) rotate(var(--r)); animation: slap 480ms var(--spring); }
   .placed.peel { animation: peel 260ms var(--ease) forwards; }
   @keyframes slap {
@@ -651,6 +668,13 @@ export function landingHtml({ version, releasedAt, site, now = Date.now() }: Lan
     .ph2 { padding: 16px 12px; gap: 8px; font-size: 11.5px; border-radius: 22px; }
     .ph2 .t, .ph2 .tot { font-size: 12.5px; }
     .turn { font-size: 15px; }
+    /* The closing stickers step off the copy: two above the headline, two
+       under the buttons. Their places are set inline, hence !important. */
+    .close .stk { font-size: 40px; }
+    .close > .stk:nth-of-type(1) { top: 32px !important; }
+    .close > .stk:nth-of-type(2) { top: 20px !important; }
+    .close > .stk:nth-of-type(3) { top: auto !important; bottom: 20px; }
+    .close > .stk:nth-of-type(4) { top: auto !important; bottom: 34px; }
     .dock { bottom: 10px; padding: 5px; gap: 0; }
     .dock button { width: 34px; height: 40px; font-size: 20px; border-radius: 11px; }
     .dock-sep { margin: 0 3px; }
@@ -1095,7 +1119,7 @@ export function landingHtml({ version, releasedAt, site, now = Date.now() }: Lan
 
 <footer>
   <div class="wrap">
-    <a class="brand" href="/">${MARK(24)}Commons</a>
+    <a class="brand" href="/">${TILE(28)}Commons</a>
     <nav aria-label="Footer">
       <a href="${APP_URL}">Open Commons</a>
       <a href="${DOWNLOAD_URL}">Download for Mac</a>

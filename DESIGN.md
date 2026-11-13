@@ -269,7 +269,9 @@ comments land, an agent drafts, and stickers fly, and then "Your turn" hands the
 visitor the composer and the sticker dock to try it themselves. Sticker sounds come from
 the app's Web Audio voices, with a mute button. Structure: hero (the two calls to
 action, then the live release line, "Version X, shipped today") beside the scene → why
-mocks go stale → how it works → roles → FAQ → the ember closing band → footer.
+mocks go stale → how it works → roles → FAQ → the ember closing field. The field runs
+on under the footer to the end of the page, so the footer is set in ink on ember and
+wears the tile instead of the mark, whose orange end would vanish there.
 
 Rules that keep it honest: the only outside requests are three Google Fonts stylesheets
 (swap, system fallbacks, Shantell subset to the characters it sets); product visuals

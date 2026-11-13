@@ -3,12 +3,12 @@
  * ribbon. One source, two forms:
  *
  * - The mark (the logo): a charcoal C with a peach top end and an orange
- *   bottom end, for light grounds. The site's header and footer, the share
- *   card.
+ *   bottom end, for light grounds. The site's header, the share card.
  * - The tile (the app icon): an orange C with a peach cap and a cream end on a
  *   charcoal rounded square, for favicons and anywhere the mark has to bring
- *   its own ground (browser tabs can be dark). The Mac app's icons are rasters
- *   of the same artwork, sourced in apps/desktop/build/icon-src.
+ *   its own ground: browser tabs can be dark, and on the site's ember footer
+ *   the mark's orange end would vanish. The Mac app's icons are rasters of
+ *   the same artwork, sourced in apps/desktop/build/icon-src.
  */
 
 type Shape = readonly [d: string, fill: string];
@@ -40,11 +40,12 @@ export function commonsMarkSvg(size: number): string {
 /**
  * The tile (the app icon) as SVG on a 32-unit square. The glyph is scaled
  * from its 15.91 x 16.94 artwork to 62% of the tile, nudged right a touch
- * because a C's weight sits on its left.
+ * because a C's weight sits on its left. Decorative, like the mark: inline,
+ * pair it with the name.
  */
 export function commonsTileSvg(size = 32): string {
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 32 32">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 32 32" aria-hidden="true">` +
     `<rect width="32" height="32" rx="7.2" fill="#282720"/>` +
     `<g transform="translate(-31.54 -49.8) scale(1.1712)">${paths(TILE_GLYPH)}</g></svg>`
   );
