@@ -23,6 +23,7 @@ import type * as figma from "../figma.js";
 import type * as flows from "../flows.js";
 import type * as github from "../github.js";
 import type * as githubApp from "../githubApp.js";
+import type * as hostSplit from "../hostSplit.js";
 import type * as http from "../http.js";
 import type * as invites from "../invites.js";
 import type * as landing from "../landing.js";
@@ -66,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   flows: typeof flows;
   github: typeof github;
   githubApp: typeof githubApp;
+  hostSplit: typeof hostSplit;
   http: typeof http;
   invites: typeof invites;
   landing: typeof landing;
